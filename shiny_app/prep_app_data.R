@@ -115,6 +115,16 @@ msg("campaign.rds: ", camp$n_days, " sampling days, ", camp$first, " - ",
     camp$h_lo, "-", camp$h_hi)
 print(camp$wk)
 
+# ---- daily tracks for the day-by-day animation slider --------------------
+tr <- dt[, .(Longitude = round(Longitude, 4), Latitude = round(Latitude, 4),
+             day = as.Date(date),
+             Route = ifelse(grepl("Suncor", Site),
+                            "Suncor & Phillips 66", "Sinclair Terminal"))]
+tr <- tr[, .SD[seq(1, .N, by = max(1L, .N %/% 1500))], by = .(day, Route)]
+saveRDS(tr, file.path(OUT, "daily_tracks.rds"))
+msg("daily_tracks.rds: ", nrow(tr), " thinned points across ",
+    uniqueN(tr$day), " days")
+
 # ---- plume-event van positions (looked up while dt is still loaded) ------
 pl0 <- fread(file.path(BASE, "FinalFig", "WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv"))
 pl0 <- pl0[sens_group == "baseline"]

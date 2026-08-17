@@ -22,6 +22,9 @@ hs      <- readRDS(file.path(DATA, "hotspots.rds"))
 ctx     <- readRDS(file.path(DATA, "context.rds"))
 camp    <- if (file.exists(file.path(DATA, "campaign.rds")))
              readRDS(file.path(DATA, "campaign.rds")) else NULL
+tracks  <- if (file.exists(file.path(DATA, "daily_tracks.rds")))
+             readRDS(file.path(DATA, "daily_tracks.rds")) else NULL
+udays   <- if (!is.null(tracks)) sort(unique(tracks$day)) else NULL
 
 POLLS <- sort(unique(cells$pollutant))
 unit_of <- function(p) if (p == "Methane") "ppm" else "ppb"
@@ -104,6 +107,14 @@ ui <- navbarPage(
         checkboxGroupInput("p1_ctx", "Show context layers", CTX_CHOICES,
                            selected = c("Covered facilities", "Wastewater treatment",
                                         "Refueling stations")),
+        h4("Play through sampling days"),
+        checkboxInput("p1_daily", "Show one day at a time", FALSE),
+        conditionalPanel("input.p1_daily",
+          uiOutput("p1_day_ui"),
+          textOutput("p1_day_info"),
+          helpText("Press the play button under the slider to animate. Blue ",
+                   "= Suncor & Phillips 66 route, dark red = Sinclair ",
+                   "Terminal route (points thinned for display).")),
         h4("Campaign summary"), tableOutput("p1_summary"),
         h4("Sampling coverage"), htmlOutput("p1_coverage"),
         h4("Platform and instruments"),
@@ -279,6 +290,34 @@ server <- function(input, output, session) {
                Value = c(format(s$n, big.mark = ","),
                          paste0(s$pct_below_mdl, "%"), s$median, s$p95, s$p99, s$max))
   }, colnames = FALSE)
+  output$p1_day_ui <- renderUI({
+    if (is.null(tracks))
+      return(helpText("Rerun prep_app_data.R to enable the day slider."))
+    sliderInput("p1_day", NULL, min = 1, max = length(udays), value = 1,
+                step = 1, ticks = FALSE, width = "100%",
+                animate = animationOptions(interval = 600, loop = TRUE))
+  })
+  observe({
+    proxy <- leafletProxy("p1_map")
+    if (!isTRUE(input$p1_daily) || is.null(tracks)) {
+      clearGroup(proxy, "daily"); return(invisible())
+    }
+    req(input$p1_day)
+    d <- udays[input$p1_day]
+    sub <- tracks[day == d]
+    proxy <- clearGroup(proxy, "daily")
+    addCircleMarkers(proxy, data = sub, ~Longitude, ~Latitude,
+      radius = 2.5, stroke = FALSE, group = "daily",
+      fillColor = ifelse(sub$Route == "Sinclair Terminal",
+                         "#b2182b", "#2166ac"),
+      fillOpacity = 0.75)
+  })
+  output$p1_day_info <- renderText({
+    req(isTRUE(input$p1_daily), input$p1_day, !is.null(tracks))
+    d <- udays[input$p1_day]
+    sprintf("%s — sampling day %d of %d", format(d, "%A, %B %d, %Y"),
+            input$p1_day, length(udays))
+  })
   output$p1_coverage <- renderUI({
     if (is.null(camp))
       return(helpText("Rerun prep_app_data.R to generate coverage stats."))
