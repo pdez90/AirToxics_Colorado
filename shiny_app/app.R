@@ -26,40 +26,56 @@ unit_of <- function(p) if (p == "Methane") "ppm" else "ppb"
 WWTP_LL <- c(39.81000447, -104.95562510)
 
 # ---- shared overlay helper --------------------------------------
+# Context features are drawn as STARS (SVG icons) so they are visually
+# distinct from data markers (circles) on every page.
+star_uri <- function(fill, stroke = "black") {
+  svg <- sprintf(paste0(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>",
+    "<path d='M12 1.8l3.1 6.5 7.1.8-5.3 4.9 1.4 7-6.3-3.5-6.3 3.5 1.4-7L1.8 9.1l7.1-.8z'",
+    " fill='%s' stroke='%s' stroke-width='1.3'/></svg>"), fill, stroke)
+  paste0("data:image/svg+xml;base64,", base64enc::base64encode(charToRaw(svg)))
+}
+star_icon <- function(fill, size = 20, stroke = "black")
+  makeIcon(iconUrl = star_uri(fill, stroke), iconWidth = size, iconHeight = size,
+           iconAnchorX = size / 2, iconAnchorY = size / 2)
 add_context <- function(map, layers) {
   k <- ctx$key
   if ("Covered facilities" %in% layers)
-    map <- addCircleMarkers(map, data = k[k$type == "Covered facility (HB21-1189)", ],
-      ~lon, ~lat, radius = 8, color = "black", fillColor = "red", weight = 2,
-      fillOpacity = 0.9, label = ~name, group = "Covered facilities")
+    map <- addMarkers(map, data = k[k$type == "Covered facility (HB21-1189)", ],
+      ~lon, ~lat, icon = star_icon("red", 24), label = ~name,
+      group = "Covered facilities")
   if ("Wastewater treatment" %in% layers)
-    map <- addCircleMarkers(map, data = k[k$type == "Wastewater treatment", ],
-      ~lon, ~lat, radius = 8, color = "black", fillColor = "green", weight = 2,
-      fillOpacity = 0.9, label = ~name, group = "WWTFs")
+    map <- addMarkers(map, data = k[k$type == "Wastewater treatment", ],
+      ~lon, ~lat, icon = star_icon("green", 24), label = ~name, group = "WWTFs")
   if ("Woodshop" %in% layers)
-    map <- addCircleMarkers(map, data = k[k$type == "Woodshop", ],
-      ~lon, ~lat, radius = 8, color = "black", fillColor = "purple", weight = 2,
-      fillOpacity = 0.9, label = ~name, group = "Woodshop")
+    map <- addMarkers(map, data = k[k$type == "Woodshop", ],
+      ~lon, ~lat, icon = star_icon("purple", 21), label = ~name, group = "Woodshop")
   if ("Refueling stations" %in% layers)
-    map <- addCircleMarkers(map, data = k[k$type == "Refueling station", ],
-      ~lon, ~lat, radius = 7, color = "black", fillColor = "dodgerblue", weight = 2,
-      fillOpacity = 0.9, label = ~name, group = "Refueling")
+    map <- addMarkers(map, data = k[k$type == "Refueling station", ],
+      ~lon, ~lat, icon = star_icon("dodgerblue", 21), label = ~name,
+      group = "Refueling")
   if ("TRI facilities" %in% layers)
-    map <- addCircleMarkers(map, data = ctx$tri, ~lon, ~lat, radius = 3,
-      color = "grey30", fillColor = "white", weight = 1, fillOpacity = 0.6,
-      label = ~name, group = "TRI")
+    map <- addMarkers(map, data = ctx$tri, ~lon, ~lat,
+      icon = star_icon("white", 12, stroke = "grey40"), label = ~name,
+      group = "TRI")
   if ("Wind sites" %in% layers)
-    map <- addCircleMarkers(map, data = ctx$wind, ~lon, ~lat, radius = 6,
-      color = "black", fillColor = "orange", weight = 2, fillOpacity = 0.9,
-      label = "EPA AQS wind site", group = "Wind sites")
+    map <- addMarkers(map, data = ctx$wind, ~lon, ~lat,
+      icon = star_icon("orange", 19), label = "EPA AQS wind site",
+      group = "Wind sites")
   if ("La Casa" %in% layers)
-    map <- addCircleMarkers(map, data = ctx$lacasa, ~lon, ~lat, radius = 8,
-      color = "black", fillColor = "gold", weight = 2, fillOpacity = 1,
-      label = ~name, group = "La Casa")
+    map <- addMarkers(map, data = ctx$lacasa, ~lon, ~lat,
+      icon = star_icon("gold", 24), label = ~name, group = "La Casa")
   sel <- intersect(names(CTX_COLS), layers)
-  if (length(sel))
-    map <- addLegend(map, position = "bottomleft", colors = unname(CTX_COLS[sel]),
-                     labels = sel, opacity = 1, title = "Context")
+  if (length(sel)) {
+    leg <- paste0(
+      "<div style='background:rgba(255,255,255,0.92);padding:6px 10px;",
+      "border-radius:5px;box-shadow:0 1px 4px rgba(0,0,0,0.3);",
+      "line-height:1.6;font-size:12px'><b>Context (&#9733;)</b><br>",
+      paste(sprintf(
+        "<span style='color:%s;text-shadow:0 0 1.5px black;font-size:15px'>&#9733;</span> %s",
+        CTX_COLS[sel], sel), collapse = "<br>"), "</div>")
+    map <- addControl(map, html = leg, position = "bottomleft")
+  }
   map
 }
 CTX_CHOICES <- c("Covered facilities", "Wastewater treatment", "Woodshop",
@@ -246,11 +262,11 @@ server <- function(input, output, session) {
   # ---- page 3 ----
   output$p3_map <- renderLeaflet({
     m <- base_map() |> setView(WWTP_LL[2], WWTP_LL[1], zoom = 13) |>
-      addCircleMarkers(lng = WWTP_LL[2], lat = WWTP_LL[1], radius = 11,
-                       color = "black", fillColor = "green", fillOpacity = 1,
-                       label = "Wastewater treatment facility",
-                       labelOptions = labelOptions(permanent = TRUE,
-                                                   direction = "left"))
+      addMarkers(lng = WWTP_LL[2], lat = WWTP_LL[1],
+                 icon = star_icon("green", 28),
+                 label = "Wastewater treatment facility",
+                 labelOptions = labelOptions(permanent = TRUE,
+                                             direction = "left"))
     cols <- c("#d73027", "#fc8d59", "#7b3294", "#4575b4")
     has_loc <- all(c("lat", "lon") %in% names(plumes))
     for (i in seq_len(nrow(plumes))) {
