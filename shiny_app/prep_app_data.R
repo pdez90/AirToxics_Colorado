@@ -97,6 +97,24 @@ if (file.exists(mfile)) {
 saveRDS(events, file.path(OUT, "events.rds"))
 msg("events.rds: ", nrow(events), " exceedance events (>= p95, wind-valid)")
 
+# ---- sampling coverage (raw-data page) -----------------------------------
+stopifnot("date" %in% names(dt))
+dd <- as.Date(dt$date)
+hh <- as.integer(format(dt$date, "%H"))
+ud <- unique(dd)
+camp <- list(
+  n_days = length(ud),
+  first = format(min(ud), "%b %d, %Y"), last = format(max(ud), "%b %d, %Y"),
+  wk = table(factor(format(ud, "%a"),
+                    levels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"))),
+  h_lo = as.integer(quantile(hh, 0.01)), h_hi = as.integer(quantile(hh, 0.99)),
+  pct_weekday = round(100 * mean(as.integer(format(dd, "%u")) <= 5), 1))
+saveRDS(camp, file.path(OUT, "campaign.rds"))
+msg("campaign.rds: ", camp$n_days, " sampling days, ", camp$first, " - ",
+    camp$last, " | ", camp$pct_weekday, "% of obs on weekdays | hours ",
+    camp$h_lo, "-", camp$h_hi)
+print(camp$wk)
+
 # ---- plume-event van positions (looked up while dt is still loaded) ------
 pl0 <- fread(file.path(BASE, "FinalFig", "WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv"))
 pl0 <- pl0[sens_group == "baseline"]

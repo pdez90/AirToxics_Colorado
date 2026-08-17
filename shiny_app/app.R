@@ -20,6 +20,8 @@ blocks  <- readRDS(file.path(DATA, "blocks.rds"))
 plumes  <- readRDS(file.path(DATA, "plumes.rds"))
 hs      <- readRDS(file.path(DATA, "hotspots.rds"))
 ctx     <- readRDS(file.path(DATA, "context.rds"))
+camp    <- if (file.exists(file.path(DATA, "campaign.rds")))
+             readRDS(file.path(DATA, "campaign.rds")) else NULL
 
 POLLS <- sort(unique(cells$pollutant))
 unit_of <- function(p) if (p == "Methane") "ppm" else "ppb"
@@ -103,9 +105,31 @@ ui <- navbarPage(
                            selected = c("Covered facilities", "Wastewater treatment",
                                         "Refueling stations")),
         h4("Campaign summary"), tableOutput("p1_summary"),
-        helpText("Cells are the 500 m analysis grid; values summarize all 1-s ",
-                 "measurements in each cell. %<MDL as reported in Table S3.1 ",
-                 "(flag-based; exact MDLs with CDPHE).")),
+        h4("Sampling coverage"), htmlOutput("p1_coverage"),
+        h4("Platform and instruments"),
+        helpText("Measurements were made by two CDPHE mobile laboratories: ",
+                 "the Community Air Toxics (CAT) lab and its duplicate, the ",
+                 "Emissions Monitoring Utility (EMU), in service from ",
+                 "December 2023 - both Mercedes Sprinter vans operated by ",
+                 "CDPHE's Air Toxics and Ozone Precursors (ATOPs) program. ",
+                 "Each carries a Vocus Eiger PTR-ToF-MS (benzene, toluene, ",
+                 "xylene, trimethylbenzene), a Vocus CI-ToF-MS (HCN), and a ",
+                 "Picarro G2204 cavity ring-down spectrometer (H2S and ",
+                 "methane), all reporting at 1-s resolution."),
+        helpText("Because sampled air travels through ~3 m of inlet tubing ",
+                 "and instrument response times differ, each measurement was ",
+                 "shifted back in time by an instrument- and vehicle-specific ",
+                 "inlet delay measured by CDPHE (CAT: 4 s aromatics, 6 s HCN, ",
+                 "21 s H2S/CH4; EMU: 5 s aromatics, 3 s HCN, 17 s H2S/CH4), ",
+                 "so every value aligns with the GPS position where the ",
+                 "sampled air entered the inlet. All data shown are ",
+                 "delay-corrected."),
+        tags$p(tags$a(href = "https://cdphe.colorado.gov/apcd/monitoring",
+                      target = "_blank",
+                      "More on CDPHE air quality monitoring")),
+        helpText("Cells are the 500 m analysis grid; values summarize all ",
+                 "1-s measurements in each cell. % below MDL is based on ",
+                 "CDPHE instrument quality flags.")),
       mainPanel(width = 9, leafletOutput("p1_map", height = 640)))),
 
   tabPanel("2. AirToxScreen vs Mobile",
@@ -116,8 +140,20 @@ ui <- navbarPage(
                        "Mobile benzene (scaled)" = "mob",
                        "Ratio mobile / AirToxScreen" = "ratio")),
         h4("Across 1,668 common blocks"), tableOutput("p2_stats"),
-        helpText("Mobile values are background-corrected medians of daily ",
-                 "medians, scaled to 24/7 using the La Casa diurnal pattern.")),
+        h4("How the mobile surface was built"),
+        helpText("Every 1-s benzene measurement is assigned to its census ",
+                 "block. Within a block, each sampling day is summarized by ",
+                 "its median, and the block estimate is the median of those ",
+                 "daily medians - a metric robust to brief plume spikes. A ",
+                 "rolling-window background computed from the mobile data ",
+                 "itself separates the regional background from local ",
+                 "enhancements. Because driving occurred mainly on weekday ",
+                 "daytimes, block values are scaled to 24-h-equivalent ",
+                 "concentrations using the diurnal pattern measured at the ",
+                 "La Casa stationary monitoring site. EPA AirToxScreen ",
+                 "values are modeled annual-average ambient benzene for the ",
+                 "same blocks; the comparison uses only the 1,668 blocks ",
+                 "covered by both datasets.")),
       mainPanel(width = 9, leafletOutput("p2_map", height = 420),
                 plotOutput("p2_scatter", height = 240)))),
 
@@ -125,10 +161,19 @@ ui <- navbarPage(
     sidebarLayout(
       sidebarPanel(width = 3,
         h4("Retained plume events"),
-        helpText("33 candidate H2S plume events were identified near the ",
-                 "wastewater treatment facility; 4 passed all quality filters ",
-                 "(shape, wind consistency, stability). Rates are Gaussian ",
-                 "plume inverse estimates assuming continuous operation."),
+        helpText("Plumes were identified as transient H2S enhancements above ",
+                 "the rolling background, measured while the van was downwind ",
+                 "of the wastewater treatment facility (wind direction at the ",
+                 "van consistent with transport from the facility). ",
+                 "Candidates were segmented by time gaps and retained only ",
+                 "with at least three plume-flagged points, a coherent ",
+                 "single-peak shape, consistent winds, and a defined ",
+                 "atmospheric stability class: 33 candidates, 4 retained. ",
+                 "Emission rates are inverse Gaussian-plume estimates from ",
+                 "the peak enhancement, distance to the facility, wind speed, ",
+                 "and Pasquill-Gifford stability, assuming continuous ",
+                 "operation. Winds and boundary-layer depth come from NOAA's ",
+                 "3-km hourly HRRR model at the measurement times."),
         tableOutput("p3_table")),
       mainPanel(width = 9, leafletOutput("p3_map", height = 640)))),
 
@@ -141,6 +186,18 @@ ui <- navbarPage(
         checkboxGroupInput("p4_ctx", "Context layers", CTX_CHOICES,
                            selected = c("Covered facilities", "Wastewater treatment",
                                         "Woodshop", "Refueling stations")),
+        h4("How hotspots were identified"),
+        helpText("For each pollutant, high 1-s readings were clustered ",
+                 "spatially within each sampling day (DBSCAN). Day-clusters ",
+                 "recurring at the same location across enough sampling days ",
+                 "- a per-pollutant persistence threshold - became ",
+                 "persistent clusters (2,719 day-clusters reduced to 221 ",
+                 "persistent). Overlapping persistent clusters of different ",
+                 "pollutants were then merged into groups, and the 17 groups ",
+                 "persistent in three or more pollutants are the ",
+                 "multi-pollutant hotspots mapped here. Methane, measured ",
+                 "alongside H2S, is analyzed the same way and overlaid as a ",
+                 "co-elevation class on each group."),
         helpText("Group markers scale with persistence; click for pollutant ",
                  "make-up, exceedance-days, nearest TRI facility, and methane ",
                  "co-elevation class.")),
@@ -159,9 +216,18 @@ ui <- navbarPage(
         selectInput("p5_sigma", "Smoothing sigma (m)",
                     c(500, 900, 1200, 1800), selected = 900),
         actionButton("p5_go", "Compute surface", class = "btn-primary"),
-        helpText("Reproduces the manuscript's upwind back-projection ",
-                 "(concentration-weighted rays, exponential distance kernel, ",
-                 "Gaussian smoothing). Manuscript settings: p99, 15 km, 900 m."),
+        h4("How the surface is created"),
+        helpText("A wind back-projection: every measurement above the chosen ",
+                 "percentile threshold is an exceedance event. From each ",
+                 "event location a ray is cast upwind (toward where the wind ",
+                 "came from), weighted by the enhancement magnitude and ",
+                 "decaying with distance. Weights accumulate on a 250-m grid ",
+                 "and are smoothed with a Gaussian kernel; the surface is ",
+                 "scaled to its maximum. Bright areas are the places most ",
+                 "often upwind of high readings - probable source regions. ",
+                 "Winds are taken from the nearest EPA AQS meteorological ",
+                 "station. Defaults: p99 threshold, 15 km rays, 900 m ",
+                 "smoothing."),
         textOutput("p5_info")),
       mainPanel(width = 9, leafletOutput("p5_map", height = 640)))),
 
@@ -213,6 +279,20 @@ server <- function(input, output, session) {
                Value = c(format(s$n, big.mark = ","),
                          paste0(s$pct_below_mdl, "%"), s$median, s$p95, s$p99, s$max))
   }, colnames = FALSE)
+  output$p1_coverage <- renderUI({
+    if (is.null(camp))
+      return(helpText("Rerun prep_app_data.R to generate coverage stats."))
+    wk <- camp$wk
+    HTML(sprintf(paste0(
+      "Measurements were collected on <b>%s sampling days</b> between %s ",
+      "and %s.<br>%s%% of 1-s measurements were made on weekdays ",
+      "(days by weekday: %s).<br>Driving hours: roughly %02d:00&ndash;%02d:00 ",
+      "local time."),
+      format(camp$n_days, big.mark = ","), camp$first, camp$last,
+      camp$pct_weekday,
+      paste(sprintf("%s %d", names(wk), as.integer(wk)), collapse = ", "),
+      camp$h_lo, camp$h_hi))
+  })
 
   # ---- page 2 ----
   output$p2_map <- renderLeaflet({
