@@ -96,6 +96,28 @@ if (file.exists(mfile)) {
 }
 saveRDS(events, file.path(OUT, "events.rds"))
 msg("events.rds: ", nrow(events), " exceedance events (>= p95, wind-valid)")
+
+# ---- plume-event van positions (looked up while dt is still loaded) ------
+pl0 <- fread(file.path(BASE, "FinalFig", "WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv"))
+pl0 <- pl0[sens_group == "baseline"]
+pl0[, datetime := as.character(datetime)]
+stopifnot("date" %in% names(dt))
+keydt <- format(dt$date, "%Y-%m-%d %H:%M:%S")
+h2s_rows <- which(is.finite(dt$Hydrogen_Sulfide_ppb))
+tzn <- attr(dt$date, "tzone"); if (is.null(tzn)) tzn <- ""
+plume_loc <- rbindlist(lapply(unique(pl0$datetime), function(ts) {
+  i <- h2s_rows[keydt[h2s_rows] == ts]
+  if (length(i) == 0) {   # fallback: nearest second on the H2S van
+    tt <- as.POSIXct(ts, tz = tzn)
+    i <- h2s_rows[which.min(abs(as.numeric(dt$date[h2s_rows]) - as.numeric(tt)))]
+    msg("  plume ", ts, ": no exact timestamp match; nearest gap = ",
+        round(abs(as.numeric(dt$date[i[1]]) - as.numeric(tt))), " s")
+  }
+  i <- i[1]
+  data.table(datetime = ts, lat = dt$Latitude[i], lon = dt$Longitude[i])
+}))
+msg("plume locations matched: ", nrow(plume_loc))
+print(plume_loc)
 rm(dt, pts); gc()
 
 # ---------- 2) census-block comparison ----------
@@ -112,11 +134,12 @@ msg("blocks.rds: ", nrow(g), " common blocks")
 # ---------- 3) plumes ----------
 pl <- fread(file.path(BASE, "FinalFig", "WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv"))
 pl <- pl[sens_group == "baseline"]
-# plume intercept locations: back out from WWTP + distance is not stored with
-# lat/lon; use event locations from the retained-plume file if available
-plumes <- pl[, .(plume_id, datetime, dH2S_ppb = round(dH2S_ppb, 1),
+plumes <- pl[, .(plume_id, datetime = as.character(datetime),
+                 dH2S_ppb = round(dH2S_ppb, 1),
                  wind_ms = round(u_ms, 2), dist_km = round(x_km, 2),
                  stability = CAT, rate_tpy = round(tpy_metric, 0))]
+plumes <- merge(plumes, plume_loc, by = "datetime", all.x = TRUE, sort = FALSE)
+stopifnot(all(is.finite(plumes$lat)))
 saveRDS(plumes, file.path(OUT, "plumes.rds"))
 msg("plumes.rds: ", nrow(plumes), " retained plumes")
 

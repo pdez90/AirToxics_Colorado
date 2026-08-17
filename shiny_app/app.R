@@ -56,10 +56,18 @@ add_context <- function(map, layers) {
     map <- addCircleMarkers(map, data = ctx$lacasa, ~lon, ~lat, radius = 8,
       color = "black", fillColor = "gold", weight = 2, fillOpacity = 1,
       label = ~name, group = "La Casa")
+  sel <- intersect(names(CTX_COLS), layers)
+  if (length(sel))
+    map <- addLegend(map, position = "bottomleft", colors = unname(CTX_COLS[sel]),
+                     labels = sel, opacity = 1, title = "Context")
   map
 }
 CTX_CHOICES <- c("Covered facilities", "Wastewater treatment", "Woodshop",
                  "Refueling stations", "TRI facilities", "Wind sites", "La Casa")
+CTX_COLS <- c("Covered facilities" = "red", "Wastewater treatment" = "green",
+              "Woodshop" = "purple", "Refueling stations" = "dodgerblue",
+              "TRI facilities" = "white", "Wind sites" = "orange",
+              "La Casa" = "gold")
 base_map <- function() leaflet() |> addProviderTiles(providers$CartoDB.Positron) |>
   setView(-104.95, 39.82, zoom = 11)
 
@@ -120,7 +128,9 @@ ui <- navbarPage(
         helpText("Group markers scale with persistence; click for pollutant ",
                  "make-up, exceedance-days, nearest TRI facility, and methane ",
                  "co-elevation class.")),
-      mainPanel(width = 9, leafletOutput("p4_map", height = 640)))),
+      mainPanel(width = 9, leafletOutput("p4_map", height = 560),
+                h4("Group composition and candidate sources"),
+                DT::DTOutput("p4_table")))),
 
   tabPanel("5. Source probability",
     sidebarLayout(
@@ -168,7 +178,16 @@ server <- function(input, output, session) {
                       "n = %s<br>median = %s %s<br>p95 = %s<br>max = %s",
                       format(d$n, big.mark = ","), d$median,
                       unit_of(input$p1_poll), d$p95, d$max))
-    add_context(m, input$p1_ctx)
+    m <- add_context(m, input$p1_ctx)
+    if (input$p1_stat == "n") {
+      addLegend(m, pal = pal, values = log10(v),
+                title = "1-s measurements<br>per 500 m cell",
+                labFormat = labelFormat(transform = function(x) signif(10^x, 2)))
+    } else {
+      addLegend(m, pal = pal, values = v,
+                title = sprintf("%s %s (%s)", input$p1_poll, input$p1_stat,
+                                unit_of(input$p1_poll)))
+    }
   })
   output$p1_summary <- renderTable({
     s <- summ[pollutant == input$p1_poll]
@@ -226,23 +245,37 @@ server <- function(input, output, session) {
 
   # ---- page 3 ----
   output$p3_map <- renderLeaflet({
-    # place plume markers along the bearing from WWTP at their distance is not
-    # stored; show WWTP + rings at plume distances with popups
-    m <- base_map() |> setView(WWTP_LL[2], WWTP_LL[1], zoom = 12) |>
-      addCircleMarkers(lng = WWTP_LL[2], lat = WWTP_LL[1], radius = 10,
+    m <- base_map() |> setView(WWTP_LL[2], WWTP_LL[1], zoom = 13) |>
+      addCircleMarkers(lng = WWTP_LL[2], lat = WWTP_LL[1], radius = 11,
                        color = "black", fillColor = "green", fillOpacity = 1,
-                       label = "Wastewater treatment facility (WWTF1)")
+                       label = "Wastewater treatment facility",
+                       labelOptions = labelOptions(permanent = TRUE,
+                                                   direction = "left"))
+    cols <- c("#d73027", "#fc8d59", "#7b3294", "#4575b4")
+    has_loc <- all(c("lat", "lon") %in% names(plumes))
     for (i in seq_len(nrow(plumes))) {
-      m <- addCircles(m, lng = WWTP_LL[2], lat = WWTP_LL[1],
-                      radius = plumes$dist_km[i] * 1000, weight = 2, fill = FALSE,
-                      color = c("#d73027", "#fc8d59", "#91bfdb", "#4575b4")[i],
-                      popup = sprintf(
-                        "<b>Plume %s</b><br>%s<br>ΔH2S: %s ppb<br>Wind: %s m/s | Stability %s<br>Distance: %s km<br><b>Inverse estimate: %s t/yr</b>",
-                        plumes$plume_id[i], plumes$datetime[i], plumes$dH2S_ppb[i],
-                        plumes$wind_ms[i], plumes$stability[i],
-                        plumes$dist_km[i], format(plumes$rate_tpy[i], big.mark = ",")))
+      pop <- sprintf(
+        "<b>Plume %s</b><br>%s<br>ΔH2S: %s ppb<br>Wind: %s m/s | Stability %s<br>Distance from WWTF: %s km<br><b>Inverse estimate: %s t/yr</b>",
+        plumes$plume_id[i], plumes$datetime[i], plumes$dH2S_ppb[i],
+        plumes$wind_ms[i], plumes$stability[i], plumes$dist_km[i],
+        format(plumes$rate_tpy[i], big.mark = ","))
+      if (has_loc && is.finite(plumes$lat[i])) {
+        m <- addPolylines(m, lng = c(WWTP_LL[2], plumes$lon[i]),
+                          lat = c(WWTP_LL[1], plumes$lat[i]),
+                          color = cols[i], weight = 2, dashArray = "5,6")
+        m <- addCircleMarkers(m, lng = plumes$lon[i], lat = plumes$lat[i],
+          radius = 9, color = "black", weight = 1.5, fillColor = cols[i],
+          fillOpacity = 0.95, popup = pop,
+          label = sprintf("Plume %s: %s", plumes$plume_id[i], plumes$datetime[i]),
+          labelOptions = labelOptions(permanent = TRUE, direction = "auto",
+                                      textsize = "11px"))
+      } else {
+        m <- addCircles(m, lng = WWTP_LL[2], lat = WWTP_LL[1],
+                        radius = plumes$dist_km[i] * 1000, weight = 2,
+                        fill = FALSE, color = cols[i], popup = pop)
+      }
     }
-    add_context(m, c("Covered facilities", "Wastewater treatment"))
+    m
   })
   output$p3_table <- renderTable({
     data.frame(Plume = plumes$plume_id,
@@ -291,42 +324,101 @@ server <- function(input, output, session) {
     }
     add_context(m, input$p4_ctx)
   })
+  output$p4_table <- DT::renderDT({
+    g <- as.data.table(hs$groups)
+    key <- ctx$key
+    has_ch4 <- "ch4_class" %in% names(g)
+    near_txt <- character(nrow(g)); src <- character(nrow(g))
+    for (i in seq_len(nrow(g))) {
+      dkm <- sqrt(((key$lon - g$Longitude[i]) *
+                     cos(g$Latitude[i] * pi / 180) * 111.32)^2 +
+                  ((key$lat - g$Latitude[i]) * 110.54)^2)
+      o <- order(dkm)
+      near <- o[dkm[o] <= 1.5]
+      near_txt[i] <- if (length(near))
+        paste(sprintf("%s (%.2f km)", key$name[near], dkm[near]), collapse = "; ")
+      else sprintf("nearest: %s (%.1f km)", key$name[o[1]], dkm[o[1]])
+      p <- tolower(g$pollutants[i]); parts <- character()
+      if (any(dkm <= 0.6)) parts <- c(parts, key$name[dkm <= 0.6])
+      if (grepl("h2s|hydrogen_sulfide", p) &&
+          any(dkm[key$type == "Wastewater treatment"] <= 2))
+        parts <- c(parts, "wastewater-type (H2S)")
+      if (has_ch4 && !is.na(g$ch4_class[i]) && g$ch4_class[i] == "CH4-enriched")
+        parts <- c(parts, "methane co-elevated (oil & gas-type)")
+      if (!is.na(g$tri_name[i]) && g$tri_dist_km[i] <= 0.75)
+        parts <- c(parts, sprintf("TRI: %s", g$tri_name[i]))
+      src[i] <- if (length(parts)) paste(unique(parts), collapse = "; ")
+                else "unresolved (mixed urban / traffic)"
+    }
+    out <- data.frame(
+      Group = g$group_id,
+      Pollutants = gsub("\\+", " + ", g$pollutants),
+      `N pollutants` = g$n_pollutants,
+      `Exceedance-days` = g$total_n_days,
+      Methane = if (has_ch4)
+        ifelse(is.na(g$ch4_class), "-",
+               sprintf("%s (%.1f%% ≥ p95)", g$ch4_class, g$pct_ge_p95))
+        else "-",
+      `Nearest TRI` = ifelse(is.na(g$tri_name), "-",
+                             sprintf("%s (%.2f km)", g$tri_name, g$tri_dist_km)),
+      `Key facilities within 1.5 km` = near_txt,
+      `Candidate sources` = src, check.names = FALSE)
+    out <- out[order(-g$total_n_days), ]
+    DT::datatable(out, rownames = FALSE,
+      options = list(pageLength = 20, dom = "t", scrollX = TRUE),
+      caption = paste("Composition of the persistent multi-pollutant hotspot",
+        "groups. Candidate sources are rule-based and transparent: key",
+        "facilities within 0.6 km; wastewater-type if the group includes H2S",
+        "and a WWTF lies within 2 km; methane co-elevation class from the",
+        "campaign CH4 data; TRI facilities within 0.75 km. Groups matching no",
+        "rule are labeled unresolved."))
+  })
 
   # ---- page 5 ----
-  surface <- eventReactive(input$p5_go, {
+  surface <- eventReactive(input$p5_go, ignoreNULL = FALSE, {
     withProgress(message = "Computing source-probability surface...", {
-      ev <- as.data.table(events)[pollutant == input$p5_poll]
-      thr <- if (input$p5_thr == "p99") ev$thr99[1] else ev$thr95[1]
-      ev <- ev[value >= thr]
-      lat0 <- median(ev$lat); lon0 <- median(ev$lon)
-      to_x <- function(lon) (lon - lon0) * cos(lat0 * pi / 180) * 111320
-      to_y <- function(lat) (lat - lat0) * 110540
-      ev[, `:=`(x = to_x(lon), y = to_y(lat),
-                w = pmin(value / thr, 5), th = wd * pi / 180)]
-      steps <- seq(150, input$p5_ray * 1000, by = 150)
-      pts <- ev[, .(x = x + sin(th) * steps, y = y + cos(th) * steps,
-                    w = w * exp(-steps / 12000)), by = seq_len(nrow(ev))]
-      G <- 250
-      pts[, `:=`(gx = round(x / G) * G, gy = round(y / G) * G)]
-      gr <- pts[, .(w = sum(w)), by = .(gx, gy)]
-      xr <- range(gr$gx); yr <- range(gr$gy)
-      nx <- (xr[2] - xr[1]) / G + 1; ny <- (yr[2] - yr[1]) / G + 1
-      M <- matrix(0, ny, nx)
-      M[cbind((gr$gy - yr[1]) / G + 1, (gr$gx - xr[1]) / G + 1)] <- gr$w
-      sg <- as.numeric(input$p5_sigma)
-      k1 <- dnorm(seq(-3 * sg, 3 * sg, by = G), sd = sg); k1 <- k1 / sum(k1)
-      sm <- function(v) as.numeric(stats::filter(
-        c(rep(0, length(k1) %/% 2), v, rep(0, length(k1) %/% 2)), k1, sides = 2)
-      )[(length(k1) %/% 2 + 1):(length(k1) %/% 2 + length(v))]
-      M <- apply(M, 2, sm); M <- t(apply(M, 1, sm))
-      M[is.na(M)] <- 0; M <- M / max(M)
-      list(M = M, xr = xr, yr = yr, G = G, lat0 = lat0, lon0 = lon0,
-           n = nrow(ev), thr = thr)
+      tryCatch({
+        ev <- events[pollutant == input$p5_poll]
+        thr <- if (input$p5_thr == "p99") ev$thr99[1] else ev$thr95[1]
+        ev <- ev[value >= thr & is.finite(wd)]
+        if (nrow(ev) < 10) stop("too few events for this pollutant/threshold")
+        if (nrow(ev) > 20000)   # cap for server memory; deterministic thinning
+          ev <- ev[unique(round(seq(1, .N, length.out = 20000)))]
+        n <- nrow(ev)
+        lat0 <- median(ev$lat); lon0 <- median(ev$lon)
+        ex <- (ev$lon - lon0) * cos(lat0 * pi / 180) * 111320
+        ey <- (ev$lat - lat0) * 110540
+        w0 <- pmin(ev$value / thr, 5); th <- ev$wd * pi / 180
+        steps <- seq(150, input$p5_ray * 1000, by = 150); ns <- length(steps)
+        x <- rep(ex, each = ns) + rep(sin(th), each = ns) * steps
+        y <- rep(ey, each = ns) + rep(cos(th), each = ns) * steps
+        w <- rep(w0, each = ns) * exp(-steps / 12000)
+        G <- 250
+        gr <- data.table(gx = round(x / G) * G,
+                         gy = round(y / G) * G, w = w)[, .(w = sum(w)),
+                                                       by = .(gx, gy)]
+        xr <- range(gr$gx); yr <- range(gr$gy)
+        nx <- (xr[2] - xr[1]) / G + 1; ny <- (yr[2] - yr[1]) / G + 1
+        M <- matrix(0, ny, nx)
+        M[cbind((gr$gy - yr[1]) / G + 1, (gr$gx - xr[1]) / G + 1)] <- gr$w
+        sg <- as.numeric(input$p5_sigma)
+        k1 <- dnorm(seq(-3 * sg, 3 * sg, by = G), sd = sg); k1 <- k1 / sum(k1)
+        sm <- function(v) as.numeric(stats::filter(
+          c(rep(0, length(k1) %/% 2), v, rep(0, length(k1) %/% 2)), k1, sides = 2)
+        )[(length(k1) %/% 2 + 1):(length(k1) %/% 2 + length(v))]
+        M <- apply(M, 2, sm); M <- t(apply(M, 1, sm))
+        M[is.na(M)] <- 0
+        if (max(M) <= 0) stop("empty surface (no weighted events)")
+        M <- M / max(M)
+        list(M = M, xr = xr, yr = yr, G = G, lat0 = lat0, lon0 = lon0,
+             n = n, thr = thr, err = NULL)
+      }, error = function(e) list(err = conditionMessage(e)))
     })
   })
   output$p5_map <- renderLeaflet({
     s <- surface()
     req(s)
+    validate(need(is.null(s$err), paste("Computation failed:", s$err)))
     # Render the surface as an in-memory PNG placed with L.imageOverlay —
     # avoids the raster/terra dependency (terra fails to compile on
     # Connect Cloud); png/base64enc/htmlwidgets are all pre-built there.
@@ -359,8 +451,9 @@ server <- function(input, output, session) {
   })
   output$p5_info <- renderText({
     s <- surface(); req(s)
-    sprintf("%s events ≥ threshold (%.3g %s) with valid wind.",
-            format(s$n, big.mark = ","), s$thr, unit_of(input$p5_poll))
+    if (!is.null(s$err)) paste("Error:", s$err)
+    else sprintf("%s events ≥ threshold (%.3g %s) with valid wind.",
+                 format(s$n, big.mark = ","), s$thr, unit_of(input$p5_poll))
   })
 
   # ---- page 6 ----
