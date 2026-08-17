@@ -16,3 +16,6 @@ logs/
 quarantine_intermediates_*/
 old_outputs_predelayfix/
 .DS_Store
+
+# exception: Shiny app data (small derived files needed for deploy)
+!shiny_app/data/*.rds

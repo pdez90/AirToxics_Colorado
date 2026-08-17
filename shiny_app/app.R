@@ -327,17 +327,35 @@ server <- function(input, output, session) {
   output$p5_map <- renderLeaflet({
     s <- surface()
     req(s)
-    r <- raster::raster(s$M[nrow(s$M):1, , drop = FALSE])
-    raster::extent(r) <- c(s$lon0 + s$xr[1] / (cos(s$lat0 * pi / 180) * 111320),
-                           s$lon0 + s$xr[2] / (cos(s$lat0 * pi / 180) * 111320),
-                           s$lat0 + s$yr[1] / 110540, s$lat0 + s$yr[2] / 110540)
-    raster::crs(r) <- "+proj=longlat +datum=WGS84"
+    # Render the surface as an in-memory PNG placed with L.imageOverlay —
+    # avoids the raster/terra dependency (terra fails to compile on
+    # Connect Cloud); png/base64enc/htmlwidgets are all pre-built there.
+    M <- s$M[nrow(s$M):1, , drop = FALSE]                    # row 1 = north
+    ramp <- grDevices::colorRampPalette(
+      c("#000004", "#420A68", "#932667", "#DD513A",
+        "#FCA50A", "#FCFFA4"))(256)                          # inferno
+    idx <- pmin(pmax(round(M * 255) + 1L, 1L), 256L)
+    rgbm <- grDevices::col2rgb(ramp[idx]) / 255              # column-major
+    arr <- array(0, dim = c(nrow(M), ncol(M), 4))
+    arr[, , 1] <- matrix(rgbm[1, ], nrow(M))
+    arr[, , 2] <- matrix(rgbm[2, ], nrow(M))
+    arr[, , 3] <- matrix(rgbm[3, ], nrow(M))
+    arr[, , 4] <- 0.75 * sqrt(M)                             # fade near-zero
+    f <- tempfile(fileext = ".png")
+    png::writePNG(arr, f)
+    uri <- base64enc::dataURI(file = f, mime = "image/png")
+    west  <- s$lon0 + s$xr[1] / (cos(s$lat0 * pi / 180) * 111320)
+    east  <- s$lon0 + s$xr[2] / (cos(s$lat0 * pi / 180) * 111320)
+    south <- s$lat0 + s$yr[1] / 110540
+    north <- s$lat0 + s$yr[2] / 110540
     pal <- colorNumeric("inferno", c(0, 1), na.color = "transparent")
     m <- base_map() |>
-      addRasterImage(r, colors = pal, opacity = 0.65) |>
       addLegend(pal = pal, values = c(0, 1), title = "Relative<br>probability")
-    add_context(m, c("Covered facilities", "Wastewater treatment", "Woodshop",
-                     "Refueling stations"))
+    m <- add_context(m, c("Covered facilities", "Wastewater treatment",
+                          "Woodshop", "Refueling stations"))
+    htmlwidgets::onRender(m, sprintf(
+      "function(el, x) { L.imageOverlay('%s', [[%.6f, %.6f], [%.6f, %.6f]], {opacity: 1}).addTo(this); }",
+      uri, south, west, north, east))
   })
   output$p5_info <- renderText({
     s <- surface(); req(s)
