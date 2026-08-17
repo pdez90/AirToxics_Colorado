@@ -1,0 +1,18 @@
+# data and outputs are not tracked — see README for data sources
+*.RData
+*.rds
+*.csv
+*.xlsx
+*.gpkg
+*.shp
+*.shx
+*.dbf
+*.prj
+*.png
+*.jpeg
+*.jpg
+*.pdf
+logs/
+quarantine_intermediates_*/
+old_outputs_predelayfix/
+.DS_Store
