@@ -313,6 +313,58 @@ df_out <- df_out %>% dplyr::filter(!is.na(Latitude), !is.na(Longitude))
 message("df_out rows after dropping missing lat/lon: ", nrow(df_out))
 
 # ----------------------------
+# 3b) NATIVE-CADENCE AVERAGING for the slow instruments
+# ----------------------------
+# The Vocus B (HCN, ~2 s) and Picarro G2204 (H2S/CH4, ~5 s) acquire
+# more slowly than 1 s; in the CDPHE-delivered record their most
+# recent reading is forward-filled to every second. AFTER the delay
+# shift above, we average each slow species to its native acquisition
+# interval within each Asset-Site-day, so all downstream maps,
+# hotspots, and plume analyses use genuine (non-forward-filled)
+# values. Aromatics (Vocus Eiger, 1 s) keep native 1-s resolution.
+# For MULTI-POLLUTANT point-level comparisons, additionally average
+# every involved species to the common 5 s (longest interval).
+# Set NATIVE_CADENCE <- FALSE to reproduce the original 1-s record.
+NATIVE_CADENCE <- TRUE
+H2S_INTERVAL_S <- 5    # Picarro G2204 acquisition interval
+HCN_INTERVAL_S <- 2    # Vocus B acquisition interval
+if (NATIVE_CADENCE) {
+  # RESTRICT-TO-MEASURED-SECONDS: assign the block mean back only to
+  # seconds that already held a value; genuine gaps stay NA (this only
+  # de-noises the delivered values to native cadence - it does not
+  # gap-fill, so coverage and campaign medians are preserved).
+  # We also keep the RAW delivered H2S (Hydrogen_Sulfide_ppb_raw) so
+  # the plume-inversion branch can detect on the un-averaged signal;
+  # pre-averaging flattens the plume rise/fall shape and collapses the
+  # retained-plume set (maps/hotspots use the averaged column).
+  .avg_native <- function(x) { m <- mean(x, na.rm = TRUE); if (is.nan(m)) NA_real_ else m }
+  .n_h2s0 <- sum(!is.na(df_out$Hydrogen_Sulfide_ppb))
+  .n_hcn0 <- sum(!is.na(df_out$Hydrogen_Cyanide_ppb))
+  df_out <- df_out %>%
+    dplyr::mutate(
+      Hydrogen_Sulfide_ppb_raw = Hydrogen_Sulfide_ppb,   # keep delivered H2S for plumes
+      Hydrogen_Cyanide_ppb_raw = Hydrogen_Cyanide_ppb,
+      .epoch = as.numeric(date), .day = as.Date(date),
+      .blk_h2s = floor(.epoch / H2S_INTERVAL_S),
+      .blk_hcn = floor(.epoch / HCN_INTERVAL_S)) %>%
+    dplyr::group_by(Asset, Site, .day, .blk_h2s) %>%
+    dplyr::mutate(.mean_h2s = .avg_native(Hydrogen_Sulfide_ppb)) %>%
+    dplyr::ungroup() %>%
+    dplyr::group_by(Asset, Site, .day, .blk_hcn) %>%
+    dplyr::mutate(.mean_hcn = .avg_native(Hydrogen_Cyanide_ppb)) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(
+      Hydrogen_Sulfide_ppb = dplyr::if_else(is.na(Hydrogen_Sulfide_ppb_raw), NA_real_, .mean_h2s),
+      Hydrogen_Cyanide_ppb = dplyr::if_else(is.na(Hydrogen_Cyanide_ppb_raw), NA_real_, .mean_hcn)) %>%
+    dplyr::select(-.epoch, -.day, -.blk_h2s, -.blk_hcn, -.mean_h2s, -.mean_hcn)
+  message("Native-cadence averaging applied (within Asset-Site-day, measured seconds only): ",
+          "H2S -> ", H2S_INTERVAL_S, " s, HCN -> ", HCN_INTERVAL_S, " s.")
+  message("  H2S non-NA ", .n_h2s0, " -> ", sum(!is.na(df_out$Hydrogen_Sulfide_ppb)),
+          " | HCN non-NA ", .n_hcn0, " -> ", sum(!is.na(df_out$Hydrogen_Cyanide_ppb)),
+          "  (coverage preserved; raw H2S kept in Hydrogen_Sulfide_ppb_raw for plumes)")
+}
+
+# ----------------------------
 # 4) Save outputs + counts
 # ----------------------------
 write.csv(df_out, "/Users/priyanka/Downloads/Suncor/mobile.csv", row.names = FALSE)
