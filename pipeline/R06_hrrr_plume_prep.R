@@ -62,6 +62,35 @@ source(file.path(PIPE, "plume_scripts", "P06_distance_from_wwtf_stability_class.
 diag_msg("WWTF/stability scripts completed in ", round(difftime(Sys.time(), t1, units = "mins"), 1), " min")
 
 # ----------------------------------------------------------------
+# PLUME EXEMPTION: detect on the RAW (un-averaged) H2S.
+# Native-cadence 5-s averaging (script 03) is correct for maps/hotspots
+# but flattens the sub-5-s plume rise/fall shape, collapsing the retained
+# set. Here we point the plume object's H2S / baseline_H2S / plume_H2S at
+# the delivered-signal versions (built in script 10 as *_raw) so the
+# inversion runs on genuine plume structure. Maps/hotspots are unaffected.
+# ----------------------------------------------------------------
+.swap_raw_h2s <- function(d) {
+  if (all(c("H2S_raw", "baseline_H2S_raw", "plume_H2S_raw") %in% names(d))) {
+    d$H2S          <- d$H2S_raw
+    d$baseline_H2S <- d$baseline_H2S_raw
+    d$plume_H2S    <- d$plume_H2S_raw
+    attr(d, ".h2s_raw_applied") <- TRUE
+  }
+  d
+}
+if (exists("res"))     res     <- .swap_raw_h2s(res)
+if (exists("res_sub")) res_sub <- .swap_raw_h2s(res_sub)
+if (isTRUE(attr(res_sub, ".h2s_raw_applied"))) {
+  save(res, res_sub, file = file.path(BASE, "mobile_hrrr_windfromwwtf_stability_filtered.RData"))
+  save(res, file = file.path(BASE, "mobile_hrrr_windfromwwtf.RData"))
+  diag_msg("  [PLUME EXEMPTION] H2S/baseline_H2S/plume_H2S set to RAW delivered signal ",
+           "for plume detection; files re-saved.")
+} else {
+  diag_msg("  [PLUME EXEMPTION] raw H2S columns (*_raw) not found — plume branch ",
+           "using averaged H2S (set NATIVE_CADENCE and re-run 03/06/10 if plumes collapse).")
+}
+
+# ----------------------------------------------------------------
 # DIAG 2: stability class distribution (feeds R2.5 response!)
 # ----------------------------------------------------------------
 diag_section("R06-DIAG 2: stability classes + WWTF alignment")

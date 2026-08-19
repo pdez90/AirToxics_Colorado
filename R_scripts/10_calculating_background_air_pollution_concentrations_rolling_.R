@@ -25,8 +25,14 @@ df <- df %>%
     HCN              = Hydrogen_Cyanide_ppb
   )
 
+# Raw (un-averaged) H2S for the PLUME branch: the plume inversion detects on
+# the delivered signal, since native-cadence averaging (script 03) flattens the
+# plume rise/fall shape. We compute a parallel baseline_H2S_raw / plume_H2S_raw
+# from the delivered H2S so P04-P06 carry them through to the plume detector.
+if ("Hydrogen_Sulfide_ppb_raw" %in% names(df)) df$H2S_raw <- df$Hydrogen_Sulfide_ppb_raw
+
 # List the pollutants you want to process (only existing columns will be used)
-pollutants <- c("Benzene", "Toluene", "Trimethylbenzene", "Xylene", "H2S", "HCN")
+pollutants <- c("Benzene", "Toluene", "Trimethylbenzene", "Xylene", "H2S", "HCN", "H2S_raw")
 cols <- intersect(pollutants, names(df))
 stopifnot(length(cols) > 0, inherits(df$datetime, "POSIXt"))
 

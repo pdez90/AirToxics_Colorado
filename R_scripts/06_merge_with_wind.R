@@ -51,6 +51,7 @@ df <- df %>%
     Xylene_ppb,
     Hydrogen_Sulfide_ppb,
     Hydrogen_Cyanide_ppb,
+    dplyr::any_of(c("Hydrogen_Sulfide_ppb_raw", "Hydrogen_Cyanide_ppb_raw")),  # raw H2S/HCN for the plume branch
     AssetSiteDay,
     interpolated
   ) %>%
