@@ -152,8 +152,14 @@ evt <- pts %>% arrange(plume_id, date) %>% group_by(plume_id) %>%
             edge_left  = if (n() >= edge_k) median(head(.dH2S[is.finite(.dH2S)], edge_k)) else NA_real_,
             edge_right = if (n() >= edge_k) median(tail(.dH2S[is.finite(.dH2S)], edge_k)) else NA_real_,
             prom_dH2S = peak_dH2S - median(.dH2S),
-            stability = if (!is.na(col_stab)) { x <- .data[[col_stab]]; x <- x[!is.na(x)]
-              if (length(x)) names(sort(table(x), decreasing = TRUE))[1] else NA_character_ } else NA_character_,
+            # Stability AT THE PLUME CENTERLINE (the point of peak dH2S), matching
+            # what P08_gaussian_plumes_h2s.R uses for the Pasquill-Gifford sigmas.
+            # Previously this took the MODAL class across all plume points, which
+            # disagreed with the inversion for plumes spanning a stability change
+            # (e.g. plume 9: mode B, centerline D).
+            stability = if (!is.na(col_stab)) {
+              as.character(.data[[col_stab]][which.max(.dH2S)][1])
+            } else NA_character_,
             .groups = "drop") %>%
   mutate(rise_dH2S = peak_dH2S - edge_left, fall_dH2S = peak_dH2S - edge_right,
          pass_peak = is.finite(peak_dH2S) & peak_dH2S >= min_peak_dh2s,
@@ -208,6 +214,16 @@ ch4_ok <- file.exists(CH4_FN)
 if (ch4_ok) {
   ch4 <- readr::read_csv(CH4_FN, show_col_types = FALSE) %>%
     mutate(date = as.POSIXct(date, tz = "UTC"))
+  # PLUME EXEMPTION for CH4, mirroring the H2S plume branch: M01 now averages CH4
+  # to its native 5 s cadence for the mapping/hotspot analyses and retains the
+  # delivered series as ch4_ppm_raw. A plume intercept lasts only seconds, so the
+  # cross-check uses the delivered signal when it is available.
+  if ("ch4_ppm_raw" %in% names(ch4)) {
+    ch4$ch4_ppm <- ch4$ch4_ppm_raw
+    cat("  [CH4 PLUME EXEMPTION] using delivered ch4_ppm_raw (un-averaged) for the cross-check\n")
+  } else {
+    cat("  [CH4 PLUME EXEMPTION] ch4_ppm_raw absent; using ch4_ppm as delivered\n")
+  }
   cat("mobile_methane.csv rows:", nrow(ch4), " assets:", paste(unique(ch4$Asset), collapse=","), "\n")
   # restrict to the Asset x day of the retained plumes (background only needs
   # the local day) -> keeps the rolling computation to a few days, not 2.6M rows

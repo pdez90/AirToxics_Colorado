@@ -913,8 +913,19 @@ compute_facility_metrics <- function(fac_row, mobile_df, receptors_ll) {
   # distance (m)
   d_m <- geosphere::distGeo(receptors_ll, fac_ll)
 
-  # bearing FROM facility TO receptor (0=N, clockwise)
-  b_deg <- geosphere::bearing(fac_ll, receptors_ll)
+  # bearing FROM receptor TO facility (0=N, clockwise) - see the BUGFIX note
+  # BUGFIX (2026-08-20): this was bearing(fac_ll, receptors_ll), the bearing
+  # FACILITY -> RECEPTOR. `wd` is meteorological, i.e. the direction the wind
+  # blows FROM, so a receptor is DOWNWIND of a facility when
+  # bearing(RECEPTOR -> FACILITY) ~ wd. Comparing wd against the
+  # facility -> receptor bearing selected the receptors that were UPWIND, so
+  # every quantity keyed on the `downwind` flag below was computed on the
+  # opposite population: summary_upwind_downwind_*.csv, the distance-decay
+  # "downwind only" panels, the facility:downwind interaction coefficients,
+  # the qGAM alignment curves and the published ratio_0_vs_90 enhancement.
+  # 35_hotspot_figure_2.R:197-203 already does this correctly
+  # (bearing_deg(hotspot -> source) vs wd); 27 now matches it.
+  b_deg <- geosphere::bearing(receptors_ll, fac_ll)
   b_deg <- (b_deg + 360) %% 360
 
   # wind direction is meteorological FROM (deg)
@@ -1242,7 +1253,18 @@ compute_facility_metrics <- function(fac_row, mobile_df, receptors_ll) {
   fac_ll <- c(fac_row$lon, fac_row$lat)
 
   d_m <- geosphere::distGeo(receptors_ll, fac_ll)
-  b_deg <- geosphere::bearing(fac_ll, receptors_ll)
+  # BUGFIX (2026-08-20): this was bearing(fac_ll, receptors_ll), the bearing
+  # FACILITY -> RECEPTOR. `wd` is meteorological, i.e. the direction the wind
+  # blows FROM, so a receptor is DOWNWIND of a facility when
+  # bearing(RECEPTOR -> FACILITY) ~ wd. Comparing wd against the
+  # facility -> receptor bearing selected the receptors that were UPWIND, so
+  # every quantity keyed on the `downwind` flag below was computed on the
+  # opposite population: summary_upwind_downwind_*.csv, the distance-decay
+  # "downwind only" panels, the facility:downwind interaction coefficients,
+  # the qGAM alignment curves and the published ratio_0_vs_90 enhancement.
+  # 35_hotspot_figure_2.R:197-203 already does this correctly
+  # (bearing_deg(hotspot -> source) vs wd); 27 now matches it.
+  b_deg <- geosphere::bearing(receptors_ll, fac_ll)
   b_deg <- (b_deg + 360) %% 360
   align_deg <- angle_diff_deg(mobile_df$wd, b_deg)
 

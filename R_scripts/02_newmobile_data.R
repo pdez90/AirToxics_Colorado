@@ -137,8 +137,56 @@ mobile<-mobile %>% dplyr::arrange(date)
 
 print(nrow(mobile))
 #2392325
-mobile$Latitude <-ifelse(mobile$GPS_flag=="", mobile$Latitude, NA)
-mobile$Longitude <-ifelse(mobile$GPS_flag=="", mobile$Longitude, NA)
+# ---------------------------------------------------------------
+# GPS QA/QC (2026-08-20)
+# Every analysis in this paper is spatial - 500 m cells, census blocks, 100 m
+# hotspot buffers, plume geometry - so a position CDPHE has flagged as
+# questionable makes the observation unusable even when the concentration
+# itself is sound. Any observation whose GPS_flag is not empty is therefore
+# removed. That is the behaviour this line already had; it is written out
+# explicitly here, counted and reported, rather than left implicit in an
+# untrimmed string comparison that would have failed open on stray whitespace.
+#
+# What this removes (counted from the 58 monthly CDPHE CSVs):
+#   QG      GPS questionable          121,207 rows, ALL with parseable coords
+#   QG,CG   + corrected GPS data      116,106 rows, 99.8% with parseable coords
+#   QG,AQ / AQ,QG / QG,AQ,AL / AN / AL / AQ / QG,CG,AL   ~110,000 rows, whose
+#           coordinates are already blank because they carry a null qualifier
+#   QC        7 rows - a code absent from the CDPHE codebook
+#   Total: 348,235 of 2,392,325 rows (14.6%).
+#
+# Note this is STRICTER than the null-qualifier rule applied to the pollutant
+# channels in 03_checks_flags.R: QG and CG are classified "Informational Only"
+# in the CDPHE codebook, and ~237,000 of the removed rows carry valid
+# coordinates. That asymmetry is deliberate and is stated in the manuscript -
+# an informational caveat on a concentration is tolerable, an informational
+# caveat on the position is not, because position is what every analysis here
+# is built on.
+# ---------------------------------------------------------------
+mobile$GPS_flag <- trimws(as.character(mobile$GPS_flag))
+mobile$GPS_flag[is.na(mobile$GPS_flag)] <- ""
+.gps_bad <- nzchar(mobile$GPS_flag)
+.gps_tab <- sort(table(mobile$GPS_flag[.gps_bad]), decreasing = TRUE)
+message(sprintf("[GPS] removing %s of %s rows (%.1f%%) carrying a GPS flag",
+                format(sum(.gps_bad), big.mark = ","),
+                format(nrow(mobile), big.mark = ","), 100 * mean(.gps_bad)))
+for (.k in names(.gps_tab)) {
+  message(sprintf("[GPS]    %-12s %s", .k,
+                  format(as.integer(.gps_tab[[.k]]), big.mark = ",")))
+}
+.gps_known <- c("QG","CG","AL","AN","AO","AQ","AT","AX","AY","AZ","BA","BD",
+                "BH","BK","BL","BM","BR","EC","MB","XX","IH","IL","IR","IT",
+                "QP","QT","QW","EH","LJ","MD","NS","QX")
+.gps_seen <- unique(unlist(strsplit(mobile$GPS_flag[.gps_bad], "[,.;[:space:]]+")))
+.gps_seen <- toupper(.gps_seen[nzchar(.gps_seen)])
+.gps_unknown <- setdiff(.gps_seen, .gps_known)
+if (length(.gps_unknown)) {
+  message(sprintf("[GPS]    NOTE: code(s) absent from the CDPHE codebook, also removed: %s",
+                  paste(sort(.gps_unknown), collapse = ", ")))
+}
+
+mobile$Latitude  <- ifelse(.gps_bad, NA, mobile$Latitude)
+mobile$Longitude <- ifelse(.gps_bad, NA, mobile$Longitude)
 
 mobile<-mobile[!is.na(mobile$Latitude),]
 mobile<-mobile[!is.na(mobile$Longitude),]

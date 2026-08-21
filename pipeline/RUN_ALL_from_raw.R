@@ -64,11 +64,28 @@ if (nzchar(Sys.getenv("CLEAN"))) {
     "WWTP_H2S_plume_step_counts.csv", "WWTP_H2S_plume_funnel.csv",
     "mobile_methane.RData", "mobile_methane.csv", "mobile_methane_wind_bg.RData",
     "hs_df_methane.RData", "cent_out_methane_all.csv", "cent_out_methane_persistent.csv",
-    # orphan artifacts from pre-scripted analyses (nothing regenerates OR consumes these):
-    "hs_df_benzene.RData", "hs_df_toluene.RData", "hs_df_trimethylbenzene.RData",
-    "hs_df_xylene.RData", "hs_df_h2s.RData", "hs_df_hcn.RData",
-    "res_h2s.csv", "lacasa_pbl.RData"
+    "lacasa_pbl.RData"
   )
+  # CORRECTION (2026-08-20): these seven files ARE still quarantined, but the
+  # reason above was wrong and the wrong reason mattered.
+  #   - NOTHING writes hs_df_benzene/toluene/trimethylbenzene/xylene/h2s/hcn:
+  #     28_hotspot_analysis...R keeps `hs_df` as a loop-local and never save()s
+  #     it. (Only hs_df_methane.RData has a writer, M03:118 - and it is listed
+  #     above as a genuine regenerable intermediate.)
+  #   - NOTHING writes res_h2s.csv either: P08 writes
+  #     FinalFig/WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv.
+  # They are not "orphans nothing consumes": R05, R07 and R99 all READ them.
+  # But because nothing WRITES them, and R00 copies these same pre-fix
+  # artifacts into BACKUP, those three diagnostics were comparing a stale
+  # artifact against ITSELF while labelling one side "NEW". Retaining them
+  # would only make a dead check look alive. R07 and R99 now read P08's real
+  # output instead (see the D8 edits), and R05 reports the cent_out_*.csv
+  # tables that script 28 actually writes.
+  .legacy_orphans <- c(
+    "hs_df_benzene.RData", "hs_df_toluene.RData", "hs_df_trimethylbenzene.RData",
+    "hs_df_xylene.RData", "hs_df_h2s.RData", "hs_df_hcn.RData", "res_h2s.csv"
+  )
+  intermediates <- union(intermediates, .legacy_orphans)
   cent_files <- list.files(BASE, pattern = "^cent_out_.*\\.csv$")
   intermediates <- union(intermediates, cent_files)
   n_moved <- 0

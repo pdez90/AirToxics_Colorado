@@ -48,6 +48,10 @@ enforce_shape_n  <- 5
 # Duration / wind / stability
 dur_min_s        <- 10
 dur_max_s        <- 180
+# (2026-08-20) TRUE = the duration window actually rejects events. FALSE
+# restores the previous behaviour, in which the window was unreachable because
+# it was OR-ed with a condition every surviving event already satisfied.
+DUR_STRICT       <- TRUE
 max_wind_sd_deg  <- 15
 keep_stab_levels <- c("B", "C", "D")
 
@@ -119,14 +123,34 @@ dat <- dat %>%
 # ----------------------------
 # 1) Keep only H2S plume-flagged points and assign plume_id
 # ----------------------------
+# BUGFIX (2026-08-20): segmentation sorted on `date` alone and started a new
+# plume only on a time gap, with no vehicle key. Both mobile laboratories are
+# in this record, and when they sample simultaneously their 1-s rows interleave
+# with dt_sec = 0, so two vehicles at two different locations were welded into
+# a single plume event. That corrupts duration_s, the edge/rise/fall shape
+# statistics, the point count, and dist_at_peak_km for any event where it
+# fires. Segment within a vehicle: a new plume starts on a time gap OR on a
+# change of Asset.
+if (!"Asset" %in% names(dat)) {
+  message("[SEG] no `Asset` column in the plume input - treating the record as a single vehicle. ",
+          "Check that 06_merge_with_wind.R still carries Asset if this is unexpected.")
+  dat$Asset <- "UNKNOWN"
+}
 h2s_pts_raw <- dat %>%
   dplyr::filter(!is.na(plume_H2S) & plume_H2S == TRUE) %>%
-  dplyr::arrange(date) %>%
+  dplyr::arrange(Asset, date) %>%
   dplyr::mutate(
     dt_sec   = as.numeric(difftime(date, dplyr::lag(date), units = "secs")),
-    plume_id = cumsum(is.na(dt_sec) | dt_sec > gap_sec)
+    .newplume = is.na(dt_sec) | dt_sec > gap_sec |
+                is.na(dplyr::lag(Asset)) | Asset != dplyr::lag(Asset),
+    plume_id = cumsum(.newplume)
   ) %>%
-  dplyr::select(-dt_sec)
+  dplyr::select(-dt_sec, -.newplume)
+
+message(sprintf("[SEG] %d plume-flagged seconds segmented into %d events across %d vehicle(s): %s",
+                nrow(h2s_pts_raw), dplyr::n_distinct(h2s_pts_raw$plume_id),
+                dplyr::n_distinct(h2s_pts_raw$Asset),
+                paste(sort(unique(h2s_pts_raw$Asset)), collapse = ", ")))
 
 n_plumes_flagged <- dplyr::n_distinct(h2s_pts_raw$plume_id)
 
@@ -171,8 +195,17 @@ h2s_evt_all <- h2s_pts_all %>%
     dist_at_peak_km = distance_wwtp[which.max(dH2S)][1],
     time_at_peak    = date[which.max(dH2S)][1],
 
+    Asset           = dplyr::first(Asset),
     windspd_at_peak = windspd[which.max(dH2S)][1],
     wind_sd_deg     = circ_sd_deg(.data[[wind_col]]),
+    # (2026-08-20) How many DISTINCT wind directions the event actually saw.
+    # The wind field is HRRR, sampled at the rounded hour and the nearest 3 km
+    # grid point, so an event shorter than an hour that stays in one grid cell
+    # sees a single constant value - and then circ_sd_deg() returns 0 and the
+    # consistency criterion below passes by construction rather than by test.
+    # Recording this lets the funnel state how many events the criterion could
+    # be evaluated on instead of implying it screened all of them.
+    n_wind_vals     = dplyr::n_distinct(.data[[wind_col]][is.finite(.data[[wind_col]])]),
 
     edge_left = {
       x <- dH2S[is.finite(dH2S)]
@@ -219,10 +252,36 @@ h2s_evt_flags <- h2s_evt_all %>%
 
     pass_singlepk = is.finite(prom_dH2S) & prom_dH2S >= min_prom_dh2s,
 
-    pass_dur = (is.finite(duration_s) & duration_s >= dur_min_s & duration_s <= dur_max_s) |
-      (n_unique_t >= min_pts),
+    # BUGFIX (2026-08-20): pass_dur was
+    #   (duration in [dur_min_s, dur_max_s]) | (n_unique_t >= min_pts)
+    # and events reaching this point have already been filtered to
+    # n_pts >= min_pts. On a 1-s grid n_unique_t therefore equals n_pts and the
+    # right-hand clause is TRUE for every surviving event, so the duration
+    # window could not reject anything - yet Figure S6.1 presents it as an
+    # active quality filter. The window is now binding, which is what
+    # dur_min_s and dur_max_s were introduced for: an event lasting under
+    # dur_min_s is a spike rather than a traverse, and one lasting over
+    # dur_max_s is not a discrete plume. Set DUR_STRICT to FALSE to restore the
+    # previous, non-binding behaviour.
+    pass_dur = if (DUR_STRICT) {
+      is.finite(duration_s) & duration_s >= dur_min_s & duration_s <= dur_max_s
+    } else {
+      (is.finite(duration_s) & duration_s >= dur_min_s & duration_s <= dur_max_s) |
+        (n_unique_t >= min_pts)
+    },
 
-    pass_wind = is.na(wind_sd_deg) | wind_sd_deg <= max_wind_sd_deg,
+    # BUGFIX (2026-08-20): pass_wind tested the circular SD of a wind direction
+    # that is constant within the event whenever the event sits inside one HRRR
+    # hour and one 3 km grid cell - which is almost always, for events capped at
+    # dur_max_s. circ_sd_deg() then returns 0, the test passes, and the funnel
+    # reports "0 dropped" as though the criterion had screened the set. The
+    # criterion is retained, but an event whose wind field never varied is now
+    # marked NOT EVALUABLE rather than silently passed, and the funnel reports
+    # how many events it could actually be applied to.
+    wind_evaluable = is.finite(n_wind_vals) & n_wind_vals >= 2,
+    pass_wind = dplyr::if_else(wind_evaluable,
+                               is.finite(wind_sd_deg) & wind_sd_deg <= max_wind_sd_deg,
+                               TRUE),
 
     pass_stab = dplyr::if_else(is.na(stability), TRUE, stability %in% keep_stab_levels),
 
@@ -258,8 +317,11 @@ plume_step_counts <- tibble::tibble(
     paste0("Pass rise criterion (>= ", min_rise_dh2s, " ppb, if n >= ", enforce_shape_n, ")"),
     paste0("Pass fall criterion (>= ", min_fall_dh2s, " ppb, if n >= ", enforce_shape_n, ")"),
     paste0("Pass prominence criterion (>= ", min_prom_dh2s, " ppb)"),
-    paste0("Pass duration criterion (", dur_min_s, "-", dur_max_s, " s, or >= ", min_pts, " unique timestamps)"),
-    paste0("Pass wind consistency (SD <= ", max_wind_sd_deg, "°)"),
+    paste0("Pass duration criterion (", dur_min_s, "-", dur_max_s, " s",
+           if (DUR_STRICT) ")" else paste0(", or >= ", min_pts, " unique timestamps)")),
+    paste0("Pass wind consistency (SD <= ", max_wind_sd_deg, "°; evaluable for ",
+           sum(h2s_evt_flags$wind_evaluable, na.rm = TRUE), " of ",
+           nrow(h2s_evt_flags), " events)"),
     paste0("Pass stability filter (", paste(keep_stab_levels, collapse = ", "), ")"),
     "Pass all filters / retained plumes"
   ),
@@ -281,6 +343,10 @@ plume_step_counts <- tibble::tibble(
     pct_remaining = round(100 * n_plumes_remaining / dplyr::first(n_plumes_remaining), 1)
   )
 
+.n_eval <- sum(h2s_evt_flags$wind_evaluable, na.rm = TRUE)
+message(sprintf("[FUNNEL] duration window binding: %s | wind-consistency evaluable on %d of %d events%s",
+                DUR_STRICT, .n_eval, nrow(h2s_evt_flags),
+                if (.n_eval == 0) "  <-- the wind criterion screened nothing; report it as not evaluable, not as passed" else ""))
 print(plume_step_counts)
 
 out_counts_csv <- file.path(out_dir, "WWTP_H2S_plume_step_counts.csv")

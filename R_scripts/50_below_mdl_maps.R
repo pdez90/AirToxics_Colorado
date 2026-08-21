@@ -56,6 +56,26 @@ for (i in seq_along(POLLS)) {
   daily <- df[is.finite(get(P$col)),
               .(dmed = median(get(P$col))), by = .(cell, day)]
   cm <- daily[, .(med = median(dmed), n_days = .N), by = cell]
+
+  # (2026-08-20) The Figure 2 caption calls this map "an alternative
+  # presentation" of Figure 2, so it has to be drawn on the same cell set.
+  # 55_figure2_sharedscale.R shows only cells sampled on at least three
+  # separate days; this script computed n_days and never used it, so it was
+  # displaying every cell including single-visit ones - and the below-MDL
+  # percentages quoted in the Figure 2 caption were computed over that wider
+  # set. Apply the same minimum. NOTE the basis deliberately stays RAW here:
+  # a detection limit is defined on the reported value, not on a
+  # background-corrected one, which is the one respect in which this map is
+  # legitimately not a re-presentation of Figure 2.
+  MIN_DAYS_MAP <- 3
+  .n_all <- nrow(cm)
+  cm <- cm[n_days >= MIN_DAYS_MAP]
+  message(sprintf("%-17s cells %d -> %d after the >=%d sampled-day rule (matching Figure 2)",
+                  P$name, .n_all, nrow(cm), MIN_DAYS_MAP))
+  if (!nrow(cm)) {
+    message(sprintf("%-17s no cell reaches the minimum; panel skipped", P$name))
+    next
+  }
   cm <- merge(cm, cells, by = "cell")
   cm[, below := med < P$mdl]
   pct <- round(100 * mean(cm$below), 1)

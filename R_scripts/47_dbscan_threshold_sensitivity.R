@@ -7,7 +7,7 @@
 #   - persistence percentile: p85, p90 (baseline), p95
 # For each of the 27 variants: per-pollutant persistent clusters,
 # cross-pollutant groups (same eps for grouping, minPts = 1), and
-# recovery of the 17 baseline groups (fraction of MASTER centroids
+# recovery of the baseline groups (fraction of MASTER centroids
 # within 300 m of a variant >=3-pollutant group).
 # Outputs:
 #   TABLE_dbscan_sensitivity.csv
@@ -36,7 +36,7 @@ EPSS <- c(50, 100, 200)
 PERS <- c(0.85, 0.90, 0.95)
 BASELINE <- list(thr = 0.99, eps = 100, pers = 0.90)
 
-# canonical 17 groups (MASTER) in meters for recovery matching
+# canonical groups (MASTER) in meters for recovery matching
 master <- fread(file.path(BASE, "MASTER_hotspot_group_index.csv"))
 mxy <- st_coordinates(st_transform(st_as_sf(
   master[, .(Longitude, Latitude)], coords = c("Longitude", "Latitude"),
@@ -93,7 +93,7 @@ for (thr in THRS) for (eps in EPSS) {
         sqrt((mxy[i, 1] - g3$x[j])^2 + (mxy[i, 2] - g3$y[j])^2)))
       mean(apply(dm, 1, min) <= 300)
     } else 0
-    npp <- dcast(keep[, .N, by = pollutant], . ~ pollutant, value.var = "N")
+    npp <- data.table::dcast(keep[, .N, by = pollutant], . ~ pollutant, value.var = "N")
     res[[length(res) + 1]] <- data.table(
       thr_pctl = thr, eps_m = eps, pers_pctl = pers,
       n_persistent_total = nrow(keep),
@@ -110,20 +110,23 @@ for (thr in THRS) for (eps in EPSS) {
 }
 res <- rbindlist(res)
 stopifnot(nrow(res) == 27, sum(res$baseline) == 1)
-message("Baseline check (should be ~17 groups >=3): ",
-        res[baseline == TRUE, groups_3plus])
+# LABEL FIX (2026-08-20): "17" was hard-coded here and in the figure panel
+# title below, while the value is computed against nrow(mxy), the CURRENT
+# master index (18 groups). The number plotted was right; every label said 17.
+message(sprintf("Baseline check (should be ~%d groups >=3): %d", nrow(mxy),
+                res[baseline == TRUE, groups_3plus]))
 fwrite(res, file.path(BASE, "TABLE_dbscan_sensitivity.csv"))
 print(res[order(-baseline, thr_pctl, eps_m, pers_pctl)])
 
 # ---- figure ---------------------------------------------------
 res[, thr_lab := sprintf("Event threshold p%.1f", 100 * thr_pctl)]
 res[, pers_lab := sprintf("persistence p%.0f", 100 * pers_pctl)]
-long <- melt(res, id.vars = c("thr_lab", "eps_m", "pers_lab", "baseline"),
+long <- data.table::melt(res, id.vars = c("thr_lab", "eps_m", "pers_lab", "baseline"),
              measure.vars = c("groups_3plus", "recovery_of_17"))
 long[variable == "recovery_of_17", value := value * 100]
 long[, panel := ifelse(variable == "groups_3plus",
                        "Groups persistent in >=3 pollutants (n)",
-                       "Baseline 17 groups recovered within 300 m (%)")]
+                       sprintf("Baseline %d groups recovered within 300 m (%%)", nrow(mxy)))]
 p <- ggplot(long, aes(factor(eps_m), value, color = pers_lab,
                       group = pers_lab)) +
   geom_line(linewidth = 0.6) + geom_point(size = 2.2) +

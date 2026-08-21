@@ -12,35 +12,86 @@ mobile$Trimethylbenzene_flag<-str_trim(mobile$Trimethylbenzene_flag)
 mobile$Hydrogen_Sulfide_flag<-str_trim(mobile$Hydrogen_Sulfide_flag)
 mobile$Hydrogen_Cyanide_flag<-str_trim(mobile$Hydrogen_Cyanide_flag)
 
-mobile$Benzene_ppbV<-ifelse(mobile$Benzene_flag=="" | mobile$Benzene_flag=="BR" | mobile$Benzene_flag=="MD" | mobile$Benzene_flag== "LJ", mobile$Benzene_ppbV, NA)
+# ---------------------------------------------------------------
+# QA/QC HARMONIZATION (2026-08-20)
+#
+# This block replaced six per-pollutant WHITELISTS of accepted flag
+# strings. They were mutually inconsistent - benzene accepted only
+# "", BR, MD and LJ, while the other five also accepted the
+# combination codes (BR,LJ / BR,QT / LJ,MD / QT,MD / CD,* ...) - and
+# they matched the flag string EXACTLY, so they were order-sensitive:
+# "LJ,MD" was accepted for toluene but "MD,LJ" was not, and neither was
+# accepted for benzene. Any combination a whitelist did not list was
+# silently voided, so the six pollutants were not receiving the same
+# QA/QC treatment.
+#
+# The rule below is applied IDENTICALLY to all six. It splits the flag
+# on any separator actually present in the CDPHE export (comma, period,
+# semicolon, whitespace - the export contains both "BD,LJ" and "BD.LJ",
+# and at least one "LJ,,AL"), then voids a measurement if ANY token is a
+# NULL DATA QUALIFIER. Codes are classified exactly as in the CDPHE
+# codebook reproduced at the top of 02_newmobile_data.R.
+#
+# Consequences, deliberately:
+#   - Values below the MDL are KEPT. MD is a Quality Assurance
+#     Qualifier ("Value less than MDL"), not a null code, and it is the
+#     single most common flag in the record.
+#   - NEGATIVE values are KEPT. No substitution of 0 or MDL/2 is made
+#     anywhere in this pipeline (SI Section S1.4).
+#   - Measurements carrying only informational codes (CD corrected data,
+#     QT temperature-sensor questionable, ...) are KEPT.
+#   - An unrecognised code is a hard error rather than a silent void, so
+#     a change in CDPHE's flag vocabulary cannot quietly delete data.
+#
+# Verified against all 58 monthly CSVs before this change: the token
+# rule and the old whitelists retain exactly the same measurements for
+# every pollutant (delta 0 on all six; medians, p99 and means
+# unchanged). The whitelists' inconsistency never bit, because the
+# combinations they omitted never co-occur with a reported value. This
+# edit removes the latent hazard and makes the treatment uniform; it
+# does not change any published number.
+# ---------------------------------------------------------------
+.QUAL_NULL <- c("AL","AN","AO","AQ","AT","AX","AY","AZ","BA","BD",
+                "BH","BK","BL","BM","BR","EC","MB","XX")
+.QUAL_KEEP <- c("CD","CG","IH","IL","IR","IT","QG","QP","QT","QW",
+                "EH","LJ","MD","NS","QX")
 
-mobile$Toluene_ppbV <-ifelse(mobile$Toluene_flag=="" | mobile$Toluene_flag=="BR" | mobile$Toluene_flag=="BR,LJ"| mobile$Toluene_flag=="BR,QT" | mobile$Toluene_flag=="MD" |mobile$Toluene_flag=="LJ"| mobile$Toluene_flag=="LJ,MD"| mobile$Toluene_flag=="QT"| mobile$Toluene_flag=="QT,MD" , mobile$Toluene_ppbV, NA)
+.qc_apply <- function(value, flag, label) {
+  f <- toupper(trimws(as.character(flag)))
+  f[is.na(f)] <- ""
+  tk <- strsplit(f, "[,.;[:space:]]+")
+  seen <- unique(unlist(tk)); seen <- seen[nzchar(seen)]
+  unknown <- setdiff(seen, c(.QUAL_NULL, .QUAL_KEEP))
+  if (length(unknown)) {
+    stop(sprintf(paste0("03/QA-QC: %s carries qualifier code(s) absent from the CDPHE ",
+                        "codebook at the top of 02_newmobile_data.R: %s. Classify each as ",
+                        "Null / Quality Assurance / Informational before proceeding."),
+                 label, paste(sort(unknown), collapse = ", ")))
+  }
+  void <- vapply(tk, function(z) any(z %in% .QUAL_NULL), logical(1))
+  n_before <- sum(!is.na(value))
+  out <- ifelse(void, NA_real_, value)
+  n_after <- sum(!is.na(out))
+  message(sprintf("[QA/QC] %-18s reported %9s | kept %9s (%6.2f%%) | voided %7s on null qualifiers | codes: %s",
+                  label, format(n_before, big.mark = ","), format(n_after, big.mark = ","),
+                  100 * n_after / max(n_before, 1L),
+                  format(n_before - n_after, big.mark = ","),
+                  paste(sort(seen), collapse = "/")))
+  out
+}
 
-mobile$Trimethylbenzene_ppbV <-ifelse(mobile$Trimethylbenzene_flag==""| mobile$Trimethylbenzene_flag=="BR" |
-mobile$Trimethylbenzene_flag=="BR,LJ"| mobile$Trimethylbenzene_flag=="BR,QT" |                  mobile$Trimethylbenzene_flag=="MD"| mobile$Trimethylbenzene_flag=="LJ"| mobile$Trimethylbenzene_flag=="LJ,MD"| mobile$Trimethylbenzene_flag=="QT"| mobile$Trimethylbenzene_flag=="QT,MD", mobile$Trimethylbenzene_ppbV, NA)
-
-mobile$Xylene_ppbV <-ifelse(mobile$Xylene_flag==""| mobile$Xylene_flag=="BR" | mobile$Xylene_flag=="BR,LJ"| 
-mobile$Xylene_flag=="BR,QT" | mobile$Xylene_flag=="MD" |mobile$Xylene_flag=="LJ"| mobile$Xylene_flag=="LJ,MD"| mobile$Xylene_flag=="QT"| mobile$Xylene_flag=="QT,MD", mobile$Xylene_ppbV, NA)
-
-mobile$Hydrogen_Cyanide_ppbV <-ifelse(mobile$Hydrogen_Cyanide_flag==""| mobile$Hydrogen_Cyanide_flag=="BR" |
-mobile$Hydrogen_Cyanide_flag=="BR,LJ" |
-mobile$Hydrogen_Cyanide_flag=="BR,QT" |
-mobile$Hydrogen_Cyanide_flag=="CD" | mobile$Hydrogen_Cyanide_flag=="CD,BR" |
-mobile$Hydrogen_Cyanide_flag=="CD,LJ" |
-mobile$Hydrogen_Cyanide_flag=="CD,LJ,MD"|
-mobile$Hydrogen_Cyanide_flag=="CD,MD"|
-mobile$Hydrogen_Cyanide_flag=="MD" |
-mobile$Hydrogen_Cyanide_flag=="MD,LJ" |
-mobile$Hydrogen_Cyanide_flag=="LJ,MD" |
-mobile$Hydrogen_Cyanide_flag=="LJ"|
-mobile$Hydrogen_Cyanide_flag=="LJ,EH"|
-mobile$Hydrogen_Cyanide_flag=="CD,LJ,MD"|
-mobile$Hydrogen_Cyanide_flag=="CD,MD"|
-mobile$Hydrogen_Cyanide_flag=="QT"| mobile$Hydrogen_Cyanide_flag=="QT,MD"|
-mobile$Hydrogen_Cyanide_flag=="LJ,EH"|
-mobile$Hydrogen_Cyanide_flag=="CD", mobile$Hydrogen_Cyanide_ppbV, NA)
-
-mobile$Hydrogen_Sulfide_ppbV <-ifelse(mobile$Hydrogen_Sulfide_flag==""| mobile$Hydrogen_Sulfide_flag=="BR" |                     mobile$Hydrogen_Sulfide_flag=="BR,LJ" | mobile$Hydrogen_Sulfide_flag=="BR,QT" |                  mobile$Hydrogen_Sulfide_flag=="MD" | mobile$Hydrogen_Sulfide_flag=="LJ"| mobile$Hydrogen_Sulfide_flag=="LJ,MD"| mobile$Hydrogen_Sulfide_flag=="QT"| mobile$Hydrogen_Sulfide_flag=="QT,MD", mobile$Hydrogen_Sulfide_ppbV, NA)
+mobile$Benzene_ppbV          <- .qc_apply(mobile$Benzene_ppbV,
+                                          mobile$Benzene_flag,          "Benzene")
+mobile$Toluene_ppbV          <- .qc_apply(mobile$Toluene_ppbV,
+                                          mobile$Toluene_flag,          "Toluene")
+mobile$Trimethylbenzene_ppbV <- .qc_apply(mobile$Trimethylbenzene_ppbV,
+                                          mobile$Trimethylbenzene_flag, "Trimethylbenzene")
+mobile$Xylene_ppbV           <- .qc_apply(mobile$Xylene_ppbV,
+                                          mobile$Xylene_flag,           "Xylene")
+mobile$Hydrogen_Sulfide_ppbV <- .qc_apply(mobile$Hydrogen_Sulfide_ppbV,
+                                          mobile$Hydrogen_Sulfide_flag, "Hydrogen sulfide")
+mobile$Hydrogen_Cyanide_ppbV <- .qc_apply(mobile$Hydrogen_Cyanide_ppbV,
+                                          mobile$Hydrogen_Cyanide_flag, "Hydrogen cyanide")
 
 sum(!is.na(mobile$Benzene_ppbV))
 sum(!is.na(mobile$Toluene_ppbV))
@@ -103,6 +154,44 @@ mobile<-subset(mobile, select=c("Asset..CAT.EMU.", "Site", "Local_Time_MST", "La
 colnames(mobile)<-c("Asset", "Site", "date", "Latitude", "Longitude", "ws", "wd", "Relative_Humidity_percent", "Pressure_mb", "Temperature_F", "Hydrogen_Cyanide_ppb", "Hydrogen_Sulfide_ppb", "Benzene_ppb", "Toluene_ppb", "Trimethylbenzene_ppb", "Xylene_ppb")
 mobile$date<-substr(mobile$date, 1, 19)
 mobile$date<- lubridate::ymd_hms(mobile$date)
+# ---------------------------------------------------------------
+# STUDY-DOMAIN FILTER (2026-08-20)
+# The paper covers the two North Denver / Commerce City routes. A third
+# CDPHE route - Pueblo / Goodrich Corporation (Collins Aerospace) - is
+# excluded. That exclusion was previously scattered across ~25 scripts
+# as `Site != "Goodrich Corporation (Collins Aerospace)"`, and was
+# ABSENT from the primary chain (13, 14, 17, 18, 26, 28, 30, 31), so the
+# scaling factors, segment maps, census-block counts, risk numbers and
+# the persistent hotspot groups were nominally computed on a different
+# sample than every sensitivity analysis meant to bound them.
+#
+# Applying it here, at the single point where the mobile record is
+# assembled, makes the scope identical everywhere downstream and leaves
+# the per-script filters as harmless no-ops. The methane chain applies
+# the equivalent restriction at its own entry point
+# (M01_ingest_delay_garage.R keeps only the SuncorP66 and HEPTerminal
+# routes).
+#
+# Note for the record: as the pipeline currently stands this removes
+# ZERO rows. 02_newmobile_data.R reads only Updated/csv/Suncor_*.csv
+# (Site = "Suncor and Phillips 66 Terminal") and Updated/csv/Terminal_*
+# .csv (Site = "Holly Energy Partners (Sinclair) Terminal"); the Pueblo
+# and Goodrich workbooks under Mobile_CDPHE/ are never read. The filter
+# is stated explicitly so the scope is enforced rather than incidental,
+# and so adding a route file later cannot silently widen the study
+# domain.
+# ---------------------------------------------------------------
+EXCLUDE_SITES <- c("Goodrich Corporation (Collins Aerospace)")
+.n_all <- nrow(mobile)
+.drop  <- mobile$Site %in% EXCLUDE_SITES
+message(sprintf("[DOMAIN] sites present: %s",
+                paste(sort(unique(mobile$Site)), collapse = " | ")))
+message(sprintf("[DOMAIN] excluding %s of %s rows (%.2f%%) on the study-domain filter",
+                format(sum(.drop), big.mark = ","), format(.n_all, big.mark = ","),
+                100 * mean(.drop)))
+mobile <- mobile[!.drop, , drop = FALSE]
+stopifnot(nrow(mobile) > 0)
+
 df<-mobile
 rm(mobile)
 
@@ -239,6 +328,19 @@ hcn  <- df[, c(1, 2, 3, 11)]
 # Build a per-row delay (in seconds) keyed on Asset, then shift timestamps back.
 .asset_delay <- function(asset, pollutant) {
   a <- toupper(trimws(as.character(asset)))
+  # GUARD (2026-08-20): a missing/blank Asset made is_cat NA, ifelse() returned
+  # NA, and the row's timestamp became NA - so the record silently vanished at
+  # the 1-s aggregation instead of being reported. Fail loudly; if this ever
+  # trips, decide the assignment explicitly rather than defaulting.
+  if (any(is.na(a) | !nzchar(a))) {
+    stop(sprintf("03/.asset_delay(): %d of %d rows have a missing or blank Asset; ",
+                 sum(is.na(a) | !nzchar(a)), length(a)),
+         "delays cannot be assigned. Fix the Asset column in 02_newmobile_data.R.")
+  }
+  if (!all(a %in% c("CAT", "EMU"))) {
+    warning(sprintf("03/.asset_delay(): unexpected Asset value(s) treated as EMU: %s",
+                    paste(unique(a[!a %in% c("CAT", "EMU")]), collapse = ", ")))
+  }
   is_cat <- a == "CAT"                      # anything not "CAT" is treated as EMU
   switch(pollutant,
     btex = ifelse(is_cat, 4, 5),
@@ -344,9 +446,24 @@ if (NATIVE_CADENCE) {
     dplyr::mutate(
       Hydrogen_Sulfide_ppb_raw = Hydrogen_Sulfide_ppb,   # keep delivered H2S for plumes
       Hydrogen_Cyanide_ppb_raw = Hydrogen_Cyanide_ppb,
+      # ANCHOR FIX (2026-08-20): the block index was floor(.epoch / B) on the
+      # POST-delay timestamp. The delays are not multiples of the cadence, and
+      # the residues differ between the two vans:
+      #     H2S (B = 5 s):  CAT 21 s -> 1,  EMU 17 s -> 2
+      #     HCN (B = 2 s):  CAT  6 s -> 0,  EMU  3 s -> 1
+      # so no phase can align both vehicles, and each block averaged parts of
+      # TWO consecutive delivered readings with a VAN-SPECIFIC weight (4:1 for
+      # CAT H2S, 3:2 for EMU H2S, exact for CAT HCN, 1:1 for EMU HCN). Means
+      # and medians are unaffected - a within-block rearrangement preserves the
+      # mean - but PEAK AMPLITUDE is attenuated differently for the two vans,
+      # which propagates into the p99 event thresholds and, worst, into
+      # 51_cat_emu_comparison.R, whose entire purpose is to compare CAT against
+      # EMU on these two species. Adding the delay back recovers the
+      # instrument's own delivery clock, so a block holds the readings that
+      # were actually delivered together.
       .epoch = as.numeric(date), .day = as.Date(date),
-      .blk_h2s = floor(.epoch / H2S_INTERVAL_S),
-      .blk_hcn = floor(.epoch / HCN_INTERVAL_S)) %>%
+      .blk_h2s = floor((.epoch + .asset_delay(Asset, "h2s")) / H2S_INTERVAL_S),
+      .blk_hcn = floor((.epoch + .asset_delay(Asset, "hcn")) / HCN_INTERVAL_S)) %>%
     dplyr::group_by(Asset, Site, .day, .blk_h2s) %>%
     dplyr::mutate(.mean_h2s = .avg_native(Hydrogen_Sulfide_ppb)) %>%
     dplyr::ungroup() %>%

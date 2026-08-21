@@ -27,7 +27,7 @@ df[, ws_class := cut(ws, breaks = c(0, 2, 4, 6, Inf),
                      include.lowest = TRUE)]
 rose <- df[, .N, by = .(sector, ws_class)]
 rose[, pct := 100 * N / sum(N)]
-print(dcast(rose, sector ~ ws_class, value.var = "pct", fill = 0))
+print(data.table::dcast(rose, sector ~ ws_class, value.var = "pct", fill = 0))
 
 p <- ggplot(rose, aes(x = factor(sector, levels = 0:15),
                       y = pct, fill = ws_class)) +

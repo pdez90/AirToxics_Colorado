@@ -88,7 +88,7 @@ diur <- rbindlist(lapply(c("benzene", "toluene", "xylene"), function(poll) {
 }))
 diur[, daytype := ifelse(weekend, "Weekend", "Weekday")]
 p <- ggplot(diur, aes(hour, mean, color = daytype, fill = daytype)) +
-  annotate("rect", xmin = 8, xmax = 16, ymin = -Inf, ymax = Inf,
+  ggplot2::annotate("rect", xmin = 8, xmax = 16, ymin = -Inf, ymax = Inf,
            alpha = 0.12, fill = "grey40") +
   geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.18, color = NA) +
   geom_line(linewidth = 0.8) +

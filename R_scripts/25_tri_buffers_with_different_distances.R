@@ -157,7 +157,13 @@ epsilon <- if (is.finite(min_pos)) min_pos / 2 else 1e-6
 summ <- dpf %>%
   group_by(Pollutant, distance, inside) %>%
   summarise(
-    n    = n(),
+    # BUGFIX (2026-08-20): n was n(), which counts rows including NA values,
+    # while mean and sd used na.rm = TRUE. se = sd/sqrt(n) was therefore
+    # understated by sqrt(n_all / n_finite) and ci95 correspondingly too
+    # narrow - worst for sHCN, which is NA for the whole record before
+    # 2025-01-22. The printed "n = ..." labels were the inflated counts too.
+    # Sibling script 24 already drops non-finite values before summarising.
+    n    = sum(is.finite(value)),
     mean = mean(value, na.rm = TRUE),
     sd   = sd(value, na.rm = TRUE),
     se   = sd / sqrt(pmax(n, 1)),

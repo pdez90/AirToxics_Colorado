@@ -83,7 +83,7 @@ temp <- df %>% dplyr::select(Site,
   H2S = Hydrogen_Sulfide_ppb, HCN = Hydrogen_Cyanide_ppb,
   ws, wd, Temp = Temperature_F, Pressure = Pressure_mb,
   RH = Relative_Humidity_percent)   # by NAME (was positional c(1,7:15,20:21))
-temp1<- melt(setDT(temp), id.vars = c("Site"), variable.name = "Pollutant")
+temp1<- data.table::melt(setDT(temp), id.vars = c("Site"), variable.name = "Pollutant")
 temp1<-subset(temp1, temp1$Pollutant!="Temp" & temp1$Pollutant!="Pressure" & temp1$Pollutant!="RH" & temp1$Pollutant!="ws" & temp1$Pollutant!="wd" )
 temp1$Pollutant<-as.character(temp1$Pollutant)
 
@@ -121,7 +121,7 @@ temp <- df %>% dplyr::select(Site,
   H2S = Hydrogen_Sulfide_ppb, HCN = Hydrogen_Cyanide_ppb,
   ws, wd, Temp = Temperature_F, Pressure = Pressure_mb,
   RH = Relative_Humidity_percent)   # by NAME (was positional c(1,7:15,20:21))
-temp1<- melt(setDT(temp), id.vars = c("Site"), variable.name = "Pollutant")
+temp1<- data.table::melt(setDT(temp), id.vars = c("Site"), variable.name = "Pollutant")
 temp1<-subset(temp1, temp1$Pollutant=="Temp" | temp1$Pollutant=="Pressure" | temp1$Pollutant=="RH" | temp1$Pollutant=="ws" | temp1$Pollutant=="wd")
 temp1$Pollutant<-as.character(temp1$Pollutant)
 
@@ -490,7 +490,13 @@ temp<-df[df$Site=="Suncor and Phillips 66 Terminal",]
 temp <- temp %>% dplyr::select(dplyr::any_of(c(
   "Benzene","Toluene","Trimethylbenzene","Xylene","H2S","HCN",
   "ws","wd","Temperature_F","Pressure_mb","Relative_Humidity_percent")))
+temp <- as.data.frame(temp)   # GUARD: df comes from mobile_wswd.RData where `out` is a
+                              # data.table (script 06 join). On a data.table, the next line's
+                              # logical vector would be evaluated in `j` and RETURN THE VECTOR
+                              # instead of subsetting columns, so cor() then receives a vector
+                              # and fails with "supply both 'x' and 'y' or a matrix-like 'x'".
 temp <- temp[, sapply(temp, is.numeric), drop = FALSE]
+stopifnot(is.data.frame(temp), ncol(temp) >= 2, nrow(temp) > 0)
 jpeg("/Users/priyanka/Downloads/Suncor/Corrplot_Suncor.jpeg", width=5000, height=5000, res=600)
 ggcorrplot::ggcorrplot(as.matrix(cor(temp, use="pairwise.complete.obs")),  type = "lower",
    lab = TRUE)
@@ -502,7 +508,13 @@ temp<-df[df$Site=="Holly Energy Partners (Sinclair) Terminal",]
 temp <- temp %>% dplyr::select(dplyr::any_of(c(
   "Benzene","Toluene","Trimethylbenzene","Xylene","H2S","HCN",
   "ws","wd","Temperature_F","Pressure_mb","Relative_Humidity_percent")))
+temp <- as.data.frame(temp)   # GUARD: df comes from mobile_wswd.RData where `out` is a
+                              # data.table (script 06 join). On a data.table, the next line's
+                              # logical vector would be evaluated in `j` and RETURN THE VECTOR
+                              # instead of subsetting columns, so cor() then receives a vector
+                              # and fails with "supply both 'x' and 'y' or a matrix-like 'x'".
 temp <- temp[, sapply(temp, is.numeric), drop = FALSE]
+stopifnot(is.data.frame(temp), ncol(temp) >= 2, nrow(temp) > 0)
 jpeg("/Users/priyanka/Downloads/Suncor/Corrplot_Terminal.jpeg", width=5000, height=5000, res=600)
 ggcorrplot::ggcorrplot(as.matrix(cor(temp, use="pairwise.complete.obs")),  type = "lower",
    lab = TRUE)

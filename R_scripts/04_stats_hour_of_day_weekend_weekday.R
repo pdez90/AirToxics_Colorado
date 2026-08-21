@@ -123,9 +123,15 @@ hour_frac <- d0 %>%
   dplyr::mutate(h = hour(date)) %>%
   dplyr::count(h, name = "n") %>%
   right_join(tibble(h = 6:16), by = "h") %>%
+  # BUGFIX (2026-08-20): `bin = hour_bins$bin` assumed the rows were still in
+  # order 6..16, but right_join appends unmatched y rows at the END. An hour
+  # with zero observations therefore landed last and every label after it was
+  # shifted by one. Sort, then join the label on the hour rather than by
+  # position, so the pairing cannot silently drift.
+  dplyr::arrange(h) %>%
   dplyr::mutate(n = ifelse(is.na(n), 0L, n),
          frac = n / nrow(d0)) %>%
-  dplyr::mutate(bin = hour_bins$bin) %>%
+  dplyr::left_join(dplyr::transmute(hour_bins, h = start_h, bin), by = "h") %>%
   dplyr::select(bin, n, frac)
 
 hour_frac

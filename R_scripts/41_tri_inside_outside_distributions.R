@@ -49,7 +49,15 @@ message("  Inside 1 km: ", format(sum(DT$inside == "Inside"), big.mark = ","),
 
 L <- data.table::melt(DT[, c("inside", unname(polls)), with = FALSE],
                       id.vars = "inside", variable.name = "col", value.name = "value")
-L <- L[is.finite(value) & value > 0]   # log display: positive values only
+# BUGFIX (2026-08-20): the "> 0" truncation was meant for the log-scale
+# display, but `stats` below (Wilcoxon W and p, the group medians, n_in and
+# n_out written to tri_inside_outside_1km_stats.csv) was computed on the
+# truncated set. Background-corrected concentrations are negative more often
+# where levels are low - disproportionately Outside - so dropping them raised
+# the Outside median and attenuated the inside/outside contrast that is the
+# point of the figure. Keep every finite value for the statistics;
+# scale_y_log10() below drops the non-positive ones from the DISPLAY only.
+L <- L[is.finite(value)]
 L[, Pollutant := factor(names(polls)[match(col, polls)],
                         levels = c("Benzene", "Toluene", "Xylene",
                                    "Trimethylbenzene", "H2S", "HCN"))]

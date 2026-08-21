@@ -54,7 +54,7 @@ n_nonmiss <- function(x) sum(is.finite(x))
 # 2) Long-form: summaries pooled over ALL points (across sites)
 # ----------------------------
 # NOTE: Site is intentionally NOT used in id.vars or grouping.
-raw_long <- melt(
+raw_long <- data.table::melt(
   DT,
   id.vars = c("id","day"),
   measure.vars = have_raw,
@@ -64,7 +64,7 @@ raw_long <- melt(
 
 cor_long <- NULL
 if (length(have_cor) > 0) {
-  cor_long <- melt(
+  cor_long <- data.table::melt(
     DT,
     id.vars = c("id","day"),
     measure.vars = have_cor,
@@ -129,6 +129,12 @@ grid$Lon_grid <- cc[,1]
 grid$Lat_grid <- cc[,2]
 
 stopifnot("id" %in% names(grid))
+# GUARD (2026-08-20): `id` uniqueness was never checked, only presence. A
+# duplicated id in the 500 m grid fans out every statistic row; data.table's
+# dcast then detects duplicates, silently defaults to fun.aggregate = length,
+# and EVERY raw_*/bgcorr_* column in seg_wide becomes an observation COUNT
+# instead of a concentration - which flows straight into Figure 2.
+stopifnot(!anyDuplicated(grid$id))
 
 seg_long_dt <- as.data.table(seg_long)
 grid_dt <- as.data.table(sf::st_drop_geometry(grid))
@@ -152,7 +158,7 @@ seg_long_sf <- sf::st_as_sf(seg_long_sf)
 # ----------------------------
 # 6) Wide table (one row per id)
 # ----------------------------
-seg_long_melt <- melt(
+seg_long_melt <- data.table::melt(
   seg_long_dt,
   id.vars = c("id","pollutant","version","Lon_grid","Lat_grid"),
   measure.vars = setdiff(names(seg_long_dt), c("id","pollutant","version","Lon_grid","Lat_grid")),
@@ -162,7 +168,10 @@ seg_long_melt <- melt(
 
 seg_long_melt[, colname := paste(version, pollutant, stat, sep = "_")]
 
-seg_wide <- dcast(
+# GUARD (2026-08-20): see the grid-id note above - assert the cast key is
+# unique so dcast can never silently aggregate concentrations into counts.
+stopifnot(!anyDuplicated(seg_long_melt[, .(id, colname)]))
+seg_wide <- data.table::dcast(
   seg_long_melt,
   id + Lon_grid + Lat_grid ~ colname,
   value.var = "value"

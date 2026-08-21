@@ -8,7 +8,7 @@
 # Thresholds and persistence cutoffs are recomputed WITHIN each
 # half, so each half is a fully self-contained mini-campaign.
 # Metrics: groups >=3 per half; cross-half location agreement
-# (within 300 m); recovery of the 17 full-campaign groups.
+# (within 300 m); recovery of the full-campaign groups (count from MASTER).
 # Outputs:
 #   TABLE_split_sample_hotspots.csv
 #   FinalFig/FIG_split_sample_hotspots.png
@@ -103,8 +103,8 @@ for (sn in names(splits)) {
     groups3_A = nrow(gA), groups3_B = nrow(gB),
     frac_A_near_B = round(near_frac(gA, gB), 2),
     frac_B_near_A = round(near_frac(gB, gA), 2),
-    frac_17_near_A = round(near_frac(mm, gA), 2),
-    frac_17_near_B = round(near_frac(mm, gB), 2))
+    frac_base_near_A = round(near_frac(mm, gA), 2),
+    frac_base_near_B = round(near_frac(mm, gB), 2))
   gA[, `:=`(half = sp$labA, split = sn)]
   gB[, `:=`(half = sp$labB, split = sn)]
   mapdat[[sn]] <- rbind(gA, gB)
@@ -132,7 +132,7 @@ p <- ggplot() +
            xlim = range(c(md$lon, mll$lon)) + c(-0.01, 0.01),
            ylim = range(c(md$lat, mll$lat)) + c(-0.01, 0.01), expand = FALSE) +
   labs(x = NULL, y = NULL,
-       caption = "X symbols: the 17 full-campaign persistent multi-pollutant groups. Colored points: groups identified independently within each half using identical parameters (p99 within-half, eps 100 m, persistence p90). Basemap: CARTO Positron.") +
+       caption = sprintf("X symbols: the %d full-campaign persistent multi-pollutant groups. Colored points: groups identified independently within each half using identical parameters (p99 within-half, eps 100 m, persistence p90). Basemap: CARTO Positron.", nrow(master))) +
   theme_bw(base_size = 11) +
   theme(legend.position = "bottom", panel.grid = element_blank(),
         axis.text = element_blank(), axis.ticks = element_blank(),

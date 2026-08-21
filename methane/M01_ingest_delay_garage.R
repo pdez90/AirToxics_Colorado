@@ -162,6 +162,8 @@ ch4[, date_predelay := date]
 ch4[, date := floor_date(date - dseconds(delay_s), "second")]
 
 # DIAG: verify shift on a sample
+set.seed(42)  # (2026-08-20) diagnostic sample only - results unaffected, but
+              # the printed delay-verification rows are now reproducible.
 samp <- ch4[!is.na(date) & !is.na(date_predelay)][sample(.N, min(.N, 10000))]
 shift_ok <- samp[, all(abs(as.numeric(date_predelay - date, units = "secs") - delay_s) <= 1)]
 diag_msg(sprintf("  [%s] timestamp shift equals per-asset delay (+-1 s flooring) on 10k sample",
@@ -213,6 +215,56 @@ diag_msg(sprintf("  1-s rows: %s | date range: %s to %s | days: %d",
 diag_msg("  per-asset 1-s rows:")
 print(ch4_1s[, .N, by = Asset])
 capture.output(print(ch4_1s[, .N, by = Asset]), file = .DIAG_LOG, append = TRUE)
+
+# ----------------------------------------------------------------
+# NATIVE-CADENCE AVERAGING (CH4, 5 s)
+# The Picarro G2204 reports CH4 on the SAME ~5 s acquisition cycle as H2S, and
+# CDPHE delivers it on a common 1-s time base by carrying the most recent value
+# forward (56.8% of consecutive delivered 1-s CH4 values are identical). Treating
+# those repeats as independent 1-s observations overstates the information
+# content exactly as it did for H2S, so we apply the SAME treatment used at the
+# toxics chokepoint (R_scripts/03_checks_flags.R, section 3b): a block mean over
+# each 5 s interval, assigned only to seconds that already carried a value, with
+# no gap-filling.
+#
+# The delivered series is retained as ch4_ppm_raw. As with H2S, PLUME-scale work
+# (the WWTP CH4 cross-check in R_scripts/70) uses the delivered signal, because
+# averaging flattens the sub-5-s structure a plume intercept depends on; the
+# mapping/hotspot analyses (M02-M06) use the averaged ch4_ppm.
+# ----------------------------------------------------------------
+CH4_NATIVE_CADENCE <- TRUE
+CH4_INTERVAL_S     <- 5
+if (CH4_NATIVE_CADENCE) {
+  diag_section("M01: native-cadence averaging (CH4, 5 s, measured seconds only)")
+  n_before   <- sum(is.finite(ch4_1s$ch4_ppm))
+  uniq_before <- uniqueN(round(ch4_1s$ch4_ppm, 6))
+  ch4_1s[, ch4_ppm_raw := ch4_ppm]
+  ch4_1s[, .day := as.Date(date)]
+  # ANCHOR FIX (2026-08-20): see 03_checks_flags.R. Blocking on the post-delay
+  # clock made each 5-s block a van-specific blend of two delivered Picarro
+  # readings (CAT delay 21 s -> residue 1, EMU 17 s -> residue 2). Add the
+  # delay back so blocks follow the instrument's own delivery cycle.
+  ch4_1s[, .blk := floor((as.numeric(date) +
+                          fifelse(toupper(trimws(Asset)) == "CAT", 21, 17)) / CH4_INTERVAL_S)]
+  ch4_1s[, .mean_ch4 := mean(ch4_ppm, na.rm = TRUE), by = .(Asset, .day, .blk)]
+  ch4_1s[, ch4_ppm := fifelse(is.na(ch4_ppm_raw), NA_real_, .mean_ch4)]
+  ch4_1s[, c(".day", ".blk", ".mean_ch4") := NULL]
+  n_after    <- sum(is.finite(ch4_1s$ch4_ppm))
+  uniq_after <- uniqueN(round(ch4_1s$ch4_ppm, 6))
+  rep_raw <- mean(head(ch4_1s$ch4_ppm_raw, -1) == tail(ch4_1s$ch4_ppm_raw, -1), na.rm = TRUE)
+  rep_avg <- mean(head(ch4_1s$ch4_ppm,     -1) == tail(ch4_1s$ch4_ppm,     -1), na.rm = TRUE)
+  diag_msg(sprintf("  [COVERAGE] CH4 non-NA %s -> %s (must be unchanged)",
+                   format(n_before, big.mark = ","), format(n_after, big.mark = ",")))
+  diag_msg(sprintf("  [DEQUANT]  unique values %s -> %s", format(uniq_before, big.mark = ","),
+                   format(uniq_after, big.mark = ",")))
+  diag_msg(sprintf("  [REPEATS]  consecutive-identical fraction %.1f%% -> %.1f%%",
+                   100 * rep_raw, 100 * rep_avg))
+  diag_msg(sprintf("  [DIST]     median %.4f -> %.4f ; p99 %.4f -> %.4f",
+                   median(ch4_1s$ch4_ppm_raw, na.rm = TRUE), median(ch4_1s$ch4_ppm, na.rm = TRUE),
+                   quantile(ch4_1s$ch4_ppm_raw, 0.99, na.rm = TRUE),
+                   quantile(ch4_1s$ch4_ppm,     0.99, na.rm = TRUE)))
+  stopifnot(n_before == n_after)
+}
 
 df_ch4 <- as.data.frame(ch4_1s)
 save(df_ch4, file = file.path(BASE, "mobile_methane.RData"))

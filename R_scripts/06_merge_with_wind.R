@@ -33,6 +33,23 @@ load("/Users/priyanka/Downloads/Suncor/mobile.RData")
 df <- df_out
 rm(df_out)
 
+# ---------------------------------------------------------------
+# GUARD (2026-08-20): the *_raw columns below carry the DELIVERED
+# (un-averaged) H2S/HCN signal that the plume branch depends on -
+# native-cadence averaging (03, section 3b) flattens the sub-5-s rise/fall
+# shape, so P07's detector must see the raw trace. These columns only exist
+# if NATIVE_CADENCE is TRUE in 03_checks_flags.R. This select() previously
+# used dplyr::any_of(), which matches ZERO columns without error: script 10
+# then built no *_raw baselines, R06's exemption guard evaluated FALSE, and
+# the whole raw-signal plume branch disappeared behind a single log line
+# while the retained-plume count collapsed. Fail loudly instead.
+stopifnot(
+  "mobile.RData lacks the *_raw columns: set NATIVE_CADENCE <- TRUE in 03_checks_flags.R and re-run 03 before 06" =
+    all(c("Hydrogen_Sulfide_ppb_raw", "Hydrogen_Cyanide_ppb_raw") %in% names(df))
+)
+message("[GUARD] raw (un-averaged) H2S/HCN columns present - plume exemption will be available downstream.")
+# ---------------------------------------------------------------
+
 df <- df %>%
    dplyr::select(
     date,
@@ -51,7 +68,7 @@ df <- df %>%
     Xylene_ppb,
     Hydrogen_Sulfide_ppb,
     Hydrogen_Cyanide_ppb,
-    dplyr::any_of(c("Hydrogen_Sulfide_ppb_raw", "Hydrogen_Cyanide_ppb_raw")),  # raw H2S/HCN for the plume branch
+    dplyr::all_of(c("Hydrogen_Sulfide_ppb_raw", "Hydrogen_Cyanide_ppb_raw")),  # raw H2S/HCN for the plume branch
     AssetSiteDay,
     interpolated
   ) %>%

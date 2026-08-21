@@ -20,8 +20,16 @@ suppressPackageStartupMessages({ library(data.table); library(sf) })
 
 BASE <- "/Users/priyanka/Downloads/Suncor"
 message("Loading mobile data + grid...")
-load(file.path(BASE, "mobile_wswd.RData"))
-df <- as.data.table(out); rm(out); gc()
+# BUGFIX (2026-08-20): this loaded mobile_wswd.RData, which is 06_merge_with_
+# wind.R's output and carries only the RAW *_ppb columns. Every hazard quotient
+# in TABLE_health_reference_HQ.csv was therefore computed on a different
+# exposure basis from 73_cumulative_risk.R, which uses the background-corrected
+# s* columns, and from the census-block surface in 18_...R, which also uses
+# them. Two hazard-quotient tables in one paper on two different bases cannot
+# be reconciled by a reader. Load the background-corrected record instead - the
+# same file 73 reads.
+load(file.path(BASE, "bgcorrected_out_merge.RData"))
+df <- as.data.table(df); gc()
 df <- df[is.finite(Latitude) & is.finite(Longitude) &
          Site != "Goodrich Corporation (Collins Aerospace)"]
 df[, day := as.Date(date)]
@@ -47,15 +55,28 @@ mrl_ppb <- data.table(
   mrl_intermediate = c(7, NA, 600, 20, NA, NA),
   mrl_chronic = c(2, 1000, 50, NA, NA, NA))
 
-POLLS <- c(Benzene = "Benzene_ppb", Toluene = "Toluene_ppb",
-           Trimethylbenzene = "Trimethylbenzene_ppb", Xylene = "Xylene_ppb",
-           H2S = "Hydrogen_Sulfide_ppb", HCN = "Hydrogen_Cyanide_ppb")
+# background-corrected columns (script 11), matching 73_cumulative_risk.R
+POLLS <- c(Benzene = "sBenzene", Toluene = "sToluene",
+           Trimethylbenzene = "sTrimethylbenzene", Xylene = "sXylene",
+           H2S = "sH2S", HCN = "sHCN")
+stopifnot(all(POLLS %in% names(df)))
 
 res <- rbindlist(lapply(names(POLLS), function(pn) {
   col <- POLLS[[pn]]
   v <- df[[col]]; fin <- is.finite(v)
   daily <- df[fin, .(dmed = median(get(col))), by = .(cell, day)]
-  cellmed <- daily[, .(m = median(dmed)), by = cell]
+  cellmed <- daily[, .(m = median(dmed), n_days = .N), by = cell]
+  # (2026-08-20) The "maximum sustained cell" previously took max() over EVERY
+  # cell, including cells visited on a single day, which is not a sustained
+  # concentration in any sense. 73_cumulative_risk.R requires >= 10 visit-days
+  # for the same quantity over the same domain; apply the same rule here so the
+  # two tables describe the same population, and report what it removes.
+  MIN_VISITS_54 <- 10
+  .n_all <- nrow(cellmed)
+  cellmed <- cellmed[n_days >= MIN_VISITS_54]
+  message(sprintf("  %-18s cells: %d -> %d after the >=%d visit-day filter",
+                  pn, .n_all, nrow(cellmed), MIN_VISITS_54))
+  stopifnot(nrow(cellmed) > 0)
   mx <- max(cellmed$m)
   sf_ <- scale_f[[pn]]
   mx_scaled <- if (is.na(sf_)) mx else mx * sf_

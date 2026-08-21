@@ -138,16 +138,23 @@ blkmetric <- function(sub) sub[, .(dmed = median(Benzene_ppb)), by = .(block, da
 b_fill <- blkmetric(bz);                 setnames(b_fill, "bval", "filled")
 b_deh  <- blkmetric(bz[gen == TRUE]);    setnames(b_deh,  "bval", "deheld")
 blk <- merge(b_fill, b_deh, by = "block")
+# (2026-08-20) carry population: the published aggregate ratio
+# (20_census_block_level_health_risks.R, and its bootstrap in 58) is
+# POPULATION-WEIGHTED. Computing an unweighted ratio here meant this
+# sensitivity analysis was perturbing a different quantity from the one it is
+# meant to bound.
 ats <- as.data.table(st_drop_geometry(gll))[, .(block = get(idcol),
-        ats = benzene_ppb_airtox)]
+        ats = benzene_ppb_airtox, pop = Population_airtox)]
 blk <- merge(blk, ats, by = "block")
 SCALE <- 1.149
 bres <- data.table(
   blocks               = nrow(blk),
   spearman_fill_deheld = round(cor(blk$filled, blk$deheld, method = "spearman"), 3),
   pearson_fill_deheld  = round(cor(blk$filled, blk$deheld), 3),
-  agg_ratio_filled = round(sum(blk$filled * SCALE) / sum(blk$ats), 3),
-  agg_ratio_deheld = round(sum(blk$deheld * SCALE) / sum(blk$ats), 3),
+  agg_ratio_filled = round(with(blk[is.finite(pop) & pop > 0 & is.finite(ats)],
+                                sum(pop * filled * SCALE) / sum(pop * ats)), 3),
+  agg_ratio_deheld = round(with(blk[is.finite(pop) & pop > 0 & is.finite(ats)],
+                                sum(pop * deheld * SCALE) / sum(pop * ats)), 3),
   blocks_gt2x_filled = sum(blk$filled * SCALE / blk$ats > 2, na.rm = TRUE),
   blocks_gt2x_deheld = sum(blk$deheld * SCALE / blk$ats > 2, na.rm = TRUE))
 fwrite(bres, file.path(BASE, "TABLE_deheld_blocks.csv")); print(t(bres))

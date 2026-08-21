@@ -66,8 +66,26 @@ stopifnot(length(bg_vars) > 0)
 # ----------------------------
 # 2) Census blocks + point-in-polygon join
 # ----------------------------
-blocks <- tigris::blocks(state = "08", year = 2020, class = "sf") |>
-  dplyr::select(GEOID20, geometry)
+# BUGFIX (2026-08-20): this dropped POP20, the 2020 decennial block
+# population that tigris already returns. With no population column on
+# block_sf, R04b_build_block_sf_risk.R falls through to its fallback branch and
+# reads a population column out of airtoxscreen.csv - a DIFFERENT file from the
+# airtoxscreen.xlsx this script reads for the concentrations. The published
+# 126,607-resident figure therefore came from a file the concentration chain
+# never touches, and could not be checked against the geography it is attached
+# to. Keep the census population on the block geometry so R04b uses it.
+blocks <- tigris::blocks(state = "08", year = 2020, class = "sf")
+.pop20 <- intersect(c("POP20", "POP"), names(blocks))
+if (!length(.pop20)) {
+  message("[POP] tigris returned no POP20 column; R04b will fall back to airtoxscreen.csv")
+  blocks <- dplyr::select(blocks, GEOID20, geometry)
+} else {
+  message(sprintf("[POP] carrying %s from the 2020 census blocks: %s residents across %s blocks statewide",
+                  .pop20[1],
+                  format(sum(as.numeric(blocks[[.pop20[1]]]), na.rm = TRUE), big.mark = ","),
+                  format(nrow(blocks), big.mark = ",")))
+  blocks <- dplyr::select(blocks, GEOID20, dplyr::all_of(.pop20[1]), geometry)
+}
 
 if (!is.na(st_crs(blocks))) out_merge <- st_transform(out_merge, st_crs(blocks))
 
@@ -125,6 +143,27 @@ block_dt <- Reduce(function(x, y) merge(x, y, by = "GEOID20", all = TRUE),
                    list(block_med_of_daily_med, block_mean_of_daily_mean, block_counts))
 
 block_dt <- block_dt[!is.na(n_points)]
+
+# (2026-08-20) The block surface keeps every block with at least one
+# observation, so a block visited for a single second on a single day carries
+# the same weight in the published risk comparison as one visited on a hundred
+# days. 73_cumulative_risk.R requires >= 10 visit-days for the same quantity
+# over the same domain. The primary block set is NOT filtered here, because the
+# 1,668-block / 126,607-resident figures are reported from it - but the
+# sensitivity is now quantified rather than invisible, so the decision can be
+# made on evidence.
+if ("n_days" %in% names(block_dt)) {
+  .thr <- 10
+  .lo  <- block_dt[n_days < .thr]
+  message(sprintf("[BLOCKS] %s of %s blocks have < %d visit-days (%.1f%%); median visit-days = %.0f, 10th pct = %.0f",
+                  format(nrow(.lo), big.mark = ","), format(nrow(block_dt), big.mark = ","),
+                  .thr, 100 * nrow(.lo) / nrow(block_dt),
+                  stats::median(block_dt$n_days), stats::quantile(block_dt$n_days, 0.10)))
+  message(sprintf("[BLOCKS] those blocks hold %s of %s mobile observations (%.1f%%)",
+                  format(sum(.lo$n_points), big.mark = ","),
+                  format(sum(block_dt$n_points), big.mark = ","),
+                  100 * sum(.lo$n_points) / sum(block_dt$n_points)))
+}
 
 # ----------------------------
 # 7) Apply scaling to BOTH A and B versions (Benzene/Toluene/Xylene)

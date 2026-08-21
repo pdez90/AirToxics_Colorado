@@ -57,9 +57,17 @@ n_nonmiss <- function(x) sum(is.finite(x))
 # 2) Long-form: segment summaries (pooled over all points)
 # ----------------------------
 # Melt raw and corrected into one tidy table
-raw_long <- melt(
+raw_long <- data.table::melt(
   DT,
-  id.vars = c("id","day"),
+  # BUGFIX (2026-08-19): "Site" was missing here while cor_long (below) had it.
+  # rbindlist(fill = TRUE) then gave every raw row Site = NA, so the later
+  # `by = .(id, Site, pollutant, version)` grouping pooled ALL raw statistics
+  # into a single Site = NA group spanning both routes, and no output row ever
+  # carried both raw_* and bgcorr_* values (verified in the saved object: 684
+  # of 1,608 rows had Site = NA with zero bgcorr values, and the 924 real-Site
+  # rows had zero raw values). This is the PER-ROUTE variant so Site belongs
+  # in the key; script 14 is the deliberate across-sites variant.
+  id.vars = c("id","Site","day"),
   measure.vars = have_raw,
   variable.name = "pollutant",
   value.name = "value"
@@ -67,7 +75,7 @@ raw_long <- melt(
 
 cor_long <- NULL
 if (length(have_cor) > 0) {
-  cor_long <- melt(
+  cor_long <- data.table::melt(
     DT,
     id.vars = c("id","Site","day"),
     measure.vars = have_cor,
@@ -136,6 +144,12 @@ grid$Lat_grid <- cc[,2]
 # Keep only one geometry column and join by id
 # (Assumes grid has column named "id")
 stopifnot("id" %in% names(grid))
+# GUARD (2026-08-20): `id` uniqueness was never checked, only presence. A
+# duplicated id in the 500 m grid fans out every statistic row; data.table's
+# dcast then detects duplicates, silently defaults to fun.aggregate = length,
+# and EVERY raw_*/bgcorr_* column in seg_wide becomes an observation COUNT
+# instead of a concentration - which flows straight into Figure 2.
+stopifnot(!anyDuplicated(grid$id))
 
 # If seg_long is NOT sf, we can keep it as data.table and merge attributes + geometry
 seg_long_dt <- as.data.table(seg_long)
@@ -150,7 +164,7 @@ seg_long_sf <- st_as_sf(seg_long_sf)
 # 6) Optional: create a wide table (one row per id) like your old segment100
 # ----------------------------
 # This makes columns like: raw_Benzene_median, bgcorr_Benzene_median, raw_Benzene_mean_of_daily_means, ...
-seg_long_melt <- melt(
+seg_long_melt <- data.table::melt(
   seg_long_dt,
   id.vars = c("id","Site","pollutant","version","Lon_grid","Lat_grid"),
   measure.vars = setdiff(names(seg_long_dt), c("id","Site","pollutant","version","Lon_grid","Lat_grid")),
@@ -160,7 +174,10 @@ seg_long_melt <- melt(
 
 seg_long_melt[, colname := paste(version, pollutant, stat, sep = "_")]
 
-seg_wide <- dcast(
+# GUARD (2026-08-20): see the grid-id note above - assert the cast key is
+# unique so dcast can never silently aggregate concentrations into counts.
+stopifnot(!anyDuplicated(seg_long_melt[, .(id, Site, colname)]))
+seg_wide <- data.table::dcast(
   seg_long_melt,
   id + Site + Lon_grid + Lat_grid ~ colname,
   value.var = "value"

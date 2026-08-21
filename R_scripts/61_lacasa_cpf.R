@@ -40,7 +40,7 @@ cpf <- rbindlist(lapply(c("benzene","toluene","xylene"), function(poll) {
   s
 }))
 fwrite(cpf, file.path(BASE,"TABLE_lacasa_cpf.csv"))
-print(dcast(cpf, sector ~ pollutant, value.var="cpf"))
+print(data.table::dcast(cpf, sector ~ pollutant, value.var="cpf"))
 cpf[, mid_deg := sector*sect]
 p <- ggplot(cpf, aes(factor(sector, levels=0:15), cpf)) +
   geom_col(fill="#4292c6", color="grey25", linewidth=0.2, width=0.95) +

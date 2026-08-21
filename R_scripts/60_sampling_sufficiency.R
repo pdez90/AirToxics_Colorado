@@ -3,7 +3,7 @@
 # For k in {10,20,40,60,80,120,160,200} sampling days (M draws
 # each): (a) Spearman correlation of subsampled 500 m cell benzene
 # medians with the full-campaign values (cells with >=3 sampled
-# days); (b) fraction of the 17 full-campaign hotspot groups
+# days); (b) fraction of the full-campaign hotspot groups
 # recovered (>=3-pollutant groups within 300 m; within-subset
 # thresholds; baseline parameters).
 # Outputs: TABLE_sampling_sufficiency.csv,
@@ -91,7 +91,7 @@ long <- rbind(
   res[,.(k_days, mid=map_cor_median, lo=map_cor_lo, hi=map_cor_hi,
          panel="Benzene cell-median map: Spearman r vs full campaign")],
   res[,.(k_days, mid=recovery_median, lo=recovery_lo, hi=recovery_hi,
-         panel="Fraction of the 17 hotspot groups recovered (300 m)")])
+         panel=sprintf("Fraction of the %d hotspot groups recovered (300 m)", nrow(master)))])
 p <- ggplot(long, aes(k_days, mid)) +
   geom_ribbon(aes(ymin=lo, ymax=hi), fill="#4292c6", alpha=0.25) +
   geom_line(color="#2166ac", linewidth=0.8) + geom_point(size=1.8) +
