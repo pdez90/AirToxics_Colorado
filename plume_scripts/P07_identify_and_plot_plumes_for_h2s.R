@@ -283,10 +283,26 @@ h2s_evt_flags <- h2s_evt_all %>%
                                is.finite(wind_sd_deg) & wind_sd_deg <= max_wind_sd_deg,
                                TRUE),
 
-    pass_stab = dplyr::if_else(is.na(stability), TRUE, stability %in% keep_stab_levels),
+    # BUGFIX (2026-08-21): missing stability used to PASS this filter. That is
+    # not a conservative default, it is an inconsistency: the Briggs sigma_y and
+    # sigma_z are indexed by stability class, so an event with no class cannot
+    # be inverted at all. P08 drops it, and P07's retained count therefore
+    # overstated the sample P08 actually inverts. An event with no stability is
+    # now dropped here, where the funnel can report it. (P06 now hard-stops if
+    # the cloud field is absent, so NA stability should be rare rather than
+    # systematic; this guard is what makes that assumption visible if it fails.)
+    pass_stab = !is.na(stability) & stability %in% keep_stab_levels,
 
     pass_all = pass_peak & pass_rise & pass_fall & pass_singlepk & pass_dur & pass_wind & pass_stab
   )
+
+.n_stab_na <- sum(is.na(h2s_evt_flags$stability))
+if (.n_stab_na > 0)
+  message(sprintf(paste0("[FILTER] %d of %d candidate events have NO stability class and are ",
+                         "dropped (they cannot be inverted: the Briggs sigmas are indexed by ",
+                         "class). Previously these passed the filter and inflated the retained ",
+                         "count relative to what P08 inverts."),
+                  .n_stab_na, nrow(h2s_evt_flags)))
 
 keep_ids <- h2s_evt_flags %>%
   dplyr::filter(pass_all) %>%
@@ -322,7 +338,8 @@ plume_step_counts <- tibble::tibble(
     paste0("Pass wind consistency (SD <= ", max_wind_sd_deg, "°; evaluable for ",
            sum(h2s_evt_flags$wind_evaluable, na.rm = TRUE), " of ",
            nrow(h2s_evt_flags), " events)"),
-    paste0("Pass stability filter (", paste(keep_stab_levels, collapse = ", "), ")"),
+    paste0("Pass stability filter (", paste(keep_stab_levels, collapse = ", "),
+           "; ", sum(is.na(h2s_evt_flags$stability)), " events dropped for having no class)"),
     "Pass all filters / retained plumes"
   ),
   n_plumes_remaining = c(
@@ -694,5 +711,6 @@ p1; p2; p3; p4; p5; p6
 # Optional: inspect kept plume table
 # ----------------------------
 # h2s_evt_keep %>%
-#   dplyr::select(plume_id, peak_dH2S, dist_at_peak_km, duration_s, n_pts, n_unique_t, wind_sd_deg, stability) %>%
+# dplyr::select(plume_id, peak_dH2S, dist_at_peak_km, duration_s, n_pts, n_unique_t,
+# wind_sd_deg, stability) %>%
 #   dplyr::arrange(dplyr::desc(peak_dH2S))

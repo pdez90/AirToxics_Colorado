@@ -58,15 +58,44 @@ if (!file.exists(res_new_f) && file.exists(file.path(BASE, "res_h2s.csv"))) {
   diag_msg("  [NOTE] falling back to the legacy res_h2s.csv - it is a pre-fix ",
            "artifact that no script regenerates; treat it as provenance only.")
 }
+# BUGFIX (2026-08-21): this reported min/median/max over EVERY row of the
+# all-scenarios file. Some scenarios intercept the plume beyond 2 sigma_y, where
+# dividing by exp(-y^2/2 sigma_y^2) makes Q a property of the Gaussian tail
+# rather than of the measurement; P08 flags those with `usable = FALSE` and they
+# reach 10^4-10^5 t/yr. Quoting their maximum as "the range of inferred emission
+# rates" is quoting the inversion failing. The range is now taken from the
+# well-posed rows, and the excluded ones are reported separately so nothing is
+# hidden. Files written before P08 carried the flag have no `usable` column;
+# those are reported as before, with a warning that the range is unscreened.
 summarize_res <- function(f, tag) {
   if (!file.exists(f)) { diag_msg("  [WARN] ", tag, " results not found: ", f); return(invisible(NULL)) }
   r <- utils::read.csv(f)
   er_col <- grep("emission|rate|tons|Q_", names(r), ignore.case = TRUE, value = TRUE)[1]
   if (is.na(er_col)) er_col <- names(r)[vapply(r, is.numeric, TRUE)][1]
-  v <- r[[er_col]]
-  diag_msg(sprintf("  [%s] n=%d | %s: min %s | median %s | max %s",
-                   tag, nrow(r), er_col, signif(min(v, na.rm = TRUE), 3),
+
+  if (!"usable" %in% names(r)) {
+    v <- r[[er_col]]
+    diag_msg(sprintf("  [%s] n=%d | %s: min %s | median %s | max %s",
+                     tag, nrow(r), er_col, signif(min(v, na.rm = TRUE), 3),
+                     signif(stats::median(v, na.rm = TRUE), 3), signif(max(v, na.rm = TRUE), 3)))
+    diag_msg("  [", tag, "] NOTE: no `usable` column - this file predates the ",
+             "well-posedness flag, so the range above is NOT screened for ",
+             "ill-conditioned crosswind geometry.")
+    return(invisible(v))
+  }
+
+  ok <- as.logical(r$usable) %in% TRUE
+  v  <- r[[er_col]][ok]
+  diag_msg(sprintf("  [%s] n=%d well-posed of %d | %s: min %s | median %s | max %s",
+                   tag, sum(ok), nrow(r), er_col, signif(min(v, na.rm = TRUE), 3),
                    signif(stats::median(v, na.rm = TRUE), 3), signif(max(v, na.rm = TRUE), 3)))
+  if (any(!ok)) {
+    b <- r[[er_col]][!ok]
+    diag_msg(sprintf(paste0("  [%s] EXCLUDED %d ill-conditioned rows (intercept beyond 2 sigma_y; ",
+                            "they span %s-%s t/yr). These are not emission estimates and must not ",
+                            "appear in the quoted range."),
+                     tag, sum(!ok), signif(min(b, na.rm = TRUE), 3), signif(max(b, na.rm = TRUE), 3)))
+  }
   invisible(v)
 }
 v_new <- summarize_res(res_new_f, "NEW")

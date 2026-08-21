@@ -128,13 +128,32 @@ fun_str <- function(f) {
 }
 add_row("S3.6", "plume filtering funnel", fun_str(fun_old), fun_str(fun_new))
 
+# BUGFIX (2026-08-21): the range was taken over EVERY row, including scenarios
+# P08 marks `usable = FALSE` - intercepts beyond 2 sigma_y, where the inversion
+# is governed by the Gaussian tail rather than by the measurement and returns
+# 10^4-10^5 t/yr. This is the number the manuscript walk-through reads, so an
+# unscreened maximum here becomes an unscreened maximum in the text. Screened
+# now, with the excluded span reported rather than dropped silently.
 res_str <- function(f) {
   if (!file.exists(f)) return(NA)
   r <- utils::read.csv(f)
   er <- grep("emission|rate|tons|Q_", names(r), ignore.case = TRUE, value = TRUE)[1]
   if (is.na(er)) er <- names(r)[vapply(r, is.numeric, TRUE)][1]
-  sprintf("n=%d; range %s-%s t/yr", nrow(r),
-          signif(min(r[[er]], na.rm = TRUE), 3), signif(max(r[[er]], na.rm = TRUE), 3))
+  if (!"usable" %in% names(r))
+    return(sprintf("n=%d; range %s-%s t/yr (UNSCREENED - file predates the well-posedness flag)",
+                   nrow(r), signif(min(r[[er]], na.rm = TRUE), 3),
+                   signif(max(r[[er]], na.rm = TRUE), 3)))
+  ok <- as.logical(r$usable) %in% TRUE
+  v  <- r[[er]][ok]
+  out <- sprintf("n=%d well-posed of %d; range %s-%s t/yr", sum(ok), nrow(r),
+                 signif(min(v, na.rm = TRUE), 3), signif(max(v, na.rm = TRUE), 3))
+  if (any(!ok)) {
+    b <- r[[er]][!ok]
+    out <- paste0(out, sprintf("; %d ill-conditioned rows excluded (%s-%s t/yr, not emission estimates)",
+                               sum(!ok), signif(min(b, na.rm = TRUE), 3),
+                               signif(max(b, na.rm = TRUE), 3)))
+  }
+  out
 }
 # BUGFIX (2026-08-20): res_h2s.csv has no writer; P08 writes
 # FinalFig/WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv.

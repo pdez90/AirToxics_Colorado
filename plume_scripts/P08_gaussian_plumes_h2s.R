@@ -226,7 +226,13 @@ sigma_z_pg <- function(CAT, x_km) {
     CAT %in% c("A","B") ~ 0.24*X*(1+(0.001*X))^(0.5),
     CAT == "C"          ~ 0.20*X,
     CAT == "D"          ~ 0.14*X*(1+(0.0003*X))^(-0.5),
-    # BUGFIX (2026-08-20): Briggs urban sigma_z E-F is 0.08x(1+0.0015x)^(-1/2); the code had 0.00015, one order of magnitude low, which makes sigma_z ~1.75x too large at 2 km and inflates Q by the same factor. Every other Briggs coefficient in these files matches the published table exactly, so this is a transcription slip. E/F never arises from the daytime classifier, so the central estimates are unaffected - but P08's CAT_plus1 scenario shifts D->E, so the published upper stability bound was inflated by ~75%.
+    # BUGFIX (2026-08-20): Briggs urban sigma_z E-F is 0.08x(1+0.0015x)^(-1/2); the code
+    # had 0.00015, one order of magnitude low, which makes sigma_z ~1.75x too large at 2
+    # km and inflates Q by the same factor. Every other Briggs coefficient in these
+    # files matches the published table exactly, so this is a transcription slip. E/F
+    # never arises from the daytime classifier, so the central estimates are unaffected
+    # - but P08's CAT_plus1 scenario shifts D->E, so the published upper stability bound
+    # was inflated by ~75%.
     CAT %in% c("E","F") ~ 0.08*X*(1+(0.0015*X))^(-0.5),
     TRUE                ~ NA_real_
   )
@@ -345,7 +351,10 @@ report_wellposed <- function(res, label = "") {
   message(sprintf("  [CROSSWIND]%s median y/sigma_y = %.2f, max = %.2f; %d of %d rows beyond 2 sigma_y%s",
                   label, stats::median(res$y_over_sigy, na.rm = TRUE),
                   max(res$y_over_sigy, na.rm = TRUE), bad, nrow(res),
-                  if (bad > 0) "  <-- inversion is ill-conditioned for those; treat as an upper bound only" else ""))
+                  if (bad > 0) paste0("  <-- inversion is ill-conditioned for those: Q is set by the ",
+                                      "Gaussian tail, not by the measurement, so those rows are NOT ",
+                                      "constrained by that intercept (in either direction - the error ",
+                                      "is not one-sided, so they are not an upper bound either)") else ""))
   invisible(NULL)
 }
 
@@ -583,11 +592,12 @@ results <- scenarios %>%
 report_wellposed(dplyr::filter(results, sens_group == "baseline"), " baseline:")
 report_wellposed(results, " all scenarios:")
 
-write.csv(
-  results,
-  file.path(out_dir, "WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv"),
-  row.names = FALSE
-)
+# The all-scenarios CSV is written AFTER the well-posedness flag is joined on
+# (below), not here. R07_plume_inversion.R and R99_manuscript_numbers_report.R
+# both read this file and report min/median/max over EVERY row, so writing it
+# without `usable` meant the manuscript-numbers report quoted an ill-conditioned
+# scenario as the maximum inferred emission rate - the same failure the figures
+# had, propagated into the numbers that get walked into the text.
 
 # ----------------------------
 # 5) Summaries by scenario (METRIC tons/year ONLY)
@@ -654,6 +664,37 @@ write.csv(
   row.names = FALSE
 )
 
+# FIGURE FIX (2026-08-21): the flag above only existed in the console log and
+# the CSV, so the figures still drew ill-conditioned scenarios as ordinary
+# points on the same axis as the well-posed ones - and because those scenarios
+# carry the largest means, they set the y-range and read as the high end of the
+# sensitivity. A reader of the figure alone would quote them. The flag is now
+# carried onto every scenario-level panel: unusable scenarios are drawn hollow
+# and red, and the caption says what that means.
+.scen_flag <- summ %>% dplyr::select(sens_group, scenario, usable, n_ill, frac_ill)
+results <- results %>%
+  dplyr::left_join(.scen_flag, by = c("sens_group", "scenario"))
+stopifnot(!any(is.na(results$usable)))
+
+write.csv(
+  results,
+  file.path(out_dir, "WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv"),
+  row.names = FALSE
+)
+message(sprintf(paste0("[WELL-POSED] all-scenarios CSV written with `usable`, `n_ill` and ",
+                       "`y_over_sigy`: %d of %d rows are well-posed. Downstream readers must ",
+                       "restrict to usable == TRUE before quoting a range."),
+                sum(results$usable), nrow(results)))
+
+WELLPOSED_COLS  <- c(`TRUE` = "black", `FALSE` = "#C0392B")
+WELLPOSED_SHAPE <- c(`TRUE` = 16, `FALSE` = 1)
+wellposed_caption <- paste0(
+  "Red hollow scenarios contain intercepts beyond ", ILL_SIGY, " sigma_y, where a ",
+  "centreline inversion cannot constrain Q. Their values are not emission ",
+  "estimates and must not be quoted as the high end of the range."
+)
+.n_unusable <- sum(!summ$usable)
+
 # ----------------------------
 # 6) FIGURES
 # ----------------------------
@@ -670,17 +711,26 @@ base_theme <- ggplot2::theme_bw(base_size = BASE_SIZE) +
   )
 
 # A) Summary mean + CI
-p_sum_tpy_metric <- ggplot2::ggplot(summ, ggplot2::aes(x = scenario, y = metric_mean)) +
+p_sum_tpy_metric <- ggplot2::ggplot(
+    summ, ggplot2::aes(x = scenario, y = metric_mean, colour = usable, shape = usable)) +
   ggplot2::geom_point(size = 3.0) +
   ggplot2::geom_errorbar(ggplot2::aes(ymin = metric_lci, ymax = metric_uci), width = 0.18, linewidth = 0.8) +
   ggplot2::facet_wrap(~sens_group, scales = "free_x", ncol = 1) +
   ggplot2::scale_y_continuous(labels = scales::comma) +
+  ggplot2::scale_colour_manual(values = WELLPOSED_COLS,
+                               labels = c(`TRUE` = "well-posed", `FALSE` = "ill-conditioned"),
+                               name = NULL, drop = FALSE) +
+  ggplot2::scale_shape_manual(values = WELLPOSED_SHAPE,
+                              labels = c(`TRUE` = "well-posed", `FALSE` = "ill-conditioned"),
+                              name = NULL, drop = FALSE) +
   ggplot2::labs(
     x = NULL,
     y = paste0("Mean emissions (metric tons/year; op_fraction=", op_fraction, ")"),
-    title = "Sensitivity analysis of inferred WWTP H\u2082S emissions (metric tons/year)"
+    title = "Sensitivity analysis of inferred WWTP H\u2082S emissions (metric tons/year)",
+    caption = wellposed_caption
   ) +
-  base_theme
+  base_theme +
+  ggplot2::theme(plot.caption = ggplot2::element_text(hjust = 0, size = BASE_SIZE - 3))
 
 ggplot2::ggsave(
   filename = file.path(out_dir, "FIG_WWTP_sens_summary_mean_ci_METRIC_TPY.png"),
@@ -689,10 +739,31 @@ ggplot2::ggsave(
 )
 
 # B1) Boxplot (ZOOMED)
-y_zoom_max <- as.numeric(stats::quantile(results$tpy_metric, probs = BOX_ZOOM_Q, na.rm = TRUE))
-if (!is.finite(y_zoom_max) || y_zoom_max <= 0) y_zoom_max <- max(results$tpy_metric, na.rm = TRUE)
+# The zoom limit is now set from the WELL-POSED rows only. Taking it from all
+# rows let the ill-conditioned scenarios - whose values run to 10^4-10^5 t/yr -
+# stretch the axis, which compressed every scenario that is actually an
+# emission estimate into the bottom of the panel.
+.wp_rows <- results$tpy_metric[results$usable]
+if (!length(.wp_rows) || all(!is.finite(.wp_rows))) .wp_rows <- results$tpy_metric
+y_zoom_max <- as.numeric(stats::quantile(.wp_rows, probs = BOX_ZOOM_Q, na.rm = TRUE))
+if (!is.finite(y_zoom_max) || y_zoom_max <= 0) y_zoom_max <- max(.wp_rows, na.rm = TRUE)
 
-p_box_tpy_zoom <- ggplot2::ggplot(results, ggplot2::aes(x = scenario, y = tpy_metric)) +
+# A scenario whose values lie entirely above the zoom limit leaves an EMPTY
+# slot on the x axis, which reads as "no data" rather than "off scale". Label
+# those explicitly so the zoomed panel cannot be misread as the full set.
+.offscale <- results %>%
+  dplyr::group_by(sens_group, scenario, usable) %>%
+  dplyr::summarise(med = stats::median(tpy_metric, na.rm = TRUE), .groups = "drop") %>%
+  dplyr::filter(is.finite(med), med > y_zoom_max)
+
+p_box_tpy_zoom <- ggplot2::ggplot(
+    results, ggplot2::aes(x = scenario, y = tpy_metric, colour = usable)) +
+  (if (nrow(.offscale)) ggplot2::geom_text(
+     data = .offscale,
+     ggplot2::aes(x = scenario, y = y_zoom_max * 0.5,
+                  label = ifelse(usable, "off scale", "off scale\n(ill-conditioned)")),
+     inherit.aes = FALSE, colour = WELLPOSED_COLS[["FALSE"]],
+     size = BASE_SIZE / 4, lineheight = 0.9) else NULL) +
   ggplot2::geom_boxplot(outlier.shape = NA, linewidth = 0.6) +
   ggplot2::geom_point(
     position = ggplot2::position_jitter(width = 0.15, height = 0),
@@ -701,15 +772,20 @@ p_box_tpy_zoom <- ggplot2::ggplot(results, ggplot2::aes(x = scenario, y = tpy_me
   ggplot2::facet_wrap(~sens_group, scales = "free_x", ncol = 1) +
   ggplot2::coord_cartesian(ylim = c(0, y_zoom_max)) +
   ggplot2::scale_y_continuous(labels = scales::comma) +
+  ggplot2::scale_colour_manual(values = WELLPOSED_COLS,
+                               labels = c(`TRUE` = "well-posed", `FALSE` = "ill-conditioned"),
+                               name = NULL, drop = FALSE) +
   ggplot2::labs(
     x = NULL,
     y = paste0("Emissions (metric tons/year; op_fraction=", op_fraction, ")"),
     title = paste0(
       "Distribution of inferred WWTP H\u2082S emissions by scenario (metric t/yr; zoom to ",
-      BOX_ZOOM_Q * 100, "th percentile)"
-    )
+      BOX_ZOOM_Q * 100, "th percentile of well-posed scenarios)"
+    ),
+    caption = wellposed_caption
   ) +
-  base_theme
+  base_theme +
+  ggplot2::theme(plot.caption = ggplot2::element_text(hjust = 0, size = BASE_SIZE - 3))
 
 ggplot2::ggsave(
   filename = file.path(out_dir, "FIG_WWTP_sens_distributions_boxplot_METRIC_TPY_ZOOM.png"),
@@ -719,7 +795,8 @@ ggplot2::ggsave(
 
 # B2) Boxplot (LOG10)
 eps <- 1e-6
-p_box_tpy_log <- ggplot2::ggplot(results, ggplot2::aes(x = scenario, y = tpy_metric + eps)) +
+p_box_tpy_log <- ggplot2::ggplot(
+    results, ggplot2::aes(x = scenario, y = tpy_metric + eps, colour = usable)) +
   ggplot2::geom_boxplot(outlier.alpha = 0.30, linewidth = 0.6) +
   ggplot2::geom_point(
     position = ggplot2::position_jitter(width = 0.15, height = 0),
@@ -727,12 +804,17 @@ p_box_tpy_log <- ggplot2::ggplot(results, ggplot2::aes(x = scenario, y = tpy_met
   ) +
   ggplot2::facet_wrap(~sens_group, scales = "free_x", ncol = 1) +
   ggplot2::scale_y_log10(labels = scales::comma) +
+  ggplot2::scale_colour_manual(values = WELLPOSED_COLS,
+                               labels = c(`TRUE` = "well-posed", `FALSE` = "ill-conditioned"),
+                               name = NULL, drop = FALSE) +
   ggplot2::labs(
     x = NULL,
     y = paste0("Emissions (metric tons/year; log10 scale; op_fraction=", op_fraction, ")"),
-    title = "Distribution of inferred WWTP H\u2082S emissions by scenario (metric t/yr; log10 scale)"
+    title = "Distribution of inferred WWTP H\u2082S emissions by scenario (metric t/yr; log10 scale)",
+    caption = wellposed_caption
   ) +
-  base_theme
+  base_theme +
+  ggplot2::theme(plot.caption = ggplot2::element_text(hjust = 0, size = BASE_SIZE - 3))
 
 ggplot2::ggsave(
   filename = file.path(out_dir, "FIG_WWTP_sens_distributions_boxplot_METRIC_TPY_LOG10.png"),
