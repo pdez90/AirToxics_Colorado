@@ -416,12 +416,23 @@ if (all(!is.finite(theta_deg_vec))) {
   .ref_v <- pick_first(df0, c("wind_from_deg_wwtf"))
   theta_deg_vec <- abs(((.wd_v - .ref_v + 180) %% 360) - 180)
 }
+# BUGFIX (2026-08-21): a missing angle used to fall back to theta = 0, i.e. to
+# the exact centreline geometry - the assumption this chain was rewritten to
+# stop making. That is the worst possible default: it is silent, it is the one
+# value that maximises the recovered concentration factor, and it biases Q
+# DOWNWARDS by a median 20% (up to 80% at the acceptance limit) on precisely
+# the rows where the geometry is unknown. P05 now writes the canonical angle and
+# P06 admits plumes on the same field, so a retained row with no angle means
+# something upstream is broken rather than merely absent. Fail.
 .n_bad_theta <- sum(!is.finite(theta_deg_vec))
 if (.n_bad_theta > 0) {
-  message(sprintf("[GEOM] %d of %d rows have no wind/bearing angle; falling back to theta = 0 (centreline) for those",
-                  .n_bad_theta, length(theta_deg_vec)))
+  stop(sprintf(paste0("P08: %d of %d retained rows have no wind/bearing angle. The crosswind ",
+                      "geometry cannot be built for them, and defaulting to theta = 0 would ",
+                      "silently re-impose the centreline assumption (a ~20%% median low bias ",
+                      "on those rows). Check that P05 wrote `wwtf_wind_angle_diff` and that ",
+                      "P06/P07 carried it through."),
+               .n_bad_theta, length(theta_deg_vec)))
 }
-theta_deg_vec[!is.finite(theta_deg_vec)] <- 0
 message(sprintf("[GEOM] |wind - source bearing|: median %.1f deg, max %.1f deg (acceptance window is 10 deg)",
                 stats::median(theta_deg_vec), max(theta_deg_vec)))
 
