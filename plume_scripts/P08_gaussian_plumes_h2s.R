@@ -592,9 +592,33 @@ write.csv(
 # ----------------------------
 # 5) Summaries by scenario (METRIC tons/year ONLY)
 # ----------------------------
+# WELL-POSEDNESS PER SCENARIO (2026-08-21)
+# Found by driving this inversion with the retained plumes' real geometry
+# rather than by reading it. Q is divided by exp(-y^2 / 2 sigma_y^2), which
+# collapses as the receptor moves off-axis: at y = 3 sigma_y the divisor is
+# 0.011 and at y = 4.4 sigma_y it is 6e-5. Two scenario groups drive y/sigma_y
+# into that regime by construction -
+#   wind-direction offsets (wd+10 and wd-10), which move the receptor, and
+#   the SAMPLING-TIME axis, which shrinks sigma_y by up to 3.6x at t = 1 s and
+#     therefore inflates y/sigma_y by the same factor
+# - and on the four retained plumes they return means of order 10^4 and 10^5
+# t/yr. Those are not emission estimates; they are the inversion failing. They
+# must not be quoted as the upper end of a sensitivity range.
+#
+# The rows are NOT dropped, because that would silently redefine the published
+# sensitivity. Instead every scenario carries the count and fraction of rows
+# beyond 2 sigma_y and a `usable` flag, and a scenario that rests on
+# ill-conditioned rows is named in a warning. Report only usable scenarios as
+# emission ranges; report the rest as "not constrained by this intercept".
+ILL_SIGY <- 2
+
 summ <- results %>%
   dplyr::group_by(sens_group, scenario) %>%
-  dplyr::summarise(ci = list(mean_ci(tpy_metric)), .groups = "drop") %>%
+  dplyr::summarise(ci = list(mean_ci(tpy_metric)),
+                   n_rows       = dplyr::n(),
+                   n_ill        = sum(y_over_sigy > ILL_SIGY, na.rm = TRUE),
+                   max_y_sigy   = max(y_over_sigy, na.rm = TRUE),
+                   .groups = "drop") %>%
   tidyr::unnest_wider(ci) %>%
   dplyr::rename(
     metric_n    = n,
@@ -603,9 +627,26 @@ summ <- results %>%
     metric_uci  = uci
   ) %>%
   dplyr::mutate(
+    frac_ill   = round(n_ill / pmax(n_rows, 1), 3),
+    usable     = n_ill == 0,
     sens_group = factor(sens_group, levels = levels(scenarios$sens_group)),
     scenario   = factor(scenario,   levels = levels(scenarios$scenario))
   )
+
+.bad <- summ[!summ$usable, ]
+if (nrow(.bad)) {
+  message("  [WELL-POSED] these scenarios contain intercepts beyond ", ILL_SIGY,
+          " sigma_y, where a centreline inversion cannot constrain Q - do NOT quote their means as emission rates:")
+  for (i in seq_len(nrow(.bad))) {
+    message(sprintf("    %-14s %-12s %d of %d rows ill-conditioned (max y/sigma_y %.2f); mean would read %.0f t/yr",
+                    as.character(.bad$sens_group[i]), as.character(.bad$scenario[i]),
+                    .bad$n_ill[i], .bad$n_rows[i], .bad$max_y_sigy[i], .bad$metric_mean[i]))
+  }
+  message("  [WELL-POSED] ", sum(summ$usable), " of ", nrow(summ),
+          " scenarios are usable; the reported range should be taken from those.")
+} else {
+  message("  [WELL-POSED] all ", nrow(summ), " scenarios are within ", ILL_SIGY, " sigma_y.")
+}
 
 write.csv(
   summ,
