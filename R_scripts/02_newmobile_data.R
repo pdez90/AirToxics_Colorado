@@ -143,9 +143,13 @@ rm(mobile1)
 #       is consistent with exactly 1.00 h (p = 0.77) and rules out 0.00 h
 #       (p < 1e-4). The offsets are truthful, not mislabelled civil time.
 #
-# `date` therefore carries the MST WALL CLOCK, and it is deliberately LABELLED
-# "UTC" so that the clock reading survives untouched through every downstream
-# operation. `date` is a clock reading, NOT an absolute instant.
+# NAMING, so no future reader assumes the attribute means what it usually means:
+#   `date` is a FIXED-MST WALL CLOCK STORED WITH A UTC ATTRIBUTE.
+#   It is NOT yet an absolute UTC instant.
+# The "UTC" label is a carrier, chosen so the clock reading survives untouched
+# through every downstream operation. To obtain the real instant, assert the
+# zone the reading is in - force_tz(x, "MST") - and then convert. P04 and H04
+# are the only places that need to.
 #
 # Two consumers depend on exactly this:
 #   * 06_merge_with_wind.R joins to EPA AQS `Date.Local`/`Time.Local`, which
@@ -171,11 +175,11 @@ if (!identical(names(.off_tab), "-0700")) {
        ". The whole pipeline assumes fixed MST; re-derive the time convention ",
        "before going further.")
 }
-message(sprintf("[TIME] Local_Time_MST offset uniform -0700 on all %d rows; `date` carries the MST wall clock labelled UTC.",
+message(sprintf("[TIME] Local_Time_MST offset uniform -0700 on all %d rows; `date` is a fixed-MST wall clock stored with a UTC attribute (not an absolute UTC instant).",
                 sum(nzchar(.off))))
 
 mobile$date<-substr(mobile$Local_Time_MST, 1, 19)
-mobile$date<- lubridate::ymd_hms(mobile$date, tz="UTC")   # MST wall clock, labelled UTC - see note above
+mobile$date<- lubridate::ymd_hms(mobile$date, tz="UTC")   # fixed-MST wall clock stored with a UTC attribute - see note above
 
 mobile<-mobile %>% dplyr::arrange(date)
 

@@ -80,8 +80,8 @@ df <- df %>%
 # ---- ensure POSIXct + same tz
 # TIME CONVENTION (2026-08-21). This join works on CLOCK READINGS, not on
 # instants, and it is correct only because both sides carry the SAME clock:
-#   * mobile `date` is the MST wall clock from Local_Time_MST, labelled UTC
-#     (see the note in 02_newmobile_data.R);
+#   * mobile `date` is a FIXED-MST WALL CLOCK STORED WITH A UTC ATTRIBUTE -
+#     not an absolute UTC instant (see the note in 02_newmobile_data.R);
 #   * AQS `Date.Local`/`Time.Local` are LOCAL STANDARD time - also MST here -
 #     and 05_wind_speed_and_direction.R parses them with ymd_hm(), whose
 #     default tz is UTC. Same convention.
@@ -96,11 +96,12 @@ df <- df %>%
 .tz_df <- attr(df$date, "tzone"); .tz_wd <- attr(wind$date, "tzone")
 if (!identical(.tz_df, "UTC") || !identical(.tz_wd, "UTC")) {
   stop("06: expected both `df$date` (", paste(.tz_df, collapse = "/"), ") and `wind$date` (",
-       paste(.tz_wd, collapse = "/"), ") to carry their local clock labelled UTC. ",
+       paste(.tz_wd, collapse = "/"), ") to be fixed-MST wall clocks stored with a UTC ",
+       "attribute, not absolute UTC instants. ",
        "See the time-convention note in 02_newmobile_data.R. Joining hours across ",
        "two different conventions pairs each mobile record with wind from 6-7 hours away.")
 }
-message("[TIME] mobile and AQS wind both carry their local (MST) clock labelled UTC - hourly join is like-for-like.")
+message("[TIME] mobile and AQS wind are both fixed-MST wall clocks stored with a UTC attribute - hourly join is like-for-like.")
 
 df$date   <- as.POSIXct(df$date,   tz = attr(df$date, "tzone"))
 wind$date <- as.POSIXct(wind$date, tz = attr(df$date, "tzone"))
