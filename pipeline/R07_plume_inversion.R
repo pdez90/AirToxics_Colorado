@@ -70,8 +70,7 @@ if (!file.exists(res_new_f) && file.exists(file.path(BASE, "res_h2s.csv"))) {
 summarize_res <- function(f, tag) {
   if (!file.exists(f)) { diag_msg("  [WARN] ", tag, " results not found: ", f); return(invisible(NULL)) }
   r <- utils::read.csv(f)
-  er_col <- grep("emission|rate|tons|Q_", names(r), ignore.case = TRUE, value = TRUE)[1]
-  if (is.na(er_col)) er_col <- names(r)[vapply(r, is.numeric, TRUE)][1]
+  er_col <- pick_emission_col(names(r))   # named, not guessed - see diagnostics_helpers.R
 
   if (!"usable" %in% names(r)) {
     v <- r[[er_col]]

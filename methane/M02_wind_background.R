@@ -183,12 +183,33 @@ if ("Hydrogen_Sulfide_ppb" %in% names(tox)) {
       suppressWarnings(cor(m$ch4_enh, m$h2s, use = "complete.obs"))
     })
     if (all(is.na(cc_by_lag))) { diag_msg("  [", a, "] insufficient overlap for lag check"); next }
-    bl <- (-10:10)[which.max(cc_by_lag)]
-    diag_msg(sprintf("  [%s] %s: max CH4-H2S correlation at lag %+d s (r=%.3f) — expect 0 (+-2)",
-                     ifelse(abs(bl) <= 2, "PASS", "CHECK"), a, bl, max(cc_by_lag, na.rm = TRUE)))
+    bl   <- (-10:10)[which.max(cc_by_lag)]
+    rmax <- max(cc_by_lag, na.rm = TRUE)
+    r0   <- cc_by_lag[(-10:10) == 0]
+
+    # BUGFIX (2026-08-21): this reported the argmax of the lag curve whatever
+    # its height, so on a flat, near-zero curve it named a lag that is pure
+    # noise - and then told the reader the delays were inconsistent and to
+    # "revisit before hotspots". On the 2026-08-20 run it flagged +10 s for
+    # both vehicles at r = 0.073 and 0.033, i.e. no co-variation to locate a
+    # lag with at all. Interpret the peak only when there is a peak.
+    R_MIN <- 0.20
+    if (!is.finite(rmax) || rmax < R_MIN) {
+      diag_msg(sprintf(paste0("  [N/A ] %s: CH4-H2S co-variation too weak to locate a lag ",
+                              "(max r=%.3f over lags -10..+10 s, r at lag 0 = %.3f; ",
+                              "need r >= %.2f). This is NOT evidence of a delay mismatch - ",
+                              "the curve is flat, so its argmax is noise."),
+                       a, rmax, r0, R_MIN))
+    } else {
+      diag_msg(sprintf("  [%s] %s: max CH4-H2S correlation at lag %+d s (r=%.3f, r at lag 0 = %.3f) — expect 0 (+-2)",
+                       ifelse(abs(bl) <= 2, "PASS", "CHECK"), a, bl, rmax, r0))
+    }
   }
-  diag_msg("  (CH4 and H2S are co-measured by the Picarro; a peak away from 0 means the")
-  diag_msg("   CH4 delay and the H2S delay are inconsistent — revisit before hotspots.)")
+  diag_msg("  (CH4 and H2S are co-measured by the Picarro, so a WELL-RESOLVED peak away")
+  diag_msg("   from lag 0 would mean the CH4 and H2S delays are inconsistent. A weak or")
+  diag_msg("   flat curve means the two species simply do not co-vary strongly enough in")
+  diag_msg("   this record to test the delays that way, which is the expected result when")
+  diag_msg("   H2S is near its MDL for most of the campaign.)")
 } else diag_msg("  [WARN] H2S column not found in toxics data; lag check skipped")
 
 df_ch4_bg <- as.data.frame(ch4)

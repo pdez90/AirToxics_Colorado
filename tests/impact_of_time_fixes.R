@@ -122,11 +122,38 @@ if (length(prev)) {
   r <- ev$res
   if (!is.null(r) && all(c("date", "hour") %in% names(r))) {
     want <- with_tz(force_tz(round(r$date, "hour"), "MST"), "UTC")
-    diff_h <- as.numeric(difftime(r$hour, want, units = "hours"))
-    cat(sprintf("\n   previous mobile_hrrr.RData (%s):\n", basename(dirname(prev[1]))))
-    cat(sprintf("     %d of %d rows carried a different HRRR hour than the corrected chain\n",
-                sum(abs(diff_h) > 1e-6), nrow(r)))
-    print(table(`offset_hours` = round(diff_h)))
+
+    # BUGFIX (2026-08-21): `hour` is stored as a CHARACTER string in the
+    # pre-delay-fix backup ("2023-02-16 17:00:00"), not as a POSIXct. Passing
+    # that straight to difftime() coerces it with as.POSIXct(x, tz = "") - the
+    # MACHINE's zone - which manufactured an offset on every row and made a
+    # correct HRRR join look catastrophically misaligned (modal -13 h on a
+    # Denver-configured Mac, -19 h under TZ=UTC). Parse it explicitly as UTC,
+    # which is what the string is, and assert the type so this cannot recur.
+    hr <- r$hour
+    if (is.character(hr)) {
+      hr <- as.POSIXct(hr, tz = "UTC", format = "%Y-%m-%d %H:%M:%S")
+    } else if (inherits(hr, "POSIXct")) {
+      if (!identical(attr(hr, "tzone"), "UTC")) hr <- with_tz(hr, "UTC")
+    } else {
+      stop("previous mobile_hrrr.RData has `hour` of class ",
+           paste(class(r$hour), collapse = "/"),
+           " - refusing to guess how to compare it.")
+    }
+    stopifnot(inherits(hr, "POSIXct"), identical(attr(hr, "tzone"), "UTC"))
+
+    diff_h  <- as.numeric(difftime(hr, want, units = "hours"))
+    n_na    <- sum(is.na(diff_h))
+    n_diff  <- sum(abs(diff_h) > 1e-6, na.rm = TRUE)
+    cat(sprintf("\n   previous mobile_hrrr.RData (%s), `hour` stored as %s:\n",
+                basename(dirname(prev[1])), paste(class(r$hour), collapse = "/")))
+    cat(sprintf("     %d of %d comparable rows carry a different HRRR hour than the\n",
+                n_diff, nrow(r) - n_na))
+    cat("     corrected chain")
+    if (n_na) cat(sprintf("; %d rows not comparable (NA date or hour)", n_na))
+    cat(".\n")
+    if (n_diff) print(table(`offset_hours` = round(diff_h[abs(diff_h) > 1e-6])))
+    else cat("     -> the as-submitted HRRR join already matched the corrected chain exactly.\n")
   }
 } else {
   cat("\n   (no previous mobile_hrrr.RData to compare against - it has not been\n")

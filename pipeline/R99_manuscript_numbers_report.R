@@ -89,16 +89,33 @@ add_row("S3.3", "census blocks with >=1 mobile point",
 # residents are the COMMON blocks (AirToxScreen benzene + mobile benzene +
 # population > 0) written by 20_census_block_level_health_risks.R. Read that
 # file so the deliverable reports the number the manuscript actually cites.
+# BUGFIX (2026-08-21): this searched BASE only, not recursively, but script 20
+# writes to BASE/FinalFig/. The file was there and fresh - R04b sources script
+# 20, so it regenerates on every run - yet the report said "NOT FOUND, run R04b
+# then script 20" and the manuscript's headline block count went unreported.
 .rc <- list.files(BASE, pattern = "risk.*common.*[.]csv$", ignore.case = TRUE,
-                  full.names = TRUE)
+                  full.names = TRUE, recursive = TRUE)
 if (length(.rc)) {
   .rcx <- try(utils::read.csv(.rc[1]), silent = TRUE)
   if (!inherits(.rcx, "try-error") && "n_blocks" %in% names(.rcx)) {
     add_row("S3.3", paste0("COMMON census blocks (", basename(.rc[1]), ")"),
             paste0(REF_SUBMITTED$n_blocks, " (as submitted)"), .rcx$n_blocks[1])
-    if ("population" %in% names(.rcx)) {
+    # script 20 names this column `total_population_used`, not `population`
+    .popcol <- intersect(c("total_population_used", "population"), names(.rcx))
+    if (length(.popcol)) {
       add_row("S3.3", "population in common blocks",
-              paste0(REF_SUBMITTED$population, " (as submitted)"), .rcx$population[1])
+              paste0(REF_SUBMITTED$population, " (as submitted)"), .rcx[[.popcol[1]]][1])
+    }
+    # this file is written by script 20 via R04b; if its timestamp predates the
+    # run it is stale and the number below is not from this pipeline.
+    add_row("S3.3", "common-blocks file last written",
+            "-", format(file.info(.rc[1])$mtime, "%Y-%m-%d %H:%M"))
+    if (all(c("risk_5_75", "risk_20_40") %in% names(.rcx))) {
+      for (k in seq_len(nrow(.rcx)))
+        add_row("S3.3", paste0("benzene risk, ", .rcx$metric[k]),
+                paste0(paste(REF_SUBMITTED$risk_airtox, collapse = "-"), " / ",
+                       paste(REF_SUBMITTED$risk_mobile, collapse = "-"), " (as submitted)"),
+                sprintf("%.3f (5.75) / %.3f (20.40)", .rcx$risk_5_75[k], .rcx$risk_20_40[k]))
     }
   }
 } else {
@@ -137,8 +154,7 @@ add_row("S3.6", "plume filtering funnel", fun_str(fun_old), fun_str(fun_new))
 res_str <- function(f) {
   if (!file.exists(f)) return(NA)
   r <- utils::read.csv(f)
-  er <- grep("emission|rate|tons|Q_", names(r), ignore.case = TRUE, value = TRUE)[1]
-  if (is.na(er)) er <- names(r)[vapply(r, is.numeric, TRUE)][1]
+  er <- pick_emission_col(names(r))      # named, not guessed - see diagnostics_helpers.R
   if (!"usable" %in% names(r))
     return(sprintf("n=%d; range %s-%s t/yr (UNSCREENED - file predates the well-posedness flag)",
                    nrow(r), signif(min(r[[er]], na.rm = TRUE), 3),

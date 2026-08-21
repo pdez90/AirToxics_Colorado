@@ -144,15 +144,44 @@ REF <- list(
 # Unchanged and therefore not restated: delays, missing_wind_pct,
 # median_dist_met_km, aromatic p99s, scaling, clusters_ge2, clusters_ge4.
 # --------------------------------------------------------------------
+# --------------------------------------------------------------------
+# BUGFIX (2026-08-21): R07 and R99 both picked the emission column out of
+# P08's output with
+#     grep("emission|rate|tons|Q_", names(r), ignore.case = TRUE)[1]
+# The ONLY column that matches is `Q_ppm_m3_s` - a legacy volumetric
+# quantity in ppm*m3/s - while `tpy_metric`, the actual metric tons/year
+# column, matches none of those words. So every "emission rate (t/yr)" line
+# in the manuscript-numbers report was printing ppm*m3/s under a t/yr label
+# (3,189-243,131 instead of 126-9,410), and the "fraction within the
+# as-submitted 100-1000 t/yr envelope" check compared ppm*m3/s against t/yr
+# and reported 0% when the true figure is 42%.
+#
+# Name the column instead of guessing at it, and refuse to fall back to a
+# unit we cannot identify.
+pick_emission_col <- function(nms) {
+  if ("tpy_metric" %in% nms) return("tpy_metric")
+  hit <- grep("^tpy|tons_per_year|t_per_yr|_tpy$", nms, ignore.case = TRUE, value = TRUE)
+  if (length(hit)) return(hit[1])
+  stop("No metric-tons/year column found (looked for `tpy_metric`). Columns present: ",
+       paste(nms, collapse = ", "),
+       ". Refusing to guess - `Q_ppm_m3_s` and `kg_s` are NOT t/yr.")
+}
+
 REF_SUBMITTED <- REF
 
 REF <- utils::modifyList(REF, list(
   p99 = c(Benzene_ppb = 1.8, Toluene_ppb = 4.31, Trimethylbenzene_ppb = 2.59,
           Xylene_ppb = 3.19, Hydrogen_Sulfide_ppb = 4.6, Hydrogen_Cyanide_ppb = 11),
   n_blocks = 1668, population = 126607,
-  risk_airtox = c(0.117, 0.416), risk_mobile = c(0.113, 0.402), risk_ratio = 0.97,
+  # BENCHMARK REFRESH (2026-08-21, full CLEAN re-run): risk_mobile and the
+  # ratio drifted slightly from the 2026-08-19 values as the GPS/QA screen
+  # removed 105,123 rows; plume_retained is 3, not 4. risk_airtox, n_blocks
+  # and population reproduced exactly.
+  risk_airtox = c(0.117, 0.416), risk_mobile = c(0.108, 0.384), risk_ratio = 0.92,
   dbscan_initial = 2650, clusters_ge3 = 18, final_groups = 18,
-  plume_candidates = 33, plume_retained = 4
+  plume_candidates = 33, plume_retained = 3,
+  emission_range_tpy_wellposed = c(126, 3929),
+  emission_baseline_mean_tpy = 1146
 ))
 
 .ref_delta <- names(REF)[vapply(names(REF), function(k)
