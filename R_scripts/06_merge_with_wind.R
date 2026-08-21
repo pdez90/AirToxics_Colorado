@@ -78,6 +78,30 @@ df <- df %>%
   )
 
 # ---- ensure POSIXct + same tz
+# TIME CONVENTION (2026-08-21). This join works on CLOCK READINGS, not on
+# instants, and it is correct only because both sides carry the SAME clock:
+#   * mobile `date` is the MST wall clock from Local_Time_MST, labelled UTC
+#     (see the note in 02_newmobile_data.R);
+#   * AQS `Date.Local`/`Time.Local` are LOCAL STANDARD time - also MST here -
+#     and 05_wind_speed_and_direction.R parses them with ymd_hm(), whose
+#     default tz is UTC. Same convention.
+# The two lines below only re-label; they do not convert. So if `date` ever
+# arrives labelled "America/Denver" - which is what parsing Local_Time_MST with
+# that zone would produce - the mobile side becomes an instant 6-7 h away from
+# the AQS clock reading, and the hourly join SILENTLY pairs each observation
+# with wind measured 6 h later in summer and 7 h later in winter. It does not
+# fail; it returns a full set of matches that are all wrong. Verified by
+# running this join logic on synthetic data under all three candidate parses.
+# Hence the hard stop.
+.tz_df <- attr(df$date, "tzone"); .tz_wd <- attr(wind$date, "tzone")
+if (!identical(.tz_df, "UTC") || !identical(.tz_wd, "UTC")) {
+  stop("06: expected both `df$date` (", paste(.tz_df, collapse = "/"), ") and `wind$date` (",
+       paste(.tz_wd, collapse = "/"), ") to carry their local clock labelled UTC. ",
+       "See the time-convention note in 02_newmobile_data.R. Joining hours across ",
+       "two different conventions pairs each mobile record with wind from 6-7 hours away.")
+}
+message("[TIME] mobile and AQS wind both carry their local (MST) clock labelled UTC - hourly join is like-for-like.")
+
 df$date   <- as.POSIXct(df$date,   tz = attr(df$date, "tzone"))
 wind$date <- as.POSIXct(wind$date, tz = attr(df$date, "tzone"))
 

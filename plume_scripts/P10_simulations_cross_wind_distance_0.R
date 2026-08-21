@@ -45,15 +45,17 @@ suppressPackageStartupMessages({
 # hour (TCDC 0.8%) into 80% cover and 1.2% into an impossible 120%. A
 # simulation that classifies stability differently from the observational chain
 # is not characterising that chain. One shared definition.
-# Resolved rather than hard-coded, so a reader who clones the repository to any
-# other path still gets ONE definition instead of silently falling back to a
-# local copy. If none of these resolve, stop - running with a stale private copy
-# of the classifier is exactly the failure this file was created to end.
+# Repository-relative, in the order the pipeline is actually run from. No
+# absolute path: a public reproducibility repository should not need one, and a
+# private one that happens to resolve on the author's machine is exactly how a
+# stale local copy of the classifier gets sourced without anyone noticing.
+# Set SUNCOR_ROOT if you run these from somewhere else entirely. If nothing
+# resolves, stop - do not carry on with no shared definition.
 .p00_cand <- c(
-  "/Users/priyanka/Downloads/Suncor/rerun_pipeline/plume_scripts/P00_met_helpers.R",
-  "P00_met_helpers.R",
-  "plume_scripts/P00_met_helpers.R",
-  "rerun_pipeline/plume_scripts/P00_met_helpers.R"
+  "P00_met_helpers.R",                              # run from plume_scripts/
+  "plume_scripts/P00_met_helpers.R",                # run from the repository root
+  "rerun_pipeline/plume_scripts/P00_met_helpers.R", # run from the working folder
+  file.path(Sys.getenv("SUNCOR_ROOT", "."), "plume_scripts", "P00_met_helpers.R")
 )
 .p00 <- .p00_cand[file.exists(.p00_cand)]
 if (!length(.p00))

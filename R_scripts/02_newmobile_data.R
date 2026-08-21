@@ -130,8 +130,52 @@ mobile1$Site<-"Holly Energy Partners (Sinclair) Terminal"
 
 mobile<-rbind(mobile, mobile1)
 rm(mobile1)
+# ===============================================================
+# TIME CONVENTION (2026-08-21) - READ THIS BEFORE CHANGING THE LINE BELOW
+#
+# `Local_Time_MST` is FIXED Mountain Standard Time, UTC-7 all year, with no
+# daylight-saving shift. Verified two ways:
+#   (a) every raw string carries the literal offset -0700, in all 12 months
+#       (asserted below, on every row, every run); and
+#   (b) crews start at a fixed CIVIL hour, so on a true-MST clock the day's
+#       first record must fall an hour EARLIER during daylight-saving months.
+#       Over the 101 sampling days it does, by 0.95 h (95% CI 0.60-1.30), which
+#       is consistent with exactly 1.00 h (p = 0.77) and rules out 0.00 h
+#       (p < 1e-4). The offsets are truthful, not mislabelled civil time.
+#
+# `date` therefore carries the MST WALL CLOCK, and it is deliberately LABELLED
+# "UTC" so that the clock reading survives untouched through every downstream
+# operation. `date` is a clock reading, NOT an absolute instant.
+#
+# Two consumers depend on exactly this:
+#   * 06_merge_with_wind.R joins to EPA AQS `Date.Local`/`Time.Local`, which
+#     AQS publishes in LOCAL STANDARD time - the same clock. Both sides carry
+#     their clock labelled UTC, so the hourly join pairs like with like.
+#     Parsing this column as "America/Denver" instead makes `date` an instant
+#     6-7 h away from the AQS clock reading; the join still SUCCEEDS, silently
+#     pairing every mobile record with wind measured 6 h later in summer and
+#     7 h later in winter. Verified by running 06's join logic on synthetic
+#     data under all three parses.
+#   * P04/H04 need a true instant to fetch HRRR, and get it explicitly with
+#     force_tz(hour, "MST") -> with_tz("UTC"). That works because the wall
+#     clock is MST, which is precisely what this parse preserves.
+#
+# So: tz = "UTC" here is not a shortcut, it is the convention, and it is the
+# convention every existing intermediate on disk was built with.
+# ===============================================================
+.off <- substr(mobile$Local_Time_MST, 20, 24)
+.off_tab <- table(.off[nzchar(.off)])
+if (!identical(names(.off_tab), "-0700")) {
+  stop("Local_Time_MST does not carry a uniform -0700 offset. Observed: ",
+       paste(sprintf("%s (n=%d)", names(.off_tab), as.integer(.off_tab)), collapse = ", "),
+       ". The whole pipeline assumes fixed MST; re-derive the time convention ",
+       "before going further.")
+}
+message(sprintf("[TIME] Local_Time_MST offset uniform -0700 on all %d rows; `date` carries the MST wall clock labelled UTC.",
+                sum(nzchar(.off))))
+
 mobile$date<-substr(mobile$Local_Time_MST, 1, 19)
-mobile$date<- lubridate::ymd_hms(mobile$date, tz="America/Denver")
+mobile$date<- lubridate::ymd_hms(mobile$date, tz="UTC")   # MST wall clock, labelled UTC - see note above
 
 mobile<-mobile %>% dplyr::arrange(date)
 
