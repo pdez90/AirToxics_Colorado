@@ -71,7 +71,8 @@ download_hrrr_and_join_mobile <- function(
   datetime_col = "date",     # your timestamp column
   lat_col      = "Latitude",
   lon_col      = "Longitude",
-  tz_local     = "America/Denver",  # local tz of df timestamps
+  tz_local     = "MST",            # NOT configurable in practice - see the check below.
+                                   # Local_Time_MST is fixed UTC-7 year round.
   fxx          = 0L,               # 0 = analysis hour
   cache_dir    = "/Users/priyanka/Downloads/Suncor/hrrr_hour_cache",
   round_deg    = 3,    # 3 ~ 100m; try 2 (~1km) if still heavy
@@ -89,6 +90,31 @@ download_hrrr_and_join_mobile <- function(
   if (!requireNamespace("lubridate", quietly = TRUE)) stop("Install {lubridate}.")
   if (!requireNamespace("dplyr", quietly = TRUE)) stop("Install {dplyr}.")
 
+  # ---------------------------------------------------------------
+  # TIME CONVENTION (2026-08-21). This function used to default to
+  # tz_local = "America/Denver", and the example call at the bottom of this
+  # file passed it explicitly. That silently undid the conversion the top of
+  # this script gets right: `df$date` is a FIXED-MST WALL CLOCK STORED WITH A
+  # UTC ATTRIBUTE, so re-interpreting it as Denver civil time fetches HRRR one
+  # hour early for every daylight-saving record - about 70% of the sampling
+  # days. The dataset has exactly one time convention, so this is no longer a
+  # caller's choice: anything other than a fixed UTC-7 zone is refused rather
+  # than honoured.
+  if (!tz_local %in% c("MST", "Etc/GMT+7")) {
+    stop("H04: tz_local = '", tz_local, "' is not accepted. Local_Time_MST is fixed ",
+         "UTC-7 year round (no daylight saving), so the only valid values are \"MST\" ",
+         "or \"Etc/GMT+7\". Passing \"America/Denver\" would fetch HRRR one hour early ",
+         "for every daylight-saving record. See the time-convention note in ",
+         "02_newmobile_data.R and tests/test_time_convention.R.")
+  }
+  .tz_in <- attr(df[[datetime_col]], "tzone")
+  if (!identical(.tz_in, "UTC")) {
+    stop("H04: `", datetime_col, "` is labelled '", paste(.tz_in, collapse = "/"),
+         "', not 'UTC'. This pipeline stores a fixed-MST wall clock with a UTC ",
+         "attribute, not an absolute UTC instant (see 02_newmobile_data.R). ",
+         "The HRRR hour would be wrong.")
+  }
+
   dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
 
   # --- prep: keep original row order id
@@ -97,13 +123,20 @@ download_hrrr_and_join_mobile <- function(
     filter(!is.na(.data[[lat_col]]), !is.na(.data[[lon_col]]))
 
   # --- build UTC hour
-  # If datetime already has tz, force_tz will re-interpret; with_tz converts.
-  # Here we assume df timestamps are intended as tz_local.
+  # force_tz ASSERTS that the wall-clock reading is MST (it moves the label,
+  # not the reading); with_tz then gives the real instant HRRR is indexed by.
+  #
+  # BUGFIX (2026-08-21): this used floor_date() while
+  # P04_join_with_mobile_toxics_data.R - the path that produced the plume
+  # results - uses round(). Two implementations of the same step disagreed by
+  # up to an hour on roughly half the records: 09:45 floors to 09:00 but rounds
+  # to 10:00. HRRR f00 is an instantaneous analysis field, so the NEAREST hour
+  # is the right match for an instantaneous observation, and matching P04 is
+  # what makes the two paths interchangeable. Now round(), as P04 does.
   df0 <- df0 %>%
     mutate(
       .dt_local = .data[[datetime_col]],
-      .dt_local = as.POSIXct(.dt_local, tz = tz_local),
-      hour_utc  = with_tz(floor_date(force_tz(.dt_local, tz_local), "hour"), "UTC"),
+      hour_utc  = with_tz(force_tz(round(.dt_local, "hour"), tz_local), "UTC"),
       lat_q     = round(as.numeric(.data[[lat_col]]), round_deg),
       lon_q     = round(as.numeric(.data[[lon_col]]), round_deg)
     )
@@ -234,7 +267,7 @@ out_hrrr <- download_hrrr_and_join_mobile(
   datetime_col = "date",
   lat_col      = "Latitude",
   lon_col      = "Longitude",
-  tz_local     = "America/Denver",
+  tz_local     = "MST",   # fixed UTC-7; "America/Denver" is refused by the function
   fxx          = 0L,
   cache_dir    = "/Users/priyanka/Downloads/Suncor/hrrr_hour_cache",
   round_deg    = 3,         # bump to 2 if too many unique points

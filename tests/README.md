@@ -36,8 +36,17 @@ Four sections:
    consistent with 1.00 h (p = 0.77), and 0.00 h rejected (p ≈ 1e-6). Also
    confirms no sampling day falls on a DST transition date.
 4. **Intermediates.** Any `.RData` on disk still carries the convention.
+5. **Static scan.** No live code converts pipeline timestamps via
+   `America/Denver`. Comments and `stop()` messages naming the zone are
+   ignored; only conversions count. This is the mechanical enforcement — the
+   convention has now been re-broken twice by code that looked locally
+   reasonable (`36_hysplit`, and `H04`'s helper default plus its example call),
+   so a scan is worth more than another comment. Verified against a negative
+   control: reintroducing `tz_local = "America/Denver"` makes the test fail and
+   names the file and line. Also checks that P04 and H04 derive the same HRRR
+   hour.
 
-Sections 2–4 skip cleanly when the data isn't present, so the test is still
+Sections 2–4 skip cleanly (5 always runs) when the data isn't present, so the test is still
 useful on a bare checkout.
 
 ## test_p08_geometry.R

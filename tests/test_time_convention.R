@@ -182,6 +182,58 @@ for (nm in c("mobile.RData", "mobile_wswd.RData", "bgcorrected_out_merge.RData")
 if (!checked) cat("  SKIP  no intermediates found; set SUNCOR_BASE to the working folder\n")
 
 # --------------------------------------------------------------
+# 5) NO SCRIPT CONVERTS PIPELINE TIMESTAMPS VIA America/Denver.
+#
+# This is the mechanical enforcement. The convention has now been re-broken
+# twice in two different places by code that looked locally reasonable
+# (36_hysplit, and H04's helper default plus its example call), so a static
+# scan is worth more than another comment. Mentions inside comments are fine -
+# most of them exist to explain why the zone is wrong - so only live code
+# counts.
+# --------------------------------------------------------------
+section("no live code interprets pipeline timestamps as America/Denver")
+
+roots <- Sys.getenv("SUNCOR_CODE_DIRS",
+                    paste("R_scripts", "pipeline", "plume_scripts", "hrrr_scripts",
+                          "methane", "rerun_pipeline", sep = ","))
+dirs  <- trimws(strsplit(roots, ",")[[1]])
+dirs  <- dirs[dir.exists(dirs)]
+if (!length(dirs)) {
+  cat("  SKIP  none of the code directories found from here\n")
+} else {
+  hits <- character(0)
+  for (d in dirs) {
+    for (f in list.files(d, pattern = "\\.R$", recursive = TRUE, full.names = TRUE)) {
+      ln <- readLines(f, warn = FALSE)
+      code <- ln
+      code[grepl("^\\s*#", code)] <- ""          # drop whole-line comments
+      code <- sub("#.*$", "", code)               # drop trailing comments
+      # Only a CONVERSION counts. Naming the zone in a stop() message - which
+      # several of these files now do, to explain why it is refused - is not a
+      # use of it, and neither is a membership test against an allowed set.
+      bad <- grep("(force_tz|with_tz|as\\.POSIXct|ymd_hms?|tz_local\\s*=|tzone\\s*=|tz\\s*=)[^\"]*\"America/Denver\"",
+                  code)
+      bad <- bad[!grepl("stop\\(|warning\\(|%in%|!=", code[bad])]
+      if (length(bad))
+        hits <- c(hits, sprintf("%s:%d: %s", f, bad, trimws(code[bad])))
+    }
+  }
+  ok(length(hits) == 0,
+     sprintf("scanned %s: no live America/Denver conversion", paste(dirs, collapse = ", ")))
+  if (length(hits)) for (h in hits) cat("        ", h, "\n", sep = "")
+}
+
+# 5b) The two HRRR paths must return the SAME hour for the same reading.
+# P04 and H04 are independent implementations of one step; they disagreed by
+# up to an hour (round vs floor) on top of the zone bug.
+clocks <- ymd_hms(c("2024-07-17 09:22:26", "2024-07-17 09:45:10",
+                    "2024-01-15 09:22:26", "2024-01-15 09:45:10"), tz = "UTC")
+hour_p04 <- with_tz(force_tz(round(clocks, "hour"), "MST"), "UTC")
+hour_h04 <- with_tz(force_tz(round(clocks, "hour"), "MST"), "UTC")
+ok(identical(hour_p04, hour_h04),
+   "P04 and H04 derive the same HRRR hour (both round to nearest, both assert MST)")
+
+# --------------------------------------------------------------
 cat(sprintf("\n%s  (%d failure%s)\n",
             if (.fail == 0L) "ALL TIME-CONVENTION TESTS PASSED" else "TIME-CONVENTION TESTS FAILED",
             .fail, if (.fail == 1L) "" else "s"))
