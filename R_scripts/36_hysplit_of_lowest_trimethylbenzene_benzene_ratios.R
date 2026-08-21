@@ -140,7 +140,13 @@ if (nrow(hs_low) == 0) stop("Bottom selection returned 0 rows.")
 hs_low <- hs_low %>%
   dplyr::mutate(
     date_posix = as.POSIXct(.data$date),
-    date_local = lubridate::force_tz(.data$date_posix, tzone = "America/Denver"),
+    # BUGFIX (2026-08-21): this forced "America/Denver". `date` carries the MST
+    # WALL CLOCK (Local_Time_MST is fixed UTC-7 year round - see the note in
+    # 02_newmobile_data.R), so interpreting a summer 09:00 reading as 09:00 MDT
+    # put every daylight-saving receptor into HYSPLIT one hour early, and about
+    # 70% of the sampling days are daylight-saving days. Same correction as
+    # P04/H04: assert MST, then convert.
+    date_local = lubridate::force_tz(.data$date_posix, tzone = "MST"),
     date_utc   = lubridate::with_tz(.data$date_local, tzone = "UTC"),
     day_utc    = as.Date(.data$date_utc),
     hour_utc   = lubridate::hour(.data$date_utc)

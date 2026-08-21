@@ -25,8 +25,19 @@ suppressPackageStartupMessages({
 load("/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge.RData")
 df<-df[!is.na(df$Longitude),]
 df<-df[!is.na(df$Latitude),]
+# TIME CONVENTION (2026-08-21): `df$date` is the MST WALL CLOCK labelled "UTC"
+# (see the note in 02_newmobile_data.R). force_tz("MST") asserts that reading
+# rather than converting it; with_tz then gives the true UTC hour HRRR is
+# indexed by. "America/Denver" here would fetch HRRR one hour early for every
+# daylight-saving record. Identical to P04_join_with_mobile_toxics_data.R -
+# if you change one, change both.
+if (!identical(attr(df$date, "tzone"), "UTC")) {
+  stop("H04: `date` is labelled `", paste(attr(df$date, "tzone"), collapse = "/"),
+       "`, not `UTC`. This pipeline stores the MST wall clock labelled UTC ",
+       "(see 02_newmobile_data.R). The HRRR hour would be wrong.")
+}
 df$hour<-round(df$date, "hour")
-df$hour<-force_tz(df$hour, "MST")
+df$hour<-force_tz(df$hour, "MST")   # the reading IS MST; assert it, do not convert
 df$hour<-with_tz(df$hour, "UTC")
 
 # ---- Optional: better parallel on macOS (fork) avoids huge future globals export
