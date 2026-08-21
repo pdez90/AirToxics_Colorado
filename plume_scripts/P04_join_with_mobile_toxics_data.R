@@ -15,9 +15,9 @@ df<-df[!is.na(df$Latitude),]
 # ===============================================================
 # TIME CONVENTION (2026-08-21)
 #
-# `df$date` carries the MST WALL CLOCK, labelled "UTC" - see the long note at
-# 02_newmobile_data.R where `date` is built, and the offset assertion there.
-# It is a clock reading, not an instant. HRRR is indexed by real UTC hours, so
+# `df$date` is a FIXED-MST WALL CLOCK STORED WITH A UTC ATTRIBUTE - it is NOT
+# yet an absolute UTC instant. See the long note at 02_newmobile_data.R where
+# `date` is built, and the offset assertion there. HRRR is indexed by real UTC hours, so
 # the clock has to be converted, and that is exactly what these three lines do:
 # round the clock to the hour, ASSERT that the clock is MST (force_tz replaces
 # the label without moving the reading), then convert that instant to UTC.
@@ -35,7 +35,8 @@ df<-df[!is.na(df$Latitude),]
 # UTC, and this would stop rather than silently double-shift.
 if (!identical(attr(df$date, "tzone"), "UTC")) {
   stop("P04: `date` is labelled `", paste(attr(df$date, "tzone"), collapse = "/"),
-       "`, not `UTC`. This pipeline stores the MST wall clock labelled UTC (see ",
+       "`, not `UTC`. This pipeline stores a fixed-MST wall clock with a UTC ",
+       "attribute, not an absolute UTC instant (see ",
        "02_newmobile_data.R). Re-run 02 with that convention before joining HRRR, ",
        "or the HRRR hour will be wrong.")
 }
