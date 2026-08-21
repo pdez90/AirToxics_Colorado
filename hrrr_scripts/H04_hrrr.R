@@ -66,13 +66,18 @@ setup_future_for_hrrr <- function(workers = max(1, parallel::detectCores() - 1))
 
 # ---- MAIN FUNCTION
 # Requires that you have defined run_hrrr_uv_pbl_clouds_on_df_fast() in your session.
+# THE time zone of the mobile timestamps. Hard-coded, deliberately NOT an
+# argument: Local_Time_MST is fixed UTC-7 all year, this dataset has exactly one
+# convention, and making it a caller's choice is how the daylight-saving shift
+# got reintroduced here in the first place (the old default was
+# "America/Denver", and the example call at the bottom passed it explicitly).
+H04_TZ_LOCAL <- "MST"
+
 download_hrrr_and_join_mobile <- function(
   df,
   datetime_col = "date",     # your timestamp column
   lat_col      = "Latitude",
   lon_col      = "Longitude",
-  tz_local     = "MST",            # NOT configurable in practice - see the check below.
-                                   # Local_Time_MST is fixed UTC-7 year round.
   fxx          = 0L,               # 0 = analysis hour
   cache_dir    = "/Users/priyanka/Downloads/Suncor/hrrr_hour_cache",
   round_deg    = 3,    # 3 ~ 100m; try 2 (~1km) if still heavy
@@ -80,7 +85,8 @@ download_hrrr_and_join_mobile <- function(
   parallel_hours = TRUE,  # parallelize across hour-batches (recommended)
   workers      = max(1, parallel::detectCores() - 1),
   overwrite_cache = FALSE,
-  verbose      = TRUE
+  verbose      = TRUE,
+  ...                        # only here to refuse `tz_local` with an explanation
 ) {
   stopifnot(is.data.frame(df))
   if (!all(c(datetime_col, lat_col, lon_col) %in% names(df))) {
@@ -91,21 +97,28 @@ download_hrrr_and_join_mobile <- function(
   if (!requireNamespace("dplyr", quietly = TRUE)) stop("Install {dplyr}.")
 
   # ---------------------------------------------------------------
-  # TIME CONVENTION (2026-08-21). This function used to default to
-  # tz_local = "America/Denver", and the example call at the bottom of this
-  # file passed it explicitly. That silently undid the conversion the top of
-  # this script gets right: `df$date` is a FIXED-MST WALL CLOCK STORED WITH A
-  # UTC ATTRIBUTE, so re-interpreting it as Denver civil time fetches HRRR one
-  # hour early for every daylight-saving record - about 70% of the sampling
-  # days. The dataset has exactly one time convention, so this is no longer a
-  # caller's choice: anything other than a fixed UTC-7 zone is refused rather
-  # than honoured.
-  if (!tz_local %in% c("MST", "Etc/GMT+7")) {
-    stop("H04: tz_local = '", tz_local, "' is not accepted. Local_Time_MST is fixed ",
-         "UTC-7 year round (no daylight saving), so the only valid values are \"MST\" ",
-         "or \"Etc/GMT+7\". Passing \"America/Denver\" would fetch HRRR one hour early ",
-         "for every daylight-saving record. See the time-convention note in ",
-         "02_newmobile_data.R and tests/test_time_convention.R.")
+  # TIME CONVENTION (2026-08-21). `tz_local` used to be an argument defaulting
+  # to "America/Denver", and the example call at the bottom of this file passed
+  # it explicitly. That silently undid the conversion the top of this script
+  # gets right: `df$date` is a FIXED-MST WALL CLOCK STORED WITH A UTC ATTRIBUTE,
+  # and re-interpreting it as Denver civil time fetched HRRR one hour early for
+  # every daylight-saving record. Worse, `as.POSIXct(x, tz=)` RELABELS a POSIXct
+  # rather than converting it, so the force_tz that followed was a no-op and the
+  # net effect was to treat the MST clock reading as UTC - a 7-8 hour error.
+  #
+  # The zone is now the constant H04_TZ_LOCAL above and cannot be overridden.
+  # Anyone still passing tz_local lands here and is told why.
+  .extra <- list(...)
+  if ("tz_local" %in% names(.extra)) {
+    stop("H04: `tz_local` is no longer an argument. Local_Time_MST is fixed UTC-7 ",
+         "year round (no daylight saving), so this pipeline has exactly one time ",
+         "convention and it is hard-coded as H04_TZ_LOCAL = \"", H04_TZ_LOCAL, "\". ",
+         "You passed \"", as.character(.extra$tz_local)[1], "\". Remove the argument. ",
+         "See the time-convention note in 02_newmobile_data.R and ",
+         "tests/test_time_convention.R.")
+  }
+  if (length(.extra)) {
+    stop("H04: unused argument(s): ", paste(names(.extra), collapse = ", "))
   }
   .tz_in <- attr(df[[datetime_col]], "tzone")
   if (!identical(.tz_in, "UTC")) {
@@ -136,7 +149,7 @@ download_hrrr_and_join_mobile <- function(
   df0 <- df0 %>%
     mutate(
       .dt_local = .data[[datetime_col]],
-      hour_utc  = with_tz(force_tz(round(.dt_local, "hour"), tz_local), "UTC"),
+      hour_utc  = with_tz(force_tz(round(.dt_local, "hour"), H04_TZ_LOCAL), "UTC"),
       lat_q     = round(as.numeric(.data[[lat_col]]), round_deg),
       lon_q     = round(as.numeric(.data[[lon_col]]), round_deg)
     )
@@ -267,7 +280,7 @@ out_hrrr <- download_hrrr_and_join_mobile(
   datetime_col = "date",
   lat_col      = "Latitude",
   lon_col      = "Longitude",
-  tz_local     = "MST",   # fixed UTC-7; "America/Denver" is refused by the function
+  # no tz_local argument: the zone is fixed MST, see H04_TZ_LOCAL above
   fxx          = 0L,
   cache_dir    = "/Users/priyanka/Downloads/Suncor/hrrr_hour_cache",
   round_deg    = 3,         # bump to 2 if too many unique points
