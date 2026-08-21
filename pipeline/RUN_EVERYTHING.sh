@@ -59,8 +59,16 @@ run_stage () {           # run_stage <label> <logfile> <command...>
 echo
 echo "-------- stage 0: guard tests --------"
 cd "$BASE" || exit 1
-if SUNCOR_CSV_DIR="$BASE/Updated/csv" SUNCOR_BASE="$BASE" \
-     SUNCOR_CODE_DIRS="R_scripts,rerun_pipeline" \
+# SUNCOR_CODE_DIRS is deliberately NOT set: the test's own default list covers
+# both layouts (R_scripts, pipeline, plume_scripts, hrrr_scripts, methane,
+# rerun_pipeline). Overriding it with a narrower list made the suite silently
+# SKIP the H04 and P04 checks in a repository checkout - and still exit 0, so
+# the gate went green having tested nothing.
+#
+# SUNCOR_STRICT=1 turns "no data found, skipping" into a failure. This is the
+# gate for a 6-9 hour run; a pass that means "I could not find anything to
+# check" is worse than no gate at all.
+if SUNCOR_STRICT=1 SUNCOR_CSV_DIR="$BASE/Updated/csv" SUNCOR_BASE="$BASE" \
      Rscript tests/test_time_convention.R > "$LOGDIR/00_test_time.log" 2>&1 \
    && Rscript tests/test_p08_geometry.R > "$LOGDIR/00_test_geometry.log" 2>&1; then
   echo "         OK   time convention + P08 geometry"

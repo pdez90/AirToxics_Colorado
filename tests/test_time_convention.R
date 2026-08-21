@@ -29,6 +29,25 @@ ok <- function(cond, what) {
 }
 section <- function(x) cat("\n== ", x, " ==\n", sep = "")
 
+# STRICT mode (2026-08-21). Set SUNCOR_STRICT=1 - RUN_EVERYTHING.sh does - to
+# turn "no data found, skipping" into a failure. Rationale: this suite is the
+# stage-0 gate for a 6-9 hour re-run, and a gate that passes because it could
+# not find anything to test is worse than no gate. Sections whose inputs are
+# genuinely optional (the intermediates in section 4, which a clean re-run may
+# legitimately not have yet) stay informational even under STRICT; sections
+# that need SOURCE FILES are fatal either way, because those files ship with
+# the repository and their absence is always a configuration error.
+STRICT <- nzchar(Sys.getenv("SUNCOR_STRICT"))
+skip_or_fail <- function(msg, fatal = STRICT) {
+  if (fatal) {
+    cat("  FAIL  ", msg, " [required]\n", sep = "")
+    .fail <<- .fail + 1L
+  } else {
+    cat("  SKIP  ", msg, "\n", sep = "")
+  }
+  invisible(NULL)
+}
+
 # --------------------------------------------------------------
 # 1) THE UNIT TEST: one summer timestamp, one winter timestamp.
 #
@@ -76,8 +95,7 @@ csv_dir <- Sys.getenv("SUNCOR_CSV_DIR", "Updated/csv")
 files <- list.files(csv_dir, pattern = "^(Suncor|Terminal)_.*\\.csv$", full.names = TRUE)
 
 if (!length(files)) {
-  cat("  SKIP  no monthly CSVs found under '", csv_dir, "'\n", sep = "")
-  cat("        set SUNCOR_CSV_DIR to run this section\n")
+  skip_or_fail(sprintf("no monthly CSVs found under '%s' (set SUNCOR_CSV_DIR)", csv_dir))
 } else {
   offs <- character(0)
   months <- character(0)
@@ -109,7 +127,7 @@ if (!length(files)) {
 section("DST diagnostic: day-start times shift by ~1 h across the DST boundary")
 
 if (!length(files)) {
-  cat("  SKIP  needs the monthly CSVs\n")
+  skip_or_fail("needs the monthly CSVs")
 } else {
   first <- list()
   for (f in files) {
@@ -179,7 +197,10 @@ for (nm in c("mobile.RData", "mobile_wswd.RData", "bgcorrected_out_merge.RData")
   }
   rm(ev)
 }
-if (!checked) cat("  SKIP  no intermediates found; set SUNCOR_BASE to the working folder\n")
+if (!checked)
+  # deliberately NOT fatal under STRICT: a clean re-run quarantines these, so
+  # their absence is a legitimate state rather than a configuration error.
+  cat("  SKIP  no intermediates found (fine on a clean re-run); set SUNCOR_BASE otherwise\n")
 
 # --------------------------------------------------------------
 # 5) NO SCRIPT CONVERTS PIPELINE TIMESTAMPS VIA America/Denver.
@@ -199,7 +220,7 @@ roots <- Sys.getenv("SUNCOR_CODE_DIRS",
 dirs  <- trimws(strsplit(roots, ",")[[1]])
 dirs  <- dirs[dir.exists(dirs)]
 if (!length(dirs)) {
-  cat("  SKIP  none of the code directories found from here\n")
+  skip_or_fail("none of the code directories found from here", fatal = TRUE)
 } else {
   hits <- character(0)
   for (d in dirs) {
@@ -229,7 +250,12 @@ if (!length(dirs)) {
 h04 <- unlist(lapply(dirs, function(d)
   list.files(d, pattern = "^H04_hrrr\\.R$", recursive = TRUE, full.names = TRUE)))
 if (!length(h04)) {
-  cat("  SKIP  H04_hrrr.R not found from here\n")
+  # ALWAYS fatal. H04 ships with the repository; not finding it means the
+  # search path is wrong, and then this whole section tested nothing while
+  # still reporting success. That is exactly how a green gate becomes
+  # meaningless. Searched: paste(dirs) below.
+  skip_or_fail(sprintf("H04_hrrr.R not found under: %s", paste(dirs, collapse = ", ")),
+               fatal = TRUE)
 } else {
   for (f in h04) {
     ln <- readLines(f, warn = FALSE)
@@ -262,7 +288,10 @@ f_p04 <- find_one("^P04_join_with_mobile_toxics_data\\.R$")
 f_h04 <- find_one("^H04_hrrr\\.R$")
 
 if (is.na(f_p04) || is.na(f_h04)) {
-  cat("  SKIP  need both P04 and H04 on disk\n")
+  skip_or_fail(sprintf("need both P04 and H04 on disk; searched: %s (found P04: %s, H04: %s)",
+                       paste(dirs, collapse = ", "),
+                       ifelse(is.na(f_p04), "no", "yes"), ifelse(is.na(f_h04), "no", "yes")),
+               fatal = TRUE)
 } else {
   clocks <- ymd_hms(c("2024-07-17 09:22:26",   # summer, rounds down
                       "2024-07-17 09:45:10",   # summer, rounds UP (floor/round differ)
