@@ -21,6 +21,18 @@
 #   1, 10, 15, 20, 30, 50 m
 # ============================================================
 
+# --------------------------------------------------------------------------
+# UNITS OF THE OUTPUT (read before quoting these numbers)
+#   error_pct    = 100 * (Q_hat - Q_TRUE_TOTAL) / Q_TRUE_TOTAL      [PERCENT]
+#   mean_error / sd_error / median_error in the saved *_summary.csv are the
+#   mean / sd / median of error_pct, so they are ALREADY IN PERCENT.
+#   DO NOT multiply by 100 again when quoting them.
+#
+#   Sanity bound: the inversion recovers a NON-NEGATIVE source strength, so
+#   Q_hat >= 0 and therefore error_pct >= -100% by construction. Any quoted
+#   value below -100% is impossible and indicates a unit error.
+# --------------------------------------------------------------------------
+
 suppressPackageStartupMessages({
   library(dplyr)
   library(tidyr)
@@ -31,6 +43,75 @@ set.seed(42)  # reproducible met sampling (sample_size = 600)
 # -------------------------
 # SETTINGS (EDIT)
 # -------------------------
+# ---------------------------------------------------------------
+# PLUME PHYSICS CORRECTIONS (2026-08-20)
+# Applied identically in P08_gaussian_plumes_h2s.R,
+# P09_simulations_real_stack_height_varies.R,
+# P10_simulations_cross_wind_distance_0.R, 46_min_detectable_rate.R and
+# 65_plume_cadence_sensitivity.R. If you change one, change all five.
+#
+# (1) MOLAR DENSITY OF AIR. The old constant 2.7e25/6.022e23 = 44.84 mol/m3
+#     is Loschmidt's number, i.e. dry air at 0 C and 1013 hPa. These
+#     measurements are made at about 1600 m, where air is a third less
+#     dense. A ppb is a mixing ratio and carries no mass without a stated
+#     air density, so the sea-level value inflated every inferred emission
+#     rate by 34%. The site basis used here (25 C, 830 hPa -> 33.48
+#     mol/m3) is the same one 18_...census_block_level_stats.R uses to
+#     convert AirToxScreen ug/m3 to ppb and the same one the benzene
+#     inhalation unit risks are expressed on, so the emissions and the
+#     exposure halves of the paper now share a standard state.
+#
+# (2) VERTICAL REFLECTION SERIES. The old five-term sum was
+#       (z-H), (z+H), (z+H-2L), (z-H-2L), (z-H+2L)
+#     which is the n = -1, 0, +1 expansion with the (z+H+2L) image MISSING,
+#     and it stopped at n = +-1 however large sigma_z had grown. Q is
+#     proportional to 1/V, so an under-counted V inflates Q: at PBL 1000 m
+#     the error is under 3%, but at PBL 300 m it reaches +57% for the
+#     class B plume at 1.95 km and +65% for the class C plume at 4.3 km.
+#     The sum is now carried to convergence (verified against a 4000-term
+#     expansion: agreement better than 0.001% at every sigma_z/L tested),
+#     and once sigma_z exceeds 1.6 L the plume is uniformly mixed through
+#     the boundary layer, where the closed form V = sqrt(2*pi)*sigma_z/L
+#     applies - the standard treatment, equivalent to
+#     C = Q / (sqrt(2*pi) * u * sigma_y * L). The switch is continuous.
+#
+# (3) CROSSWIND OFFSET. See the geometry note in P08: the receptor is not
+#     on the plume centreline, because the acceptance window admits a
+#     wind-to-source bearing difference of up to 10 degrees.
+# ---------------------------------------------------------------
+R_GAS      <- 8.314462618   # J/(mol K)
+SITE_T_C   <- 25            # nominal site air temperature
+SITE_P_HPA <- 830           # nominal site pressure (~1600 m elevation)
+molar_density_mol_m3 <- function(T_C = SITE_T_C, P_hPa = SITE_P_HPA) {
+  (P_hPa * 100) / (R_GAS * (T_C + 273.15))
+}
+SITE_MOL_M3 <- molar_density_mol_m3()      # 33.48 mol/m3 (was 44.84)
+
+WELL_MIXED_RATIO <- 1.6     # sigma_z / L above which the plume is uniform
+VERT_N_IMAGES    <- 20      # images per side; later terms are below 1e-100
+
+vertical_term <- function(z, H, sigz, hpbl, reflections = TRUE) {
+  out <- rep(NA_real_, length(sigz))
+  ok  <- is.finite(sigz) & sigz > 0 & is.finite(hpbl) & hpbl > 0
+  if (!any(ok)) return(out)
+  s <- sigz[ok]
+  L <- rep_len(hpbl, length(sigz))[ok]
+  v <- exp(-0.5 * ((z - H) / s)^2)
+  if (!reflections) { out[ok] <- v; return(out) }
+  v <- v + exp(-0.5 * ((z + H) / s)^2)
+  for (n in seq_len(VERT_N_IMAGES)) {
+    v <- v +
+      exp(-0.5 * ((z - H + 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z + H + 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z - H - 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z + H - 2 * n * L) / s)^2)
+  }
+  wm <- s > WELL_MIXED_RATIO * L
+  if (any(wm)) v[wm] <- sqrt(2 * pi) * s[wm] / L[wm]
+  out[ok] <- v
+  out
+}
+
 MW_H2S     <- 34.08
 Z_RECEPTOR <- 1.5
 MIN_U      <- 0.5
@@ -125,7 +206,8 @@ calculate_sigma_z <- function(stability_class, distance_km) {
   if (stability_class %in% c("A", "B"))       0.24 * X * (1 + (0.001 * X))^(0.5)
   else if (stability_class == "C")            0.20 * X
   else if (stability_class == "D")            0.14 * X * (1 + (0.0003 * X))^(-0.5)
-  else if (stability_class %in% c("E", "F"))  0.08 * X * (1 + (0.00015 * X))^(-0.5)
+  # BUGFIX (2026-08-20): Briggs urban sigma_z E-F is 0.08x(1+0.0015x)^(-1/2); the code had 0.00015, one order of magnitude low, which makes sigma_z ~1.75x too large at 2 km and inflates Q by the same factor. Every other Briggs coefficient in these files matches the published table exactly, so this is a transcription slip. E/F never arises from the daytime classifier, so the central estimates are unaffected - but P08's CAT_plus1 scenario shifts D->E, so the published upper stability bound was inflated by ~75%.
+  else if (stability_class %in% c("E", "F"))  0.08 * X * (1 + (0.0015 * X))^(-0.5)
   else NA_real_
 }
 
@@ -191,15 +273,9 @@ gaussian_plume_ppm <- function(Q_kg_s, H_m, z_m, x_m, y_m, u_ms, stab, pbl_m,
 
   crosswind_term <- exp(-0.5 * (y_m^2) / (sy^2))
 
-  zt <- (
-    exp(-0.5 * ((z_m - H_m)^2) / (sz^2)) +
-      exp(-0.5 * ((z_m + H_m)^2) / (sz^2)) +
-      exp(-0.5 * ((z_m + H_m - 2 * L)^2) / (sz^2)) +
-      exp(-0.5 * ((z_m - H_m - 2 * L)^2) / (sz^2)) +
-      exp(-0.5 * ((z_m - H_m + 2 * L)^2) / (sz^2))
-  )
+  zt <- vertical_term(z = z_m, H = H_m, sigz = sz, hpbl = L)   # (2)
 
-  unit_conversion <- 2.7e25 / 6.022e23 / 1e6 * MW_H2S / 1000
+  unit_conversion <- SITE_MOL_M3 / 1e6 * MW_H2S / 1000   # (1) site air density
   (Q_kg_s / U) * (1 / (2 * pi * sy * sz)) * crosswind_term * zt / unit_conversion
 }
 
@@ -219,18 +295,12 @@ estimate_Q_from_C <- function(C_ppm, H_m, z_m, x_m, y_m, u_ms, stab, pbl_m) {
 
   crosswind_term <- exp(-0.5 * (y_m^2) / (sy^2))
 
-  zt <- (
-    exp(-0.5 * ((z_m - H_m)^2) / (sz^2)) +
-      exp(-0.5 * ((z_m + H_m)^2) / (sz^2)) +
-      exp(-0.5 * ((z_m + H_m - 2 * L)^2) / (sz^2)) +
-      exp(-0.5 * ((z_m - H_m - 2 * L)^2) / (sz^2)) +
-      exp(-0.5 * ((z_m - H_m + 2 * L)^2) / (sz^2))
-  )
+  zt <- vertical_term(z = z_m, H = H_m, sigz = sz, hpbl = L)   # (2)
 
   denom <- crosswind_term * zt
   if (!is.finite(denom) || denom < DENOM_MIN) return(NA_real_)
 
-  unit_conversion <- 2.7e25 / 6.022e23 / 1e6 * MW_H2S / 1000
+  unit_conversion <- SITE_MOL_M3 / 1e6 * MW_H2S / 1000   # (1) site air density
   C_use * U * (2 * pi * sy * sz) * unit_conversion / denom
 }
 

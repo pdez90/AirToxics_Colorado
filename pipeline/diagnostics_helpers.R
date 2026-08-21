@@ -118,4 +118,47 @@ REF <- list(
   emission_range_tpy = c(1e2, 1e3)
 )
 
+# --------------------------------------------------------------------
+# BENCHMARK FIX (2026-08-20): the list above is the AS-SUBMITTED
+# provenance record and every diag_check_value() call compared against it,
+# so after the delay correction + native-cadence reprocessing each stage
+# reported a "CHANGED beyond tolerance" discrepancy on every run - and
+# R05's final_groups check runs at tol_pct = 0, so it could never pass.
+# The as-submitted values are preserved under REF_SUBMITTED; REF now holds
+# the CURRENT expected values, so a genuine regression is once again
+# visible against a benchmark that is supposed to hold.
+#
+# Provenance for each updated entry (2026-08-19 native-cadence run):
+#   p99 H2S/HCN      4.6 / 11      manuscript Section 2.5.3 (was 5 / 12)
+#   n_blocks         1668          health-exposure block set (was 1120)
+#   population       126607        same set (was 83828)
+#   risk_airtox      0.117, 0.416  Section 3.3 (was 0.077, 0.275)
+#   risk_mobile      0.113, 0.402  Section 3.3 (was 0.183, 0.650)
+#   risk_ratio       0.97          2.4 was the KNOWN-ERRONEOUS value that
+#                                  this reprocessing was undertaken to fix
+#   dbscan_initial   2650          Section 2.5.3.2 (was 160)
+#   clusters_ge3     18            (was 17)
+#   final_groups     18            (was 17)
+#   plume_candidates 33            Section 3.6 (was 137)
+#   plume_retained   4             Section 3.6 (was 7)
+# Unchanged and therefore not restated: delays, missing_wind_pct,
+# median_dist_met_km, aromatic p99s, scaling, clusters_ge2, clusters_ge4.
+# --------------------------------------------------------------------
+REF_SUBMITTED <- REF
+
+REF <- utils::modifyList(REF, list(
+  p99 = c(Benzene_ppb = 1.8, Toluene_ppb = 4.31, Trimethylbenzene_ppb = 2.59,
+          Xylene_ppb = 3.19, Hydrogen_Sulfide_ppb = 4.6, Hydrogen_Cyanide_ppb = 11),
+  n_blocks = 1668, population = 126607,
+  risk_airtox = c(0.117, 0.416), risk_mobile = c(0.113, 0.402), risk_ratio = 0.97,
+  dbscan_initial = 2650, clusters_ge3 = 18, final_groups = 18,
+  plume_candidates = 33, plume_retained = 4
+))
+
+.ref_delta <- names(REF)[vapply(names(REF), function(k)
+  !isTRUE(all.equal(REF[[k]], REF_SUBMITTED[[k]])), logical(1))]
+diag_msg("[BENCHMARKS] REF updated to current values for: ",
+         paste(.ref_delta, collapse = ", "))
+diag_msg("[BENCHMARKS] as-submitted values remain available as REF_SUBMITTED$<name>")
+
 diag_msg("diagnostics_helpers.R loaded. Log: ", .DIAG_LOG)

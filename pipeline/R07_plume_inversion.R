@@ -37,13 +37,27 @@ if (file.exists(fun_file)) {
     for (i in seq_len(nrow(ofun))) diag_msg("    ", paste(names(ofun), "=", unlist(ofun[i, ]), collapse = "  "))
   }
 } else diag_msg("  [WARN] funnel file not found; read counts from script printout above.")
-diag_msg("  Manuscript values (old delays): 137 candidate events, 7 retained.")
+diag_msg(sprintf("  Expected (current run): %d candidate events, %d retained.  ",
+                 REF$plume_candidates, REF$plume_retained),
+         sprintf("As submitted: %d and %d.",
+                 REF_SUBMITTED$plume_candidates, REF_SUBMITTED$plume_retained))
 
 # ----------------------------------------------------------------
 # DIAG 2: emission-rate estimates vs manuscript (10^2-10^3 tons/yr)
 # ----------------------------------------------------------------
 diag_section("R07-DIAG 2: emission rates old vs new")
-res_new_f <- file.path(BASE, "res_h2s.csv"); res_old_f <- file.path(BACKUP, "res_h2s.csv")
+# BUGFIX (2026-08-20): this looked for res_h2s.csv in BASE. Nothing writes it -
+# P08_gaussian_plumes_h2s.R:374 writes
+# FinalFig/WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv (column tpy_metric).
+# DIAG 2, the only quantitative plume check in the pipeline, therefore always
+# printed "[WARN] NEW results not found" and never ran.
+.RES_REL <- file.path("FinalFig", "WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv")
+res_new_f <- file.path(BASE, .RES_REL); res_old_f <- file.path(BACKUP, .RES_REL)
+if (!file.exists(res_new_f) && file.exists(file.path(BASE, "res_h2s.csv"))) {
+  res_new_f <- file.path(BASE, "res_h2s.csv")
+  diag_msg("  [NOTE] falling back to the legacy res_h2s.csv - it is a pre-fix ",
+           "artifact that no script regenerates; treat it as provenance only.")
+}
 summarize_res <- function(f, tag) {
   if (!file.exists(f)) { diag_msg("  [WARN] ", tag, " results not found: ", f); return(invisible(NULL)) }
   r <- utils::read.csv(f)
@@ -58,9 +72,18 @@ summarize_res <- function(f, tag) {
 v_new <- summarize_res(res_new_f, "NEW")
 v_old <- summarize_res(res_old_f, "OLD")
 if (!is.null(v_new)) {
-  in_range <- mean(v_new >= REF$emission_range_tpy[1] & v_new <= REF$emission_range_tpy[2], na.rm = TRUE)
-  diag_msg(sprintf("  [CHECK] fraction of new estimates within manuscript's 10^2-10^3 t/yr: %.0f%%",
-                   100 * in_range))
+  # NOTE (2026-08-20): emission_range_tpy was NOT updated when the other REF
+  # benchmarks were, so this compares against the AS-SUBMITTED 10^2-10^3 t/yr
+  # envelope. Labelled as such rather than silently re-benchmarked, because the
+  # current envelope should be read off this run, not asserted in advance.
+  .rng <- REF_SUBMITTED$emission_range_tpy
+  in_range <- mean(v_new >= .rng[1] & v_new <= .rng[2], na.rm = TRUE)
+  diag_msg(sprintf("  [CHECK] fraction of new estimates within the AS-SUBMITTED %g-%g t/yr envelope: %.0f%%",
+                   .rng[1], .rng[2], 100 * in_range))
+  diag_msg(sprintf("  [RANGE] this run: min %s | median %s | max %s t/yr",
+                   signif(min(v_new, na.rm = TRUE), 3),
+                   signif(stats::median(v_new, na.rm = TRUE), 3),
+                   signif(max(v_new, na.rm = TRUE), 3)))
 }
 
 # ----------------------------------------------------------------

@@ -152,7 +152,14 @@ for (p in pollutants) {
   t_p <- Sys.time()
   message("Processing: ", p)
 
-  dpp <- b[is.finite(get(p)) & get(p) >= 0]
+  # BUGFIX (2026-08-20): this dropped every negative (below-background)
+  # value before building the polar surface, while every other analysis in
+  # the paper retains them - SI Section S1.4 states explicitly that no
+  # substitution of 0 or MDL/2 is made. Because sub-zero values occur where
+  # concentrations are low, discarding them biased the NWR surfaces high
+  # relative to the pooled statistics in scripts 04 and 13, and the only
+  # trace was a "no valid rows" message when a pollutant had none left.
+  dpp <- b[is.finite(get(p))]
 
   if (nrow(dpp) == 0) {
     message("  Skipping ", p, " (no valid rows)")

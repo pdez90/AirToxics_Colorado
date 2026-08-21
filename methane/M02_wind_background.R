@@ -60,15 +60,101 @@ diag_section("M02: background correction (rolling lowest 20th pct, 20-min window
 setorder(ch4, Asset, date)
 ch4[, AssetDay := paste0(Asset, "_", as.Date(date))]
 
-# 20-minute rolling 20th percentile per Asset-day, then hourly interpolation
-bg_fun <- function(x) {
-  if (all(is.na(x))) return(rep(NA_real_, length(x)))
-  r <- zoo::rollapply(x, width = 1200, FUN = function(v) quantile(v, 0.20, na.rm = TRUE),
-                      fill = NA, align = "center", partial = 300)
-  zoo::na.approx(r, na.rm = FALSE, rule = 2)
+# ---------------------------------------------------------------
+# BACKGROUND CONSISTENCY FIX (2026-08-20)
+#
+# This claimed to use "the SAME hourly background correction used for
+# the toxics", but it did not. zoo::rollapply(width = 1200) is indexed
+# by ROW, and ch4 has a row only for seconds that were measured, so any
+# within-day gap - a stop, a route change, an instrument dropout -
+# silently stretched the "20-minute" window across a much longer stretch
+# of wall-clock time. Under 5-s native cadence a 1200-ROW window spans
+# about 100 minutes of real time, not 20. It also grouped on Asset-day
+# only, where the toxics group on date x Site x Asset, and it used a
+# plain subtraction where the toxics use bg_correct().
+#
+# Rebuilt to mirror 10_calculating_background...R and
+# 11_correcting_for_background.R exactly:
+#   - window: TIME-indexed, +/- 600 s (slider::slide_index_dbl on the
+#     numeric timestamp), partial windows allowed
+#   - statistic: 20th percentile, requiring >= 30 finite points
+#   - grouping: date x route x Asset (the methane analogue of
+#     date x Site x Asset; Route is carried from M01 and, unlike the
+#     Site joined from the toxics table, is never NA)
+#   - a rolling sd and a plume flag on the same window, as script 10
+#   - sCH4 via the same bg_correct() rule script 11 applies to the
+#     toxics, so a background-corrected methane column exists on the
+#     same footing as sBenzene, sH2S and the rest
+#
+# ch4_enh (the raw enhancement over local background) is retained
+# because M03 reports it. Note that the methane HOTSPOTS are defined on
+# the raw ch4_ppm 99th percentile, not on ch4_enh, so this fix changes
+# the enhancement statistics reported per cluster and NOT the cluster
+# inventory, the 2.576 ppm threshold, or the hotspot co-elevation
+# fractions in Section 3.7.
+# ---------------------------------------------------------------
+suppressPackageStartupMessages(library(slider))
+
+.BG_BEFORE <- 600      # seconds; script 10 uses +/- 600 s
+.BG_AFTER  <- 600
+.BG_MIN_N  <- 30       # script 10 requires >= 30 finite points in the window
+.BG_PCT    <- 0.20     # lowest-20th-percentile baseline
+
+.q20 <- function(v, min_n = .BG_MIN_N) {
+  vv <- v[is.finite(v)]
+  if (length(vv) < min_n) return(NA_real_)
+  unname(stats::quantile(vv, .BG_PCT, names = FALSE))
 }
-ch4[, ch4_bg := bg_fun(ch4_ppm), by = AssetDay]
+.sd_safe <- function(v, min_n = .BG_MIN_N) {
+  vv <- v[is.finite(v)]
+  if (length(vv) < min_n) return(NA_real_)
+  stats::sd(vv)
+}
+
+# GUARD (2026-08-20): the fallback was rep("ALL", nrow(ch4)), which silently
+# collapses the key back to date x Asset - exactly the grouping this rewrite
+# replaced - with no warning. M01 always carries Route; if it ever stops, that
+# is a pipeline change that should be noticed, not absorbed.
+stopifnot("M02: `Route` missing from the methane table - M01 must carry it so the background can be grouped date x route x Asset, matching script 10" =
+            "Route" %in% names(ch4))
+.route <- ch4$Route
+ch4[, bgkey := paste0(as.Date(date), "_", .route, "_", Asset)]
+setorder(ch4, bgkey, date)
+diag_msg(sprintf("  background groups (date x route x Asset): %d", uniqueN(ch4$bgkey)))
+
+ch4[, ch4_bg := NA_real_][, ch4_sd := NA_real_]
+for (.k in unique(ch4$bgkey)) {
+  .i <- which(ch4$bgkey == .k)
+  .t <- as.numeric(ch4$date[.i])
+  .x <- as.numeric(ch4$ch4_ppm[.i])
+  ch4$ch4_bg[.i] <- slider::slide_index_dbl(.x, .t, .before = .BG_BEFORE,
+                                            .after = .BG_AFTER, .complete = FALSE, .f = .q20)
+  ch4$ch4_sd[.i] <- slider::slide_index_dbl(.x, .t, .before = .BG_BEFORE,
+                                            .after = .BG_AFTER, .complete = FALSE, .f = .sd_safe)
+}
+ch4[, ch4_plume := !is.na(ch4_ppm) & !is.na(ch4_bg) & !is.na(ch4_sd) &
+                   (ch4_ppm >= ch4_bg + 3 * ch4_sd)]
 ch4[, ch4_enh := ch4_ppm - ch4_bg]                   # enhancement over local background
+
+# script 11's rule, verbatim: obs - baseline + median_bg when baseline <= obs,
+# otherwise obs * median_bg / baseline (guarding a zero baseline).
+ch4[, median_bgCH4 := median(ch4_bg[is.finite(ch4_bg)], na.rm = TRUE), by = bgkey]
+ch4[, median_bgCH4 := ifelse(is.finite(median_bgCH4), median_bgCH4, NA_real_)]
+.bg_correct <- function(obs, base, med) {
+  # Mirrors 11_correcting_for_background.R including its 2026-08-20 fix: the
+  # multiplicative branch is only meaningful for a STRICTLY POSITIVE baseline.
+  out <- rep(NA_real_, length(obs))
+  ok  <- is.finite(obs) & is.finite(base) & is.finite(med)
+  ok_add   <- ok & ((base <= obs) | (base <= 0))
+  out[ok_add] <- obs[ok_add] - base[ok_add] + med[ok_add]
+  ok_ratio <- ok & (base > obs) & (base > 0)
+  out[ok_ratio] <- obs[ok_ratio] * med[ok_ratio] / base[ok_ratio]
+  out
+}
+ch4[, sCH4 := .bg_correct(ch4_ppm, ch4_bg, median_bgCH4)]
+diag_msg(sprintf("  [BG] ch4_bg defined on %.1f%% of rows | sCH4 on %.1f%% | plume flag on %.2f%%",
+                 100 * mean(is.finite(ch4$ch4_bg)), 100 * mean(is.finite(ch4$sCH4)),
+                 100 * mean(ch4$ch4_plume)))
 
 # DIAG: background plausibility (regional ambient CH4 ~1.9-2.2 ppm)
 bg_med <- median(ch4$ch4_bg, na.rm = TRUE)

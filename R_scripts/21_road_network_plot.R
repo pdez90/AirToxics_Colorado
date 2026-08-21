@@ -111,7 +111,14 @@ make_clean_road_figure <- function(DT, pollutant_cols, out_file,
     variable.name = "Pollutant",
     value.name = "value"
   )
-  L <- L[is.finite(value) & value > 0]
+  # BUGFIX (2026-08-20): the "> 0" truncation exists for the log scale at
+  # the bottom of this block, but med_dt below - the median printed on each
+  # violin - was computed on the truncated set. Negative values occur more
+  # often where concentrations are low, so the printed medians were biased
+  # high, unevenly across road classes. Keep every finite value for the
+  # statistics; scale_y_log10() drops the non-positive ones from the
+  # DISPLAY on its own.
+  L <- L[is.finite(value)]
 
   med_dt <- L[, .(med = median(value, na.rm = TRUE)), by = .(Pollutant, road_class)]
   med_dt[, lab := formatC(med, format = "f", digits = digits)]

@@ -23,7 +23,7 @@ ms <- rbindlist(lapply(names(POLLS), function(pn) {
 }))
 ms <- ms[n >= 1000]     # skip fragmentary months
 fwrite(ms, file.path(BASE, "TABLE_monthly_stability.csv"))
-print(dcast(ms[pollutant=="Benzene"], month ~ van, value.var="median"))
+print(data.table::dcast(ms[pollutant=="Benzene"], month ~ van, value.var="median"))
 # audit boundaries to display (MDL change points, Table S1.2)
 bounds <- as.Date(c("2024-10-01", "2025-01-01", "2024-04-01", "2024-07-01"))
 p <- ggplot(ms, aes(month, median, color=van)) +

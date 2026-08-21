@@ -1,7 +1,7 @@
 # ==============================================================
 # M06_methane_at_toxics_hotspots.R
 # Uses methane as an independent tracer to further discriminate the
-# 17 persistent multi-pollutant air-toxics hotspot groups:
+# the persistent multi-pollutant air-toxics hotspot groups (count read from MASTER):
 #   - CH4 behavior within 100 m of each toxics group centroid
 #     (n obs, days, median, % >= p95, % >= p99 of campaign CH4)
 #   - distance from each group to the nearest CH4 cluster and to the
@@ -14,7 +14,7 @@
 # ==============================================================
 
 source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
-diag_section("M06: Methane as a discriminator at the 17 toxics hotspot groups")
+diag_section("M06: Methane as a discriminator at the persistent toxics hotspot groups")
 
 suppressPackageStartupMessages({
   library(data.table); library(sf); library(ggplot2); library(patchwork)
@@ -98,7 +98,7 @@ if (n_cov > 0) diag_msg("  [CAVEAT] ", n_cov, " group(s) have < 100 CH4 obs with
 fwrite(res, file.path(BASE, "methane_at_toxics_hotspots.csv"))
 
 # ---- figure: heatmap of CH4 metrics by group + context map ----
-hm <- melt(res[, .(group_id, `% obs >= p95` = pct_ge_p95, `% obs >= p99` = pct_ge_p99,
+hm <- data.table::melt(res[, .(group_id, `% obs >= p95` = pct_ge_p95, `% obs >= p99` = pct_ge_p99,
                    `days with high CH4` = days_with_high,
                    `median CH4 (ppm)` = ch4_med)],
            id.vars = "group_id")
@@ -111,7 +111,7 @@ p1 <- ggplot(hm, aes(x = variable, y = group_id, fill = value)) +
   theme_bw(base_size = 11) +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         strip.background = element_rect(fill = "grey95")) +
-  labs(title = "Methane at the 17 persistent air-toxics hotspot groups",
+  labs(title = sprintf("Methane at the %d persistent air-toxics hotspot groups", nrow(groups)),
        subtitle = sprintf("Within %g m of each group centroid | campaign p95 = %.2f ppm, p99 = %.2f ppm",
                           RADIUS_M, p95, p99),
        x = NULL, y = "Toxics hotspot group")

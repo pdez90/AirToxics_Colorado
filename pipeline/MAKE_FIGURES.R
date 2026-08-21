@@ -30,9 +30,16 @@ GROUPS <- list(
   B = list(desc = "Polar plot maps + combined figures (S3.9 etc.)",
            pre = character(0),
            scripts = c("08_polarplot_maps.R", "09_creating_figures.R")),
-  C = list(desc = "FIGURE 2: 500 m segment maps + ratio maps (S4.5)",
-           pre = c('load(file.path(BASE, "segment500_summaries_clean.RData"))',
-                   'load(file.path(BASE, "segment500_summaries_acrossSites.RData"))'),
+  C = list(desc = "SI S4.5: 500 m segment maps + ratio maps (across-sites aggregation)",
+           # BUGFIX (2026-08-19): scripts 13 and 14 save the SAME four object
+           # names (seg_long_dt, seg_long_sf, seg_wide, seg_wide_sf) to
+           # different files, so loading both here silently clobbered the
+           # first. Scripts 15/16 therefore always rendered the across-sites
+           # aggregation. Load ONLY that file, which is the behaviour these SI
+           # figures were produced under. (Manuscript Figure 2 is built by
+           # 55_figure2_sharedscale.R, which loads segment500_summaries_clean
+           # itself - see group O.)
+           pre = c('load(file.path(BASE, "segment500_summaries_acrossSites.RData"))'),
            scripts = c("15_maps_for_500_m_segment.R", "16_500_m_plotting_ratios.R")),
   D = list(desc = "Census block maps (S4.6)",
            pre = c('load(file.path(BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB.RData"))',
@@ -68,11 +75,66 @@ GROUPS <- list(
            scripts = "27_hotspot_sensitivity_sensitivity.R"),
   M = list(desc = "Table S5.1 per-group reports (maps/scatter/polar + highday tables)",
            pre = character(0),
-           scripts = "31_plotting.R")
+           scripts = "31_plotting.R"),
+  N = list(desc = "Rebuild root MASTER_hotspot_group_index.csv (must precede H)",
+           pre = character(0),
+           scripts = "71_rebuild_master_index.R"),
+  O = list(desc = "FIGURE 2 shared-scale composite (manuscript Figure 2)",
+           pre = character(0),
+           scripts = "55_figure2_sharedscale.R"),
+  P = list(desc = "Hotspot sensitivity / split-sample / sufficiency (S5.6, S5.8, S5.9)",
+           pre = character(0),
+           scripts = c("47_dbscan_threshold_sensitivity.R",
+                       "52_split_sample_hotspots.R",
+                       "60_sampling_sufficiency.R")),
+  Q = list(desc = "Methane at the toxics hotspot groups (S7.2 / Section 3.7)",
+           pre = character(0),
+           scripts = "../rerun_pipeline/methane/M06_methane_at_toxics_hotspots.R"),
+  U = list(desc = "Methane chain re-run (CH4 native cadence -> hotspots -> maps)",
+           pre = character(0),
+           scripts = c("../rerun_pipeline/methane/M01_ingest_delay_garage.R",
+                       "../rerun_pipeline/methane/M02_wind_background.R",
+                       "../rerun_pipeline/methane/M03_hotspots.R",
+                       "../rerun_pipeline/methane/M04_sourceprob_map.R",
+                       "../rerun_pipeline/methane/M06_methane_at_toxics_hotspots.R")),
+  V = list(desc = "Plume bias simulations S6.3/S6.4 + minimum detectable rate S6.6",
+           pre = character(0),
+           scripts = c("../rerun_pipeline/plume_scripts/P09_simulations_real_stack_height_varies.R",
+                       "../rerun_pipeline/plume_scripts/P10_simulations_cross_wind_distance_0.R",
+                       "46_min_detectable_rate.R")),
+  W = list(desc = "WWTP-vs-refinery plume source attribution (re-run after CH4 change)",
+           pre = character(0),
+           scripts = "70_source_attribution_wwtp_vs_refinery.R"),
+  T = list(desc = "Cumulative non-cancer HI + total cancer risk (Chiger/Robinson)",
+           pre = character(0),
+           scripts = "73_cumulative_risk.R"),
+  S = list(desc = "Table S3.2 health-reference / hazard-quotient table",
+           pre = character(0),
+           scripts = "54_health_reference_table.R"),
+  R = list(desc = "MDL / smoke / stability / seasonal / CAT-EMU (S1.2, S3.11-S3.14)",
+           pre = character(0),
+           scripts = c("45_mdl_sensitivity.R", "50_below_mdl_maps.R",
+                       "51_cat_emu_comparison.R", "56_hms_smoke_days.R",
+                       "57_monthly_stability.R", "62_seasonal_patterns.R"))
 )
 
 sel <- Sys.getenv("GROUPS")
 run_names <- if (nzchar(sel)) trimws(strsplit(sel, ",")[[1]]) else names(GROUPS)
+
+# ---- DEPENDENCY ORDER (added 2026-08-19) --------------------------------
+# Script 31 (group M) REGENERATES hotspot_group_reports/MASTER_hotspot_group_index.csv
+# from group_summary_persistent. Script 32 (G) joins TRI onto that index, and
+# scripts 33-35 (H) read it to build Figure 4 / fingerprints / directional
+# metrics. Alphabetical order runs G and H BEFORE M, so on any run where the
+# group set changes (e.g. the native-cadence reprocessing), G and H silently
+# use the PREVIOUS run's groups. Worse, scripts 33-35 read the ROOT-level
+# MASTER_hotspot_group_index.csv, which is a DIFFERENT file from the one script
+# 31 writes under hotspot_group_reports/ — group N (script 71) rebuilds the root
+# copy from the current run so the two agree. Force M -> G -> N -> H.
+DEP_ORDER <- c("M", "G", "N", "H", "P", "U", "Q", "W", "V")   # U (CH4) before Q (methane@hotspots) and W (attribution)   # P,Q read the rebuilt MASTER
+run_names <- c(intersect(DEP_ORDER, run_names), setdiff(run_names, DEP_ORDER))
+diag_msg("Run order (dependency-corrected): ", paste(run_names, collapse = ", "))
+# -------------------------------------------------------------------------
 
 results <- data.frame(group = character(0), desc = character(0),
                       status = character(0), minutes = numeric(0))

@@ -28,10 +28,26 @@ diag_msg("Section scripts completed in ", round(difftime(Sys.time(), t0, units =
 # DIAG 1: per-pollutant hotspot events (old vs new)
 # ----------------------------------------------------------------
 diag_section("R05-DIAG 1: high-concentration events per pollutant (old vs new)")
-for (f in c("hs_df_benzene.RData", "hs_df_toluene.RData", "hs_df_trimethylbenzene.RData",
-            "hs_df_xylene.RData", "hs_df_h2s.RData", "hs_df_hcn.RData")) {
-  diag_compare_rdata_rows(f, "hs_df")
+# BUGFIX (2026-08-20): this loop compared six hs_df_*.RData files that NO
+# script writes - 28_hotspot_analysis...R:62 keeps `hs_df` as a loop-local and
+# never save()s it. Both sides of the comparison were pre-fix artifacts, so the
+# "old vs new" event counts were meaningless. The per-pollutant event counts
+# that actually drive Section 2.5.3.2 are in cent_out_*.csv, which script 28
+# does write; report those instead.
+.cent <- list.files(BASE, pattern = "^cent_out_.*[.]csv$", full.names = TRUE)
+if (length(.cent)) {
+  for (f in .cent) {
+    x <- try(utils::read.csv(f), silent = TRUE)
+    if (!inherits(x, "try-error")) {
+      diag_msg(sprintf("  [EVENTS] %-42s %s cluster rows", basename(f),
+                       format(nrow(x), big.mark = ",")))
+    }
+  }
+} else {
+  diag_msg("  [WARN] no cent_out_*.csv found - script 28 did not write its ",
+           "per-pollutant cluster tables.")
 }
+diag_compare_rdata_rows("hs_df_methane.RData", "hs_df_methane")
 
 # ----------------------------------------------------------------
 # DIAG 2: cluster pipeline counts vs manuscript
@@ -46,7 +62,11 @@ if (file.exists(idx_file)) {
   gid_col <- grep("group", names(idx), ignore.case = TRUE, value = TRUE)[1]
   if (!is.na(gid_col)) {
     n_groups <- length(unique(idx[[gid_col]]))
-    diag_check_value("final persistent hotspot groups (ms: 17)", n_groups, REF$final_groups, tol_pct = 0)
+    # tol_pct = 0: this one is exact by construction, so it must be checked
+    # against the CURRENT expected count (REF, updated 2026-08-20), not the
+    # as-submitted 17 (still available as REF_SUBMITTED$final_groups).
+    diag_check_value("final persistent hotspot groups (expect 18)", n_groups,
+                     REF$final_groups, tol_pct = 0)
   }
 } else diag_msg("  [WARN] MASTER_hotspot_group_index.csv not found")
 
@@ -56,8 +76,10 @@ if (file.exists(pc_file)) {
   diag_msg("  pair_counts_persistent.csv:")
   for (i in seq_len(min(nrow(pc), 10))) diag_msg("    ", paste(pc[i, ], collapse = " | "))
 }
-diag_msg("  Manuscript counts to verify: 160 initial DBSCAN clusters; 40 clusters with >=2")
-diag_msg("  pollutants; 17 with >=3; 8 with >=4; 17 final groups. Check the printed output")
+diag_msg(sprintf("  Manuscript counts to verify: %d initial DBSCAN clusters; %d clusters with >=2",
+                 REF$dbscan_initial, REF$clusters_ge2))
+diag_msg(sprintf("  pollutants; %d with >=3; %d with >=4; %d final groups. Check the printed output",
+                 REF$clusters_ge3, REF$clusters_ge4, REF$final_groups))
 diag_msg("  of scripts 28-30 above for the new values of each step.")
 
 # ----------------------------------------------------------------

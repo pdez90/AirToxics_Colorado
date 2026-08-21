@@ -12,9 +12,14 @@ library(dplyr)
 df <- df %>%
   dplyr::mutate(day = as.Date(date))
 
-# --- compute daily/site median of baseline_* (NA-safe, finite-safe)
+# KEY FIX (2026-08-20): matched to script 10 - the daily median background
+# must be per-vehicle for the same reason the rolling window is. Asset is
+# carried through script 06's select(), so it is available here.
+stopifnot("Asset" %in% names(df))
+
+# --- compute daily/site/asset median of baseline_* (NA-safe, finite-safe)
 medianpollutants <- df %>%
-  dplyr::group_by(day, Site) %>%
+  dplyr::group_by(day, Site, Asset) %>%
   dplyr::summarise(
     median_bgBenzene          = median(baseline_Benzene[is.finite(baseline_Benzene)], na.rm = TRUE),
     median_bgToluene          = median(baseline_Toluene[is.finite(baseline_Toluene)], na.rm = TRUE),
@@ -28,7 +33,7 @@ medianpollutants <- df %>%
   dplyr::mutate(across(starts_with("median_bg"), ~ ifelse(is.finite(.x), .x, NA_real_)))
 
 df <- df %>%
-  left_join(medianpollutants, by = c("day", "Site"))
+  left_join(medianpollutants, by = c("day", "Site", "Asset"))
 
 rm(medianpollutants); gc()
 
@@ -37,14 +42,41 @@ rm(medianpollutants); gc()
 # Else: obs * median_bg / baseline
 # Returns NA if any needed piece missing; avoids division by 0
 bg_correct <- function(obs, base, med) {
+  # BUGFIX (2026-08-20): the multiplicative branch guarded only `base != 0`,
+  # not `base <= 0`. This pipeline deliberately RETAINS negative readings, and
+  # they are common in exactly the two species whose MDLs sit far above ambient:
+  # 34.2% of retained H2S values and 17.3% of benzene are negative (counted
+  # from the 58 monthly CDPHE CSVs; toluene, xylene, TMB and HCN are delivered
+  # non-negative). The lowest-20th-percentile baseline of a 20-minute window is
+  # therefore frequently <= 0 for H2S, and then:
+  #   base <  0 and base > obs  ->  obs * med / base FLIPS THE SIGN, so a
+  #                                 -3 ppb reading is published as +1.5 ppb
+  #   base == 0                 ->  the row falls through BOTH branches and is
+  #                                 silently deleted as NA
+  # Neither is intended. Equation 3 exists to avoid negative corrected values
+  # when a POSITIVE background exceeds the observation; it is only meaningful
+  # for a positive baseline. Fall back to the additive form (Equation 2)
+  # whenever the baseline is not strictly positive - that is well defined,
+  # order-preserving, and leaves a genuinely negative observation negative,
+  # which is what SI Section S4.1.1 says happens.
   out <- rep(NA_real_, length(obs))
+  ok  <- is.finite(obs) & is.finite(base) & is.finite(med)
 
-  ok_add <- is.finite(obs) & is.finite(base) & is.finite(med) & (base <= obs)
+  # Equation 2 (additive): baseline at or below the observation, OR any
+  # baseline that is not strictly positive.
+  ok_add <- ok & ((base <= obs) | (base <= 0))
   out[ok_add] <- obs[ok_add] - base[ok_add] + med[ok_add]
 
-  ok_ratio <- is.finite(obs) & is.finite(base) & is.finite(med) & (base > obs) & (base != 0)
+  # Equation 3 (multiplicative): only when a STRICTLY POSITIVE baseline
+  # exceeds the observation.
+  ok_ratio <- ok & (base > obs) & (base > 0)
   out[ok_ratio] <- obs[ok_ratio] * med[ok_ratio] / base[ok_ratio]
 
+  .n_np <- sum(ok & (base <= 0) & (base > obs))
+  if (.n_np > 0) {
+    message(sprintf("[BG] %s rows had a non-positive baseline above the observation; Eq.2 used instead of Eq.3 (previously a sign flip or a silent NA)",
+                    format(.n_np, big.mark = ",")))
+  }
   out
 }
 

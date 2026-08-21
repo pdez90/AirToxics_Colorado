@@ -45,7 +45,77 @@ dur_min_s <- 10; dur_max_s <- 180; max_wind_sd_deg <- 15
 keep_stab_levels <- c("B", "C", "D")
 
 # ---- inversion settings (verbatim) ----------------------------
-z_m <- 1.5; MW_H2S <- 34.08; mol_m3_air <- 2.7e25 / 6.022e23
+# ---------------------------------------------------------------
+# PLUME PHYSICS CORRECTIONS (2026-08-20)
+# Applied identically in P08_gaussian_plumes_h2s.R,
+# P09_simulations_real_stack_height_varies.R,
+# P10_simulations_cross_wind_distance_0.R, 46_min_detectable_rate.R and
+# 65_plume_cadence_sensitivity.R. If you change one, change all five.
+#
+# (1) MOLAR DENSITY OF AIR. The old constant 2.7e25/6.022e23 = 44.84 mol/m3
+#     is Loschmidt's number, i.e. dry air at 0 C and 1013 hPa. These
+#     measurements are made at about 1600 m, where air is a third less
+#     dense. A ppb is a mixing ratio and carries no mass without a stated
+#     air density, so the sea-level value inflated every inferred emission
+#     rate by 34%. The site basis used here (25 C, 830 hPa -> 33.48
+#     mol/m3) is the same one 18_...census_block_level_stats.R uses to
+#     convert AirToxScreen ug/m3 to ppb and the same one the benzene
+#     inhalation unit risks are expressed on, so the emissions and the
+#     exposure halves of the paper now share a standard state.
+#
+# (2) VERTICAL REFLECTION SERIES. The old five-term sum was
+#       (z-H), (z+H), (z+H-2L), (z-H-2L), (z-H+2L)
+#     which is the n = -1, 0, +1 expansion with the (z+H+2L) image MISSING,
+#     and it stopped at n = +-1 however large sigma_z had grown. Q is
+#     proportional to 1/V, so an under-counted V inflates Q: at PBL 1000 m
+#     the error is under 3%, but at PBL 300 m it reaches +57% for the
+#     class B plume at 1.95 km and +65% for the class C plume at 4.3 km.
+#     The sum is now carried to convergence (verified against a 4000-term
+#     expansion: agreement better than 0.001% at every sigma_z/L tested),
+#     and once sigma_z exceeds 1.6 L the plume is uniformly mixed through
+#     the boundary layer, where the closed form V = sqrt(2*pi)*sigma_z/L
+#     applies - the standard treatment, equivalent to
+#     C = Q / (sqrt(2*pi) * u * sigma_y * L). The switch is continuous.
+#
+# (3) CROSSWIND OFFSET. See the geometry note in P08: the receptor is not
+#     on the plume centreline, because the acceptance window admits a
+#     wind-to-source bearing difference of up to 10 degrees.
+# ---------------------------------------------------------------
+R_GAS      <- 8.314462618   # J/(mol K)
+SITE_T_C   <- 25            # nominal site air temperature
+SITE_P_HPA <- 830           # nominal site pressure (~1600 m elevation)
+molar_density_mol_m3 <- function(T_C = SITE_T_C, P_hPa = SITE_P_HPA) {
+  (P_hPa * 100) / (R_GAS * (T_C + 273.15))
+}
+SITE_MOL_M3 <- molar_density_mol_m3()      # 33.48 mol/m3 (was 44.84)
+
+WELL_MIXED_RATIO <- 1.6     # sigma_z / L above which the plume is uniform
+VERT_N_IMAGES    <- 20      # images per side; later terms are below 1e-100
+
+vertical_term <- function(z, H, sigz, hpbl, reflections = TRUE) {
+  out <- rep(NA_real_, length(sigz))
+  ok  <- is.finite(sigz) & sigz > 0 & is.finite(hpbl) & hpbl > 0
+  if (!any(ok)) return(out)
+  s <- sigz[ok]
+  L <- rep_len(hpbl, length(sigz))[ok]
+  v <- exp(-0.5 * ((z - H) / s)^2)
+  if (!reflections) { out[ok] <- v; return(out) }
+  v <- v + exp(-0.5 * ((z + H) / s)^2)
+  for (n in seq_len(VERT_N_IMAGES)) {
+    v <- v +
+      exp(-0.5 * ((z - H + 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z + H + 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z - H - 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z + H - 2 * n * L) / s)^2)
+  }
+  wm <- s > WELL_MIXED_RATIO * L
+  if (any(wm)) v[wm] <- sqrt(2 * pi) * s[wm] / L[wm]
+  out[ok] <- v
+  out
+}
+
+z_m <- 1.5; MW_H2S <- 34.08
+mol_m3_air <- SITE_MOL_M3          # (1) was 2.7e25/6.022e23 = 44.84 mol/m3
 seconds_per_year <- 365.25 * 24 * 3600; op_fraction <- 1.0
 wwtp_stack_height_m <- 12.2; stack_heights_m <- c(1, 10, 15, 20, 30, 50)
 wind_mults <- c(0.8, 1.0, 1.2); x_mults <- c(0.9, 1.0, 1.1)
@@ -70,16 +140,16 @@ sigma_y_pg <- function(CAT, x_km) { X <- pmax(x_km,1e-6)*1000
 sigma_z_pg <- function(CAT, x_km) { X <- pmax(x_km,1e-6)*1000
   dplyr::case_when(CAT %in% c("A","B") ~ 0.24*X*(1+(0.001*X))^(0.5),
     CAT=="C" ~ 0.20*X, CAT=="D" ~ 0.14*X*(1+(0.0003*X))^(-0.5),
-    CAT %in% c("E","F") ~ 0.08*X*(1+(0.00015*X))^(-0.5), TRUE ~ NA_real_) }
+    # BUGFIX (2026-08-20): Briggs urban sigma_z E-F is 0.08x(1+0.0015x)^(-1/2); the code had 0.00015, one order of magnitude low, which makes sigma_z ~1.75x too large at 2 km and inflates Q by the same factor. Every other Briggs coefficient in these files matches the published table exactly, so this is a transcription slip. E/F never arises from the daytime classifier, so the central estimates are unaffected - but P08's CAT_plus1 scenario shifts D->E, so the published upper stability bound was inflated by ~75%.
+    CAT %in% c("E","F") ~ 0.08*X*(1+(0.0015*X))^(-0.5), TRUE ~ NA_real_) }
 shift_cat <- function(cat, shift=0) { lev <- c("A","B","C","D","E","F")
   idx <- match(cat, lev); ifelse(is.na(idx), NA_character_, lev[pmin(pmax(idx+shift,1),length(lev))]) }
 vert_term_vec <- function(z, H, sigz, hpbl, reflections=TRUE) {
   ok <- is.finite(sigz)&sigz>0&is.finite(hpbl)&hpbl>0; out <- rep(NA_real_, length(sigz))
   if (!any(ok)) return(out); s <- sigz[ok]; L <- hpbl[ok]
   a <- exp(-0.5*((z-H)^2)/(s^2)); if (!reflections) { out[ok] <- a; return(out) }
-  b <- exp(-0.5*((z+H)^2)/(s^2)); c <- exp(-0.5*((z+H-2*L)^2)/(s^2))
-  d <- exp(-0.5*((z-H-2*L)^2)/(s^2)); e <- exp(-0.5*((z-H+2*L)^2)/(s^2))
-  out[ok] <- a+b+c+d+e; out }
+  out[ok] <- vertical_term(z=z, H=H, sigz=s, hpbl=L, reflections=TRUE)   # (2)
+  out }
 invert_gaussian <- function(inv_df, reflections, H_m, wind_mult, x_mult, cat_shift, y_m) {
   inv_df %>% dplyr::mutate(
     CAT_s = shift_cat(CAT, cat_shift), u_ms_s = u_ms*wind_mult,

@@ -38,7 +38,16 @@ stopifnot(length(cols) > 0, inherits(df$datetime, "POSIXt"))
 
 # Sort + define day-group (no timezone manipulation)
 df <- df[order(df$datetime), ]
-df$day <- paste0(as.Date(df$datetime), df$Site)
+# KEY FIX (2026-08-20): the rolling-background window is split on this key,
+# so omitting Asset let the two mobile labs' interleaved 1-s records share a
+# window whenever both sampled the same Site on the same day. Each vehicle's
+# 20-min background was then drawn from a mixture of two vehicles at different
+# locations. (Impact is small - the labs share a Site-day twice in 203 days,
+# SI S1.5 - but the key should be per-vehicle.) Asset is already the grouping
+# key at 03:147 (AssetSiteDay) and 03:350 (native-cadence blocks).
+df$day <- paste0(as.Date(df$datetime), "_", df$Site, "_", df$Asset)
+message(sprintf("[KEY] rolling-background groups: %d (date x Site x Asset)",
+                length(unique(df$day))))
 
 # Window size = ±10 min around each time point
 before_sec <- 600

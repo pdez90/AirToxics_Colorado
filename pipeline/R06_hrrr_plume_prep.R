@@ -78,9 +78,19 @@ diag_msg("WWTF/stability scripts completed in ", round(difftime(Sys.time(), t1, 
   }
   d
 }
-if (exists("res"))     res     <- .swap_raw_h2s(res)
-if (exists("res_sub")) res_sub <- .swap_raw_h2s(res_sub)
-if (isTRUE(attr(res_sub, ".h2s_raw_applied"))) {
+# BUGFIX (2026-08-20): the check below read attr(res_sub, ...) even when the
+# guarded exists("res_sub") above was FALSE, and if only `res` carried the
+# *_raw columns the swap was computed and then never saved while the log
+# still claimed the raw signal was in use. Track both objects explicitly and
+# require BOTH to have been swapped before re-saving.
+.res_ok     <- exists("res")     && isTRUE(attr(res     <- .swap_raw_h2s(res),     ".h2s_raw_applied"))
+.res_sub_ok <- exists("res_sub") && isTRUE(attr(res_sub <- .swap_raw_h2s(res_sub), ".h2s_raw_applied"))
+if (exists("res") && exists("res_sub") && xor(.res_ok, .res_sub_ok)) {
+  stop("R06: raw H2S columns present in only ONE of res / res_sub (res: ", .res_ok,
+       ", res_sub: ", .res_sub_ok, "). Re-run 03/06/10 with NATIVE_CADENCE <- TRUE ",
+       "so both objects carry H2S_raw / baseline_H2S_raw / plume_H2S_raw.")
+}
+if (.res_ok && .res_sub_ok) {
   save(res, res_sub, file = file.path(BASE, "mobile_hrrr_windfromwwtf_stability_filtered.RData"))
   save(res, file = file.path(BASE, "mobile_hrrr_windfromwwtf.RData"))
   diag_msg("  [PLUME EXEMPTION] H2S/baseline_H2S/plume_H2S set to RAW delivered signal ",
@@ -98,7 +108,14 @@ stab_file <- file.path(BASE, "mobile_hrrr_windfromwwtf_stability_filtered.RData"
 if (file.exists(stab_file)) {
   e_s <- new.env(); load(stab_file, envir = e_s)
   diag_msg("  objects: ", paste(ls(e_s), collapse = ", "))
-  sdat <- get(ls(e_s)[1], envir = e_s)
+  # BUGFIX (2026-08-20): this was get(ls(e_s)[1]). The file contains `res` and
+  # `res_sub`; ls() sorts alphabetically, so sdat was `res` - the UNFILTERED
+  # HRRR join - not `res_sub`, which P06 restricts to 0.5-5 km from the WWTF
+  # and |wind - bearing| <= 10 deg. The stability-class distribution and the
+  # [ALIGN] median printed below are the numbers the Reviewer-2 response cites,
+  # and they were describing the wrong population.
+  sdat <- get(if ("res_sub" %in% ls(e_s)) "res_sub" else ls(e_s)[1], envir = e_s)
+  diag_msg("  using object: ", if ("res_sub" %in% ls(e_s)) "res_sub (WWTF-aligned, distance-filtered)" else ls(e_s)[1])
   if (is.data.frame(sdat)) {
     sc_col <- grep("Stability_Class", names(sdat), value = TRUE)
     for (cc in sc_col) {

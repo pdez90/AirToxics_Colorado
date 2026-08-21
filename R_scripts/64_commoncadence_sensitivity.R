@@ -63,7 +63,11 @@ g    <- st_read(file.path(BASE,
          "censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONBLOCKS.gpkg"), quiet = TRUE)
 gll  <- st_transform(g, 4326)
 idcol <- grep("GEOID", names(gll), value = TRUE)[1]
-ats  <- as.data.table(st_drop_geometry(gll))[, .(block = get(idcol), ats = benzene_ppb_airtox)]
+# (2026-08-20) population carried so the aggregate ratio below is
+# POPULATION-WEIGHTED, matching the published quantity in scripts 20 and 58.
+ats  <- as.data.table(st_drop_geometry(gll))[, .(block = get(idcol),
+                                                 ats = benzene_ppb_airtox,
+                                                 pop = Population_airtox)]
 SCALE <- 1.149
 
 assign_cell <- function(d) {
@@ -77,7 +81,17 @@ assign_block <- function(d) {                # proper st_within on THESE positio
   w  <- st_within(up, gll)
   u[, block := st_drop_geometry(gll)[[idcol]][
         vapply(w, function(z) if (length(z)) z[1] else NA_integer_, 1L)]]
-  merge(d, u, by = c("Longitude", "Latitude"), all.x = TRUE)$block
+  # BUGFIX (2026-08-20): this was
+  #   merge(d, u, by = c("Longitude","Latitude"), all.x = TRUE)$block
+  # merge() returns its rows SORTED BY THE JOIN KEY, but the caller assigns the
+  # result positionally (`b0[, block := assign_block(b0)]`), so the block label
+  # for one row landed on a different row. Every figure in TABLE_cadence_blocks
+  # .csv - including the 1-s BASELINE row - was computed on scrambled block
+  # membership, which homogenises blocks and would manufacture the "risk ratio
+  # is invariant to bin size" result. A data.table join keyed on `d` returns
+  # the result in `d`'s order.
+  stopifnot(is.data.table(u), is.data.table(d))
+  u[d, on = c("Longitude", "Latitude"), x.block]
 }
 
 # ---- binning: mean conc + mean position per B-second window ----
@@ -163,7 +177,8 @@ for (B in BINS) {
   bb <- merge(block_bz(d), ats, by = "block")
   bcmp <- merge(bb0[, .(block, base = bval)], bb[, .(block, binned = bval)], by = "block")
   bl_all[[as.character(B)]] <- data.table(bin_s = B, blocks = nrow(bb),
-    agg_ratio = round(sum(bb$bval * SCALE) / sum(bb$ats), 3),
+    agg_ratio = round(with(bb[is.finite(pop) & pop > 0 & is.finite(ats)],
+                           sum(pop * bval * SCALE) / sum(pop * ats)), 3),
     blocks_gt2x = sum(bb$bval * SCALE / bb$ats > 2, na.rm = TRUE),
     spearman_vs_1s = round(cor(bcmp$base, bcmp$binned, method = "spearman"), 3))
   message("  block benzene: ratio ", bl_all[[as.character(B)]]$agg_ratio,
@@ -179,7 +194,7 @@ for (B in BINS) {
 cm <- rbindlist(cm_all); bl <- rbindlist(bl_all)
 fwrite(cm, file.path(BASE, "TABLE_cadence_cellmaps.csv"))
 fwrite(bl, file.path(BASE, "TABLE_cadence_blocks.csv"))
-message("\n--- cell-map Spearman vs 1-s ---"); print(dcast(cm, pollutant ~ bin_s, value.var = "spearman"))
+message("\n--- cell-map Spearman vs 1-s ---"); print(data.table::dcast(cm, pollutant ~ bin_s, value.var = "spearman"))
 message("--- census-block benzene by bin ---"); print(bl)
 if (DOHOT) { ht <- rbindlist(ht_all)
   fwrite(ht, file.path(BASE, "TABLE_cadence_hotspots.csv"))

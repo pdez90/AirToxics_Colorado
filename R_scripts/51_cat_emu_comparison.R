@@ -43,7 +43,7 @@ for (pn in names(POLLS)) {
   col <- POLLS[[pn]]
   dd <- df[is.finite(get(col)) & van %in% c("CAT", "EMU"),
            .(med = median(get(col)), n = .N), by = .(cell, day, van)]
-  w <- dcast(dd, cell + day ~ van, value.var = "med")
+  w <- data.table::dcast(dd, cell + day ~ van, value.var = "med")
   w <- w[is.finite(CAT) & is.finite(EMU)]
   message(sprintf("%-17s cell-days with BOTH vans: %s", pn,
                   format(nrow(w), big.mark = ",")))

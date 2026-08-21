@@ -14,7 +14,19 @@
 source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
 diag_section("R01: Delay reprocessing (corrected asset-specific delays)")
 
-stopifnot(dir.exists(file.path(BACKUP)))  # run R00 first
+# BUGFIX (2026-08-20): this was a hard stopifnot(dir.exists(BACKUP)), but
+# RUN_ALL_from_raw.R advertises "ONE COMMAND, RAW DATA IN" and never calls
+# R00_backup_old_outputs.R, so a genuine from-raw run died here. BACKUP only
+# supplies the OLD side of the old-vs-new comparisons; its absence should
+# degrade the diagnostics, not stop the pipeline.
+if (!dir.exists(BACKUP)) {
+  dir.create(BACKUP, showWarnings = FALSE, recursive = TRUE)
+  diag_msg("  [NOTE] ", BACKUP, " did not exist and has been created EMPTY. ",
+           "This run has no pre-fix snapshot to compare against, so every ",
+           "old-vs-new diagnostic will report the old side as NA. That is ",
+           "expected for a clean from-raw run; run R00_backup_old_outputs.R ",
+           "first if you want the comparisons.")
+}
 
 t0 <- Sys.time()
 source(file.path(BASE, "R_scripts", "01_libraries.R"))
@@ -58,7 +70,20 @@ diag_df_summary(df_out, "df_out (new, corrected delays)")
 # DIAG 3: old vs new row counts + per-asset counts
 # ----------------------------------------------------------------
 diag_section("R01-DIAG 3: old vs new comparison")
-e_old <- new.env(); load(file.path(BACKUP, "mobile.RData"), envir = e_old)
+# BUGFIX (2026-08-20): this load() was unguarded, so on the from-raw run that
+# the BACKUP fix above was written for - BACKUP freshly created and EMPTY -
+# it threw "cannot open compressed file", R01 exited non-zero, and RUN_ALL
+# stopped the whole chain at stage 3. DIAG 3 and DIAG 4 are old-vs-new
+# comparisons; with no snapshot there is simply nothing to compare.
+.old_mobile <- file.path(BACKUP, "mobile.RData")
+.have_old <- file.exists(.old_mobile)
+if (!.have_old) {
+  diag_msg("  [SKIP] no pre-fix snapshot at ", .old_mobile,
+           " - DIAG 3 and DIAG 4 (old-vs-new rows and lag verification) cannot run. ",
+           "Run R00_backup_old_outputs.R first if you want them.")
+}
+if (.have_old) {
+e_old <- new.env(); load(.old_mobile, envir = e_old)
 df_old <- get(ls(e_old)[1], envir = e_old)
 diag_msg(sprintf("  rows  old: %s   new: %s   (%+.2f%%)",
                  format(nrow(df_old), big.mark = ","), format(nrow(df_out), big.mark = ","),
@@ -79,6 +104,9 @@ for (a in unique(df_out$Asset)) {
 #   EMU: BTEX 5-6.5   = -1.5,  HCN 3-7.5 = -4.5,           H2S 17-9 = +8
 # (positive = new timestamps are EARLIER by that many seconds)
 # ----------------------------------------------------------------
+}  # end if (.have_old) for DIAG 3
+
+if (.have_old) {
 diag_section("R01-DIAG 4: lag verification old->new (sampled days)")
 suppressPackageStartupMessages(library(data.table))
 
@@ -118,6 +146,8 @@ for (a in intersect(names(lag_expected), unique(dt_new$Asset))) {
                      ifelse(ok, "PASS", "CHECK"), a, poll, best_lag, best_cor, exp_lag))
   }
 }
+}  # end if (.have_old) for DIAG 4
+
 diag_msg("\nInterpretation: 'best lag' is how far the new series is shifted vs the old.")
 diag_msg("If PASS on all rows, the corrected delays were applied exactly as intended.")
 

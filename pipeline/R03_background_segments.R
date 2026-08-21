@@ -33,10 +33,39 @@ e_new <- new.env(); load(file.path(BASE, "bgcorrected_out_merge.RData"), envir =
 bg <- get(ls(e_new)[1], envir = e_new)
 diag_df_summary(bg, "bgcorrected_out_merge (new)")
 
-# Background correction sanity: medians of corrected data should sit near 0
-for (cc in intersect(c("Benzene_ppb", "Hydrogen_Sulfide_ppb", "Hydrogen_Cyanide_ppb"), names(bg))) {
+# BUGFIX (2026-08-20): this intersected Benzene_ppb / Hydrogen_Sulfide_ppb /
+# Hydrogen_Cyanide_ppb with names(bg), but script 10 renames those to
+# Benzene / H2S / HCN and script 11 writes the CORRECTED values to sBenzene /
+# sH2S / sHCN. The intersect was empty, so the loop body never ran.
+# The stated expectation was wrong too: bg_correct() returns
+# obs - baseline + median_bg, i.e. values centred on the DAILY MEDIAN
+# BACKGROUND, not on zero. Compare each corrected median against its own
+# baseline median instead.
+.bg_pairs <- list(Benzene          = c("sBenzene",          "baseline_Benzene"),
+                  Toluene          = c("sToluene",          "baseline_Toluene"),
+                  Trimethylbenzene = c("sTrimethylbenzene", "baseline_Trimethylbenzene"),
+                  Xylene           = c("sXylene",           "baseline_Xylene"),
+                  H2S              = c("sH2S",              "baseline_H2S"),
+                  HCN              = c("sHCN",              "baseline_HCN"))
+.ran <- 0L
+for (nm in names(.bg_pairs)) {
+  cc <- .bg_pairs[[nm]][1]; bb <- .bg_pairs[[nm]][2]
+  if (!cc %in% names(bg)) next
+  .ran <- .ran + 1L
   md <- stats::median(bg[[cc]], na.rm = TRUE)
-  diag_msg(sprintf("  [SANITY] median background-corrected %-22s = %8.4f ppb (expect near 0)", cc, md))
+  mb <- if (bb %in% names(bg)) stats::median(bg[[bb]], na.rm = TRUE) else NA_real_
+  diag_msg(sprintf(
+    "  [SANITY] median bg-corrected %-10s = %8.4f ppb | median baseline = %8.4f ppb | diff = %8.4f (expect near 0)",
+    cc, md, mb, md - mb))
+  if (is.finite(md) && md < 0) {
+    diag_msg("           [WARN] negative median for ", cc,
+             " - bg_correct() should not produce a net-negative distribution.")
+  }
+}
+if (.ran == 0L) {
+  diag_msg("  [CHECK-FAIL] no background-corrected columns (s*) found in ",
+           "bgcorrected_out_merge.RData - names are: ",
+           paste(head(names(bg), 30), collapse = ", "))
 }
 
 # ----------------------------------------------------------------

@@ -35,7 +35,77 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 z_m <- 1.5                       # instrument height above ground (m)
 MW_H2S <- 34.08                  # g/mol
-mol_m3_air <- 2.7e25 / 6.022e23  # legacy constant ~44.8 mol/m^3
+# ---------------------------------------------------------------
+# PLUME PHYSICS CORRECTIONS (2026-08-20)
+# Applied identically in P08_gaussian_plumes_h2s.R,
+# P09_simulations_real_stack_height_varies.R,
+# P10_simulations_cross_wind_distance_0.R, 46_min_detectable_rate.R and
+# 65_plume_cadence_sensitivity.R. If you change one, change all five.
+#
+# (1) MOLAR DENSITY OF AIR. The old constant 2.7e25/6.022e23 = 44.84 mol/m3
+#     is Loschmidt's number, i.e. dry air at 0 C and 1013 hPa. These
+#     measurements are made at about 1600 m, where air is a third less
+#     dense. A ppb is a mixing ratio and carries no mass without a stated
+#     air density, so the sea-level value inflated every inferred emission
+#     rate by 34%. The site basis used here (25 C, 830 hPa -> 33.48
+#     mol/m3) is the same one 18_...census_block_level_stats.R uses to
+#     convert AirToxScreen ug/m3 to ppb and the same one the benzene
+#     inhalation unit risks are expressed on, so the emissions and the
+#     exposure halves of the paper now share a standard state.
+#
+# (2) VERTICAL REFLECTION SERIES. The old five-term sum was
+#       (z-H), (z+H), (z+H-2L), (z-H-2L), (z-H+2L)
+#     which is the n = -1, 0, +1 expansion with the (z+H+2L) image MISSING,
+#     and it stopped at n = +-1 however large sigma_z had grown. Q is
+#     proportional to 1/V, so an under-counted V inflates Q: at PBL 1000 m
+#     the error is under 3%, but at PBL 300 m it reaches +57% for the
+#     class B plume at 1.95 km and +65% for the class C plume at 4.3 km.
+#     The sum is now carried to convergence (verified against a 4000-term
+#     expansion: agreement better than 0.001% at every sigma_z/L tested),
+#     and once sigma_z exceeds 1.6 L the plume is uniformly mixed through
+#     the boundary layer, where the closed form V = sqrt(2*pi)*sigma_z/L
+#     applies - the standard treatment, equivalent to
+#     C = Q / (sqrt(2*pi) * u * sigma_y * L). The switch is continuous.
+#
+# (3) CROSSWIND OFFSET. See the geometry note in P08: the receptor is not
+#     on the plume centreline, because the acceptance window admits a
+#     wind-to-source bearing difference of up to 10 degrees.
+# ---------------------------------------------------------------
+R_GAS      <- 8.314462618   # J/(mol K)
+SITE_T_C   <- 25            # nominal site air temperature
+SITE_P_HPA <- 830           # nominal site pressure (~1600 m elevation)
+molar_density_mol_m3 <- function(T_C = SITE_T_C, P_hPa = SITE_P_HPA) {
+  (P_hPa * 100) / (R_GAS * (T_C + 273.15))
+}
+SITE_MOL_M3 <- molar_density_mol_m3()      # 33.48 mol/m3 (was 44.84)
+
+WELL_MIXED_RATIO <- 1.6     # sigma_z / L above which the plume is uniform
+VERT_N_IMAGES    <- 20      # images per side; later terms are below 1e-100
+
+vertical_term <- function(z, H, sigz, hpbl, reflections = TRUE) {
+  out <- rep(NA_real_, length(sigz))
+  ok  <- is.finite(sigz) & sigz > 0 & is.finite(hpbl) & hpbl > 0
+  if (!any(ok)) return(out)
+  s <- sigz[ok]
+  L <- rep_len(hpbl, length(sigz))[ok]
+  v <- exp(-0.5 * ((z - H) / s)^2)
+  if (!reflections) { out[ok] <- v; return(out) }
+  v <- v + exp(-0.5 * ((z + H) / s)^2)
+  for (n in seq_len(VERT_N_IMAGES)) {
+    v <- v +
+      exp(-0.5 * ((z - H + 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z + H + 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z - H - 2 * n * L) / s)^2) +
+      exp(-0.5 * ((z + H - 2 * n * L) / s)^2)
+  }
+  wm <- s > WELL_MIXED_RATIO * L
+  if (any(wm)) v[wm] <- sqrt(2 * pi) * s[wm] / L[wm]
+  out[ok] <- v
+  out
+}
+
+# Kept only so a reader can reproduce the superseded numbers:
+mol_m3_air_LEGACY <- 2.7e25 / 6.022e23   # 44.84 mol/m3, 0 C / 1013 hPa
 
 # WWTP effective source / stack heights to evaluate
 wwtp_stack_height_m <- 12.2
@@ -44,7 +114,56 @@ stack_heights_m     <- c(1, 10, 15, 20, 30, 50)
 # Uncertainty knobs
 wind_mults      <- c(0.8, 1.0, 1.2)           # ±20%
 x_mults         <- c(0.9, 1.0, 1.1)           # ±10% downwind distance
-y_offsets_m     <- c(-100, -50, 0, 50, 100)   # crosswind offset (m)
+# CROSSWIND GEOMETRY (2026-08-20)
+# The inversion previously set the crosswind offset y to 0 for the baseline
+# and tested a fixed +-100 m band. Neither matches the geometry the plume
+# set was selected under. P06 keeps an observation when the wind direction
+# is within 10 degrees of the source-to-receptor bearing, so the receptor
+# sits off the plume axis by up to d*sin(10 deg) - 339 m at the 1.95 km
+# plume and 747 m at the 4.30 km plume, far outside +-100 m. Setting y = 0
+# treats an off-axis concentration as if it were a centreline value, which
+# UNDER-estimates Q; the effect runs opposite to (1) and (2) above.
+#
+# The straight-line source-to-receptor distance is therefore decomposed
+# into its along-wind and cross-wind components using the measured angular
+# offset theta:  x = d*cos(theta),  y = d*sin(theta). This is the same
+# decomposition the P09/P10 simulations use, so the estimator being
+# validated is now the estimator that runs.
+#
+# Sensitivity is now expressed as an uncertainty on the WIND DIRECTION -
+# which is what is actually uncertain, HRRR wind being sampled at the
+# rounded hour and nearest 3 km grid point - rather than as an arbitrary
+# distance in metres:
+#   "geom"       theta as measured                       (baseline)
+#   "wd+/-5"     theta shifted by 5 degrees
+#   "wd+/-10"    theta shifted by 10 degrees, the full acceptance window
+#   "centerline" theta forced to 0, i.e. the previous behaviour, retained
+#                so the superseded numbers stay reproducible
+y_specs <- c("centerline", "wd-10", "wd-5", "geom", "wd+5", "wd+10")
+
+# AVERAGING TIME (2026-08-20)
+# The Pasquill-Gifford / Briggs dispersion coefficients are fitted to sampling
+# times of order ten minutes, over which wind meander broadens the apparent
+# plume. The measurement inverted here is a ONE-SECOND peak, which samples a
+# much narrower instantaneous plume. Using a meander-broadened sigma_y with an
+# instantaneous concentration overstates the plume's width and therefore the
+# inferred source strength. The usual scaling is sigma_y proportional to
+# t^p with p about 0.2; sigma_z is left unscaled, since vertical spread is
+# driven by turbulence on much shorter timescales than meander.
+# This is added as a SENSITIVITY AXIS rather than applied to the baseline: the
+# reference sampling time of the Briggs urban curves is itself uncertain
+# (quoted variously as 10 min to 1 h), so the honest statement is a range. It
+# was previously not bracketed anywhere in the suite, which meant the single
+# largest structural uncertainty in the emission estimate went unreported.
+AVG_REF_S   <- 600                      # nominal sampling time of the curves
+avg_times_s <- c(1, 60, 600, 3600)
+sigma_y_avg_mult <- function(t_s, ref_s = AVG_REF_S, p = 0.2) (t_s / ref_s)^p
+
+.theta_eff <- function(spec, theta_deg) {
+  if (identical(spec, "centerline")) return(rep(0, length(theta_deg)))
+  sh <- if (identical(spec, "geom")) 0 else as.numeric(sub("^wd", "", spec))
+  pmin(abs(theta_deg + sh), 89.9)
+}
 
 # OPTIONAL: annualization assumptions
 op_fraction <- 1.0
@@ -107,7 +226,8 @@ sigma_z_pg <- function(CAT, x_km) {
     CAT %in% c("A","B") ~ 0.24*X*(1+(0.001*X))^(0.5),
     CAT == "C"          ~ 0.20*X,
     CAT == "D"          ~ 0.14*X*(1+(0.0003*X))^(-0.5),
-    CAT %in% c("E","F") ~ 0.08*X*(1+(0.00015*X))^(-0.5),
+    # BUGFIX (2026-08-20): Briggs urban sigma_z E-F is 0.08x(1+0.0015x)^(-1/2); the code had 0.00015, one order of magnitude low, which makes sigma_z ~1.75x too large at 2 km and inflates Q by the same factor. Every other Briggs coefficient in these files matches the published table exactly, so this is a transcription slip. E/F never arises from the daytime classifier, so the central estimates are unaffected - but P08's CAT_plus1 scenario shifts D->E, so the published upper stability bound was inflated by ~75%.
+    CAT %in% c("E","F") ~ 0.08*X*(1+(0.0015*X))^(-0.5),
     TRUE                ~ NA_real_
   )
 }
@@ -136,28 +256,47 @@ vert_term_vec <- function(z, H, sigz, hpbl, reflections = TRUE) {
     return(out)
   }
 
-  b <- exp(-0.5 * ((z0 + H0)^2) / (s^2))
-  c <- exp(-0.5 * ((z0 + H0 - (2 * L))^2) / (s^2))
-  d <- exp(-0.5 * ((z0 - H0 - (2 * L))^2) / (s^2))
-  e <- exp(-0.5 * ((z0 - H0 + (2 * L))^2) / (s^2))
-  out[ok] <- a + b + c + d + e
+  # (2) see the physics note at the top: the five-term sum was missing the
+  # (z+H+2L) image and stopped at n = +-1. Delegate to the shared
+  # convergent implementation.
+  out[ok] <- vertical_term(z = z0, H = H0, sigz = s, hpbl = L, reflections = TRUE)
   out
 }
 
+# NUMERICAL FLOORS (2026-08-20)
+# P09 and P10 guard their estimator with MIN_U, MIN_HPBL, MIN_X_M and
+# DENOM_MIN; P08 had none of them, so the inversion whose bias those
+# simulations characterise was not the inversion that produced the published
+# rates. A 0.2 m/s HRRR wind, for instance, yields a Q two and a half times
+# smaller here than under the simulations' 0.5 m/s floor. The four constants
+# below are the same values P09/P10 use.
+MIN_U      <- 0.5     # m/s   - Gaussian steady-state fails below this
+MIN_HPBL   <- 50      # m     - mixing depth floor
+MIN_X_M    <- 50      # m     - near-field floor on downwind distance
+DENOM_MIN  <- 1e-20   # crosswind x vertical below this is off-plume noise
+
 # Core inversion for a scenario (vectorized over rows)
-invert_gaussian <- function(inv_df, reflections, H_m, wind_mult, x_mult, cat_shift, y_m) {
+invert_gaussian <- function(inv_df, reflections, H_m, wind_mult, x_mult, cat_shift, y_spec,
+                            sigy_mult = 1) {
   inv_df %>%
     dplyr::mutate(
       CAT_s  = shift_cat(CAT, cat_shift),
-      u_ms_s = u_ms * wind_mult,
+      u_ms_s = pmax(u_ms * wind_mult, MIN_U),
+      hpbl_m = pmax(hpbl_m, MIN_HPBL, H_m + 10),
 
-      # perturb x and recompute sigmas
-      x_km_s = x_km * x_mult,
-      sigy_s = sigma_y_pg(CAT_s, x_km_s),
+      # (3) decompose the straight-line distance into along-wind and
+      # cross-wind components at the effective angular offset, then perturb
+      # the along-wind distance and recompute the sigmas on it.
+      theta_s = .theta_eff(y_spec, theta_deg),
+      y_m_s   = dist_m * sin(theta_s * pi / 180),
+      x_km_s  = pmax((dist_m / 1000) * cos(theta_s * pi / 180) * x_mult, MIN_X_M / 1000),
+      # (H5) sigma_y scaled for sampling time - see the averaging-time note
+      sigy_s = sigma_y_pg(CAT_s, x_km_s) * sigy_mult,
       sigz_s = sigma_z_pg(CAT_s, x_km_s),
 
       # crosswind Gaussian factor
-      crosswind = exp(-0.5 * (y_m^2) / (sigy_s^2)),
+      y_over_sigy = abs(y_m_s) / sigy_s,
+      crosswind = exp(-0.5 * (y_m_s^2) / (sigy_s^2)),
 
       # vertical term
       vertical = vert_term_vec(z = z_m, H = H_m, sigz = sigz_s, hpbl = hpbl_m, reflections = reflections),
@@ -171,7 +310,8 @@ invert_gaussian <- function(inv_df, reflections, H_m, wind_mult, x_mult, cat_shi
       Q_ppm_m3_s = (dH2S_ppm * u_ms_s * (2 * pi * sigy_s * sigz_s)) / denom,
 
       # kg/s conversion (legacy)
-      kg_s = Q_ppm_m3_s * mol_m3_air * 1e-6 * (MW_H2S / 1000),
+      # (1) per-row molar density at the measured temperature and pressure
+      kg_s = Q_ppm_m3_s * mol_m3 * 1e-6 * (MW_H2S / 1000),
 
       # metric tons/year
       tpy_metric = kg_s_to_tpy_metric(kg_s, op_fraction = op_fraction)
@@ -184,8 +324,29 @@ invert_gaussian <- function(inv_df, reflections, H_m, wind_mult, x_mult, cat_shi
       is.finite(sigz_s), sigz_s > 0,
       is.finite(vertical), vertical > 0,
       is.finite(crosswind), crosswind > 0,
-      is.finite(denom), denom > 0
+      is.finite(denom), denom > DENOM_MIN
     )
+}
+
+# WELL-POSEDNESS OF THE CROSSWIND CORRECTION (2026-08-20)
+# Dividing by exp(-y^2 / 2 sigma_y^2) is exact, but it amplifies: at
+# y = 2 sigma_y the divisor is 0.135 and at y = 3 sigma_y it is 0.011, so
+# beyond about two sigma_y the inferred Q is governed by the tail of the
+# Gaussian rather than by the measurement, and a 1-degree error in the HRRR
+# wind direction moves it by tens of percent. That regime is reachable here:
+# the acceptance window admits y up to d*sin(10 deg), which is 1.9 sigma_y at
+# the 3.55 km class-D plume and 2.6 sigma_y at 3.90 km. This is a real
+# limitation of intercepting a plume off-axis at range, not an artefact - the
+# previous y = 0 assumption concealed it by discarding the geometry - so the
+# ratio is carried through to the output and flagged rather than hidden.
+report_wellposed <- function(res, label = "") {
+  if (!"y_over_sigy" %in% names(res) || !nrow(res)) return(invisible(NULL))
+  bad <- sum(res$y_over_sigy > 2, na.rm = TRUE)
+  message(sprintf("  [CROSSWIND]%s median y/sigma_y = %.2f, max = %.2f; %d of %d rows beyond 2 sigma_y%s",
+                  label, stats::median(res$y_over_sigy, na.rm = TRUE),
+                  max(res$y_over_sigy, na.rm = TRUE), bad, nrow(res),
+                  if (bad > 0) "  <-- inversion is ill-conditioned for those; treat as an upper bound only" else ""))
+  invisible(NULL)
 }
 
 # Mean + t CI helper
@@ -237,6 +398,35 @@ x_km_vec <- pick_first(df0, c(
 
 hpbl_m_vec <- pick_first(df0, c("hpbl", "hpbl_m", "pbl_m"))
 
+# Angular offset between the wind direction and the source-to-receptor
+# bearing (degrees). P05 writes this as wwtf_wind_angle_diff; recompute it
+# from the underlying columns if that is absent.
+theta_deg_vec <- pick_first(df0, c("wwtf_wind_angle_diff", "angle_diff_deg"))
+if (all(!is.finite(theta_deg_vec))) {
+  .wd_v  <- pick_first(df0, c("winddir", "wd"))
+  .ref_v <- pick_first(df0, c("wind_from_deg_wwtf"))
+  theta_deg_vec <- abs(((.wd_v - .ref_v + 180) %% 360) - 180)
+}
+.n_bad_theta <- sum(!is.finite(theta_deg_vec))
+if (.n_bad_theta > 0) {
+  message(sprintf("[GEOM] %d of %d rows have no wind/bearing angle; falling back to theta = 0 (centreline) for those",
+                  .n_bad_theta, length(theta_deg_vec)))
+}
+theta_deg_vec[!is.finite(theta_deg_vec)] <- 0
+message(sprintf("[GEOM] |wind - source bearing|: median %.1f deg, max %.1f deg (acceptance window is 10 deg)",
+                stats::median(theta_deg_vec), max(theta_deg_vec)))
+
+# Air molar density from the MEASURED temperature and pressure where the
+# plume was intercepted; site nominal (25 C, 830 hPa) where absent.
+.temp_f  <- pick_first(df0, c("Temperature_F"))
+.pres_mb <- pick_first(df0, c("Pressure_mb"))
+mol_m3_vec <- molar_density_mol_m3((.temp_f - 32) * 5 / 9, .pres_mb)
+.n_nom <- sum(!is.finite(mol_m3_vec) | mol_m3_vec <= 0)
+mol_m3_vec[!is.finite(mol_m3_vec) | mol_m3_vec <= 0] <- SITE_MOL_M3
+message(sprintf("[UNITS] air molar density: median %.2f mol/m3 (%d of %d rows fell back to the site nominal %.2f; the superseded constant was %.2f)",
+                stats::median(mol_m3_vec), .n_nom, length(mol_m3_vec),
+                SITE_MOL_M3, mol_m3_air_LEGACY))
+
 CAT_chr <- pick_first_chr(df0, c("CAT", "Stability_Class_simple", "Stability_Class", "stability"))
 CAT_chr <- dplyr::recode(CAT_chr, "A-B" = "A", "B-C" = "B", .default = CAT_chr)
 
@@ -245,7 +435,10 @@ inv_base <- tibble::tibble(
   datetime = datetime_vec,
   dH2S_ppb = dH2S_ppb_vec,
   u_ms     = u_ms_vec,
-  x_km     = x_km_vec,
+  x_km     = x_km_vec,          # straight-line source-to-receptor distance
+  dist_m   = x_km_vec * 1000,
+  theta_deg = theta_deg_vec,
+  mol_m3   = mol_m3_vec,
   hpbl_m   = hpbl_m_vec,
   CAT      = CAT_chr
 ) %>%
@@ -272,7 +465,7 @@ scenarios <- dplyr::bind_rows(
     wind_mult = 1.0,
     x_mult = 1.0,
     cat_shift = 0,
-    y_m = 0
+    y_spec = "geom"
   ),
 
   tibble::tibble(
@@ -283,7 +476,7 @@ scenarios <- dplyr::bind_rows(
     wind_mult = 1.0,
     x_mult = 1.0,
     cat_shift = 0,
-    y_m = 0
+    y_spec = "geom"
   ),
 
   tibble::tibble(
@@ -294,7 +487,7 @@ scenarios <- dplyr::bind_rows(
     wind_mult = 1.0,
     x_mult = 1.0,
     cat_shift = 0,
-    y_m = 0
+    y_spec = "geom"
   ),
 
   tibble::tibble(
@@ -305,7 +498,7 @@ scenarios <- dplyr::bind_rows(
     wind_mult = wind_mults,
     x_mult = 1.0,
     cat_shift = 0,
-    y_m = 0
+    y_spec = "geom"
   ),
 
   tibble::tibble(
@@ -316,7 +509,7 @@ scenarios <- dplyr::bind_rows(
     wind_mult = 1.0,
     x_mult = 1.0,
     cat_shift = c(-1, 0, 1),
-    y_m = 0
+    y_spec = "geom"
   ),
 
   tibble::tibble(
@@ -327,20 +520,34 @@ scenarios <- dplyr::bind_rows(
     wind_mult = 1.0,
     x_mult = x_mults,
     cat_shift = 0,
-    y_m = 0
+    y_spec = "geom"
   ),
 
   tibble::tibble(
-    sens_group = "crosswind_y_uncertainty",
-    scenario   = paste0("y_", ifelse(y_offsets_m >= 0, "+", ""), y_offsets_m, "m"),
+    sens_group = "crosswind_geometry",
+    scenario   = y_specs,
     reflections = TRUE,
     H_m = wwtp_stack_height_m,
     wind_mult = 1.0,
     x_mult = 1.0,
     cat_shift = 0,
-    y_m = y_offsets_m
+    y_spec = y_specs
+  ),
+
+  tibble::tibble(
+    sens_group = "averaging_time",
+    scenario   = paste0("avg_", avg_times_s, "s"),
+    reflections = TRUE,
+    H_m = wwtp_stack_height_m,
+    wind_mult = 1.0,
+    x_mult = 1.0,
+    cat_shift = 0,
+    y_spec = "geom",
+    sigy_mult = sigma_y_avg_mult(avg_times_s)
   )
 ) %>%
+  # every other scenario runs at the curves' own nominal sampling time
+  dplyr::mutate(sigy_mult = dplyr::coalesce(sigy_mult, 1)) %>%
   dplyr::mutate(
     sens_group = factor(sens_group, levels = unique(sens_group)),
     scenario   = factor(scenario,   levels = unique(scenario))
@@ -352,7 +559,7 @@ scenarios <- dplyr::bind_rows(
 results <- scenarios %>%
   dplyr::mutate(
     data = purrr::pmap(
-      list(reflections, H_m, wind_mult, x_mult, cat_shift, y_m),
+      list(reflections, H_m, wind_mult, x_mult, cat_shift, y_spec, sigy_mult),
       ~invert_gaussian(
         inv_base,
         reflections = ..1,
@@ -360,16 +567,21 @@ results <- scenarios %>%
         wind_mult = ..3,
         x_mult = ..4,
         cat_shift = ..5,
-        y_m = ..6
+        y_spec = ..6,
+        sigy_mult = ..7
       )
     )
   ) %>%
-  dplyr::select(sens_group, scenario, reflections, H_m, wind_mult, x_mult, cat_shift, y_m, data) %>%
+  dplyr::select(sens_group, scenario, reflections, H_m, wind_mult, x_mult, cat_shift,
+                y_spec, sigy_mult, data) %>%
   tidyr::unnest(data) %>%
   dplyr::mutate(
     sens_group = factor(sens_group, levels = levels(scenarios$sens_group)),
     scenario   = factor(scenario,   levels = levels(scenarios$scenario))
   )
+
+report_wellposed(dplyr::filter(results, sens_group == "baseline"), " baseline:")
+report_wellposed(results, " all scenarios:")
 
 write.csv(
   results,

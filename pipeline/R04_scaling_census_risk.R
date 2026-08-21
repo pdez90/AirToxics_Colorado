@@ -51,12 +51,20 @@ if (file.exists(sf_file)) {
   diag_msg("  Objects in ", basename(sf_file), ": ", paste(ls(e_sf), collapse = ", "))
   sf_obj <- get(ls(e_sf)[1], envir = e_sf)
   print(sf_obj); capture.output(print(sf_obj), file = .DIAG_LOG, append = TRUE)
-  sf_num <- suppressWarnings(as.numeric(unlist(sf_obj)))
-  sf_num <- sf_num[!is.na(sf_num)]
-  if (length(sf_num) >= 3) {
-    diag_check_value("scaling factor (benzene, ms 1.15)", sf_num[1], REF$scaling[["benzene"]], tol_pct = 5)
-    diag_check_value("scaling factor (toluene, ms 1.23)", sf_num[2], REF$scaling[["toluene"]], tol_pct = 5)
-    diag_check_value("scaling factor (xylene, ms 1.38)",  sf_num[3], REF$scaling[["xylene"]],  tol_pct = 5)
+  # BUGFIX (2026-08-20): this was `as.numeric(unlist(sf_obj))` then drop NAs.
+  # scale_factors is a 3 x 4 table (pollutant, lc_mean_all, lc_mean_mobilelike,
+  # ratio_all_over_mobilelike) and unlist() flattens COLUMN-major, so
+  # sf_num[1:3] were the La Casa mean concentrations, never the ratios - the
+  # check therefore reported "CHANGED beyond tolerance" on every run.
+  # Read by name, exactly as script 18's get_ratio() does.
+  .get_ratio <- function(pol) {
+    if (!all(c("pollutant", "ratio_all_over_mobilelike") %in% names(sf_obj))) return(NA_real_)
+    r <- sf_obj[["ratio_all_over_mobilelike"]][match(pol, sf_obj[["pollutant"]])]
+    if (length(r) != 1) NA_real_ else as.numeric(r)
+  }
+  for (.pol in c("benzene", "toluene", "xylene")) {
+    diag_check_value(sprintf("scaling factor (%s, ms %.2f)", .pol, REF$scaling[[.pol]]),
+                     .get_ratio(.pol), REF$scaling[[.pol]], tol_pct = 5)
   }
 } else diag_msg("  [WARN] scaling factor file not found.")
 
@@ -64,19 +72,45 @@ if (file.exists(sf_file)) {
 # DIAG 2: census-block coverage vs manuscript (1,120 blocks; 83,828 residents)
 # ----------------------------------------------------------------
 diag_section("R04-DIAG 2: census-block coverage")
-diag_compare_rdata_rows("blocks_summaries_clean.RData", "blocks")
-bl_file <- file.path(BASE, "blocks_summaries_clean.RData")
+# BUGFIX (2026-08-20): nothing in the pipeline writes blocks_summaries_clean
+# .RData - script 18 writes censusblocks_suncor_terminal_BINWEIGHTED_AB.RData
+# (objects block_sf, block_dt). file.exists() was therefore always FALSE and
+# the block-count and population checks never executed. Point at the real
+# file, preferring block_dt.
+.BLOCKS_FILE <- "censusblocks_suncor_terminal_BINWEIGHTED_AB.RData"
+diag_compare_rdata_rows(.BLOCKS_FILE, "block_dt")
+bl_file <- file.path(BASE, .BLOCKS_FILE)
 if (file.exists(bl_file)) {
   e_b <- new.env(); load(bl_file, envir = e_b)
-  bl <- get(ls(e_b)[1], envir = e_b)
+  bl <- get(if ("block_dt" %in% ls(e_b)) "block_dt" else ls(e_b)[1], envir = e_b)
   if (is.data.frame(bl)) {
     # blocks with both AirToxScreen + mobile benzene, if identifiable
     diag_msg("  columns: ", paste(head(names(bl), 25), collapse = ", "))
-    diag_check_value("n census blocks in summaries", nrow(bl), REF$n_blocks, tol_pct = 5)
+    # BUGFIX (2026-08-20): this compared nrow(block_dt) against REF$n_blocks.
+    # They are different quantities. Script 18 builds block_dt as EVERY block
+    # containing at least one mobile point (`block_dt[!is.na(n_points)]`), with
+    # no population and no AirToxScreen requirement, so nrow(block_dt) is
+    # necessarily larger than the manuscript's 1,668 - which is the COMMON
+    # block count from 20_census_block_level_health_risks.R (finite
+    # Population_airtox > 0 AND finite benzene_ppb_airtox AND finite mobile
+    # benzene). At tol_pct = 5 the old comparison flagged a regression on every
+    # run. Report the coverage count here; the 1,668 check belongs to R04b/20.
+    diag_msg(sprintf("  [COUNT] census blocks with >=1 mobile point: %s (no benchmark - ",
+                     format(nrow(bl), big.mark = ",")),
+             "this is NOT the manuscript's ", REF$n_blocks,
+             " common blocks, which are checked from script 20's ",
+             "results_risk_common after R04b.)")
     pop_col <- grep("pop", names(bl), ignore.case = TRUE, value = TRUE)[1]
     if (!is.na(pop_col)) {
       diag_check_value(paste0("total population (", pop_col, ")"),
                        sum(bl[[pop_col]], na.rm = TRUE), REF$population, tol_pct = 5)
+    } else {
+      # script 18 drops POP20 at line ~70, so the population total has to come
+      # from the block-risk object built by R04b. Say so rather than passing
+      # silently, which is what this branch used to do.
+      diag_msg("  [CHECK-SKIP] total population: no population column in ", .BLOCKS_FILE,
+               " (script 18 drops POP20) - verify against R04b's block_sf_risk instead. ",
+               "Expected: ", REF$population)
     }
   }
 }

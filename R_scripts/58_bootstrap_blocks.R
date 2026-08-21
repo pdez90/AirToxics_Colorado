@@ -15,8 +15,16 @@ suppressPackageStartupMessages({ library(data.table); library(sf); library(ggplo
 set.seed(42)
 BASE <- "/Users/priyanka/Downloads/Suncor"
 B <- 500; SCALE <- 1.149
-load(file.path(BASE, "mobile_wswd.RData")); df <- as.data.table(out); rm(out); gc()
-df <- df[is.finite(Benzene_ppb) & is.finite(Latitude) & is.finite(Longitude) &
+# BUGFIX (2026-08-20): this loaded mobile_wswd.RData (raw *_ppb) and
+# bootstrapped a RAW-benzene block statistic, while the point estimate it is
+# meant to put a confidence interval on - the population-weighted mobile :
+# AirToxScreen ratio in 20_census_block_level_health_risks.R - is computed from
+# the background-corrected, scaled sBenzene surface. The published CI therefore
+# described the uncertainty of a different statistic from the one being
+# reported, and `gt2_full` was a different block set from the one script 20 and
+# 59 identify. Use the background-corrected record.
+load(file.path(BASE, "bgcorrected_out_merge.RData")); df <- as.data.table(df); gc()
+df <- df[is.finite(sBenzene) & is.finite(Latitude) & is.finite(Longitude) &
          Site != "Goodrich Corporation (Collins Aerospace)"]
 df[, day := as.Date(date)]
 g <- st_read(file.path(BASE,"censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONBLOCKS.gpkg"), quiet=TRUE)
@@ -29,7 +37,7 @@ w <- st_within(up, gll)
 ul[, block := st_drop_geometry(gll)[[idcol]][
       vapply(w, function(z) if (length(z)) z[1] else NA_integer_, 1L)]]
 df <- merge(df, ul, by=c("rlon","rlat"))[!is.na(block)]
-daily <- df[, .(dmed = median(Benzene_ppb)), by=.(block, day)]
+daily <- df[, .(dmed = median(sBenzene)), by=.(block, day)]
 days <- sort(unique(daily$day))
 message(uniqueN(daily$block), " blocks | ", length(days), " days | ",
         nrow(daily), " block-day rows")
@@ -38,7 +46,18 @@ ats <- ats[, .(block=get(idcol), ats=benzene_ppb_airtox, pop=Population_airtox)]
 
 full <- daily[, .(bval = median(dmed)), by=block]
 full <- merge(full, ats, by="block")
-ratio_full <- with(full, sum(pop*bval*SCALE, na.rm=TRUE)/sum(pop*ats, na.rm=TRUE))
+# BUGFIX (2026-08-20): the ratio applied na.rm = TRUE independently to the
+# numerator and the denominator. `bval` is a median and is never NA, but `ats`
+# (benzene_ppb_airtox) can be, so a block with population and a mobile value
+# but no AirToxScreen value contributed to the NUMERATOR and nothing to the
+# DENOMINATOR - biasing the published aggregate ratio, the whole bootstrap CI,
+# and the >2x block set upward. Restrict once, to blocks where all three are
+# usable, and drop na.rm so a future NA is loud instead of silent.
+.keep <- with(full, is.finite(bval) & is.finite(ats) & is.finite(pop) & pop > 0)
+message(sprintf("  [BLOCKS] %d of %d blocks have finite mobile + AirToxScreen + population (%d dropped)",
+                sum(.keep), nrow(full), sum(!.keep)))
+full <- full[.keep]
+ratio_full <- with(full, sum(pop*bval*SCALE)/sum(pop*ats))
 gt2_full <- full[bval*SCALE/ats > 2, block]
 message(sprintf("Point estimates: aggregate ratio %.3f | blocks >2x: %d",
                 ratio_full, length(gt2_full)))
@@ -52,7 +71,8 @@ for (b in seq_len(B)) {
   dd <- daily[sel, on="day", allow.cartesian=TRUE]
   bs <- dd[, .(bval = median(dmed)), by=block]
   bs <- merge(bs, ats, by="block")
-  ratios[b] <- with(bs, sum(pop*bval*SCALE, na.rm=TRUE)/sum(pop*ats, na.rm=TRUE))
+  bs <- bs[is.finite(bval) & is.finite(ats) & is.finite(pop) & pop > 0]   # see BUGFIX above
+  ratios[b] <- with(bs, sum(pop*bval*SCALE)/sum(pop*ats))
   hit <- bs[block %in% gt2_full & bval*SCALE/ats > 2, block]
   gt2_count[hit] <- gt2_count[hit] + 1L
   if (b %% 50 == 0) message("  ", b, "/", B, " (",

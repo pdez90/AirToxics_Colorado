@@ -204,7 +204,7 @@ for (cs in CASES) {
   blk[[cs]] <- bmed[, .(block, bval, case = cs)]
 }
 blk <- rbindlist(blk)
-wide <- dcast(blk, block ~ case, value.var = "bval")
+wide <- data.table::dcast(blk, block ~ case, value.var = "bval")
 ats <- as.data.table(st_drop_geometry(gll))
 ats <- ats[, .(block = get(idcol), ats = benzene_ppb_airtox)]
 wide <- merge(wide, ats, by = "block")
@@ -238,7 +238,7 @@ blk[, case_f := factor(case_lab[case], levels = case_lab)]
 pB <- ggplot(blk, aes(case_f, bval, fill = case_f)) +
   geom_boxplot(outlier.size = 0.4, linewidth = 0.3, show.legend = FALSE) +
   geom_hline(yintercept = median(wide$ats), linetype = 2, color = "red") +
-  annotate("text", x = 0.6, y = median(wide$ats), vjust = -0.6, hjust = 0,
+  ggplot2::annotate("text", x = 0.6, y = median(wide$ats), vjust = -0.6, hjust = 0,
            label = "median AirToxScreen", color = "red", size = 3.2) +
   scale_fill_brewer(palette = "Blues") +
   labs(x = NULL, y = "Block benzene (ppb)",
