@@ -43,8 +43,9 @@ Four sections:
    reasonable (`36_hysplit`, and `H04`'s helper default plus its example call),
    so a scan is worth more than another comment. Verified against a negative
    control: reintroducing `tz_local = "America/Denver"` makes the test fail and
-   names the file and line. Also checks that P04 and H04 derive the same HRRR
-   hour.
+   names the file and line. Also checks that `download_hrrr_and_join_mobile()`
+   exposes no `tz_local` argument at all (the zone is the hard-coded constant
+   `H04_TZ_LOCAL`), and that P04 and H04 derive the same HRRR hour.
 
 Sections 2–4 skip cleanly (5 always runs) when the data isn't present, so the test is still
 useful on a bare checkout.

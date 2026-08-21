@@ -223,7 +223,27 @@ if (!length(dirs)) {
   if (length(hits)) for (h in hits) cat("        ", h, "\n", sep = "")
 }
 
-# 5b) The two HRRR paths must return the SAME hour for the same reading.
+# 5b) The HRRR helper must not expose the zone as a caller's choice at all.
+# It was an argument, it defaulted to America/Denver, and the example call in
+# the same file passed it. Removing the argument is what stops that recurring.
+h04 <- unlist(lapply(dirs, function(d)
+  list.files(d, pattern = "^H04_hrrr\\.R$", recursive = TRUE, full.names = TRUE)))
+if (!length(h04)) {
+  cat("  SKIP  H04_hrrr.R not found from here\n")
+} else {
+  for (f in h04) {
+    ln <- readLines(f, warn = FALSE)
+    i <- grep("download_hrrr_and_join_mobile\\s*<-\\s*function\\(", ln)[1]
+    j <- grep("^\\)\\s*\\{", ln); j <- min(j[j > i])
+    sig <- paste(sub("#.*$", "", ln[i:j]), collapse = " ")
+    ok(!grepl("tz_local", sig),
+       sprintf("%s: download_hrrr_and_join_mobile() takes no tz_local argument", basename(f)))
+    ok(any(grepl('^H04_TZ_LOCAL\\s*<-\\s*"(MST|Etc/GMT\\+7)"', ln)),
+       sprintf("%s: the zone is a hard-coded fixed-UTC-7 constant", basename(f)))
+  }
+}
+
+# 5c) The two HRRR paths must return the SAME hour for the same reading.
 # P04 and H04 are independent implementations of one step; they disagreed by
 # up to an hour (round vs floor) on top of the zone bug.
 clocks <- ymd_hms(c("2024-07-17 09:22:26", "2024-07-17 09:45:10",
