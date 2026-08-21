@@ -21,57 +21,27 @@ suppressPackageStartupMessages({
   library(geosphere)
 })
 
-# --- helper: meteorological wind direction FROM u/v (if needed)
-winddir_from_uv <- function(u, v) {
-  dir_toward <- (atan2(u, v) * 180 / pi + 360) %% 360
-  (dir_toward + 180) %% 360
-}
-
-# --- helper: daytime stability class
-determine_stability_class_daytime <- function(wind_speed_ms, cloud_cover_percent) {
-  windspd <- as.numeric(wind_speed_ms)
-  cc <- as.numeric(cloud_cover_percent)
-  cc[is.nan(cc)] <- NA_real_
-
-  Insolation <- dplyr::case_when(
-    is.na(cc)           ~ NA_character_,
-    cc <= 25            ~ "strong",
-    cc > 25 & cc <= 75  ~ "moderate",
-    cc > 75             ~ "slight",
-    TRUE                ~ NA_character_
-  )
-
-  Stability_Class <- dplyr::case_when(
-    is.na(windspd) | is.na(Insolation) ~ NA_character_,
-
-    windspd <= 2 & Insolation == "strong"   ~ "A",
-    windspd <= 2 & Insolation == "moderate" ~ "A-B",
-    windspd <= 2 & Insolation == "slight"   ~ "B",
-
-    windspd > 2 & windspd <= 3 & Insolation == "strong"   ~ "A-B",
-    windspd > 2 & windspd <= 3 & Insolation == "moderate" ~ "B",
-    windspd > 2 & windspd <= 3 & Insolation == "slight"   ~ "C",
-
-    windspd > 3 & windspd <= 5 & Insolation == "strong"   ~ "B",
-    windspd > 3 & windspd <= 5 & Insolation == "moderate" ~ "B-C",
-    windspd > 3 & windspd <= 5 & Insolation == "slight"   ~ "C",
-
-    windspd > 5 & windspd <= 6 & Insolation == "strong"   ~ "C",
-    windspd > 5 & windspd <= 6 & Insolation != "strong"   ~ "D",
-
-    windspd > 6 & Insolation == "strong"                  ~ "C",
-    windspd > 6 & Insolation != "strong"                  ~ "D",
-
-    TRUE ~ NA_character_
-  )
-
-  dplyr::recode(
-    Stability_Class,
-    "A-B" = "A",
-    "B-C" = "B",
-    .default = Stability_Class
-  )
-}
+# SHARED HELPERS (2026-08-21): winddir_from_uv() and
+# determine_stability_class_daytime() used to be defined here AND again in
+# P09 and P10. The three copies of the classifier differed only cosmetically,
+# but the cloud-cover preparation feeding it had genuinely diverged, so the
+# simulations were no longer exercising the algorithm this script runs. One
+# definition now, sourced by all three.
+# Resolved rather than hard-coded, so a reader who clones the repository to any
+# other path still gets ONE definition instead of silently falling back to a
+# local copy. If none of these resolve, stop - running with a stale private copy
+# of the classifier is exactly the failure this file was created to end.
+.p00_cand <- c(
+  "/Users/priyanka/Downloads/Suncor/rerun_pipeline/plume_scripts/P00_met_helpers.R",
+  "P00_met_helpers.R",
+  "plume_scripts/P00_met_helpers.R",
+  "rerun_pipeline/plume_scripts/P00_met_helpers.R"
+)
+.p00 <- .p00_cand[file.exists(.p00_cand)]
+if (!length(.p00))
+  stop("P00_met_helpers.R not found. Looked in:\n  ", paste(.p00_cand, collapse = "\n  "))
+message("[MET] shared helpers sourced from: ", .p00[1])
+source(.p00[1])
 
 # ============================================================
 # Load data
@@ -113,36 +83,28 @@ if ("windspd" %in% names(res)) {
 } else {
   .ws_src <- "NONE"; .ws <- rep(NA_real_, .n)
 }
-if ("tcdc" %in% names(res)) {
-  .cl_src <- "tcdc"; .cl <- as.numeric(res$tcdc)
-} else if ("lcc" %in% names(res)) {
-  .cl_src <- "lcc";  .cl <- as.numeric(res$lcc)
-} else {
-  .cl_src <- "NONE"; .cl <- rep(NA_real_, .n)
-}
-message("[MET] wind speed from: ", .ws_src, " | cloud cover from: ", .cl_src)
+message("[MET] wind speed from: ", .ws_src)
 if (.ws_src == "NONE")
   stop("P06: no wind-speed field (need `windspd`, or both `u10` and `v10`) - ",
        "the stability classification cannot be computed.")
 
-# BUGFIX (2026-08-21): cloud cover was rescaled PER ROW with
-#   cloud_raw <= 1.2 ~ 100 * cloud_raw
-# meant to convert a 0-1 fraction to percent. But HRRR TCDC is already a
-# percentage, so a genuinely near-clear hour was promoted rather than
-# converted: 0.8% became 80% cover, and 1.2% became a physically impossible
-# 120%. Either error moves the insolation category, hence the stability class,
-# hence sigma_y and sigma_z, hence the inferred emission rate. The unit is a
-# property of the FIELD, not of an individual value, so decide it once from the
-# column and clamp the result to a physical range.
-.cl_max <- suppressWarnings(max(.cl, na.rm = TRUE))
-.is_fraction <- is.finite(.cl_max) && .cl_max <= 1.5
-.cloud_pct <- if (.is_fraction) 100 * .cl else .cl
-.cloud_pct <- pmin(pmax(.cloud_pct, 0), 100)
-message(sprintf("[MET] cloud field read as %s (max observed %.3g); cover %.0f-%.0f%%, median %.0f%%",
-                if (.is_fraction) "a 0-1 FRACTION" else "a PERCENTAGE", .cl_max,
-                suppressWarnings(min(.cloud_pct, na.rm = TRUE)),
-                suppressWarnings(max(.cloud_pct, na.rm = TRUE)),
-                suppressWarnings(stats::median(.cloud_pct, na.rm = TRUE))))
+# Cloud cover, via the shared helper: the unit is asserted from the source
+# (HRRR tcdc/lcc are percentages) rather than inferred from the observed
+# values, because inference is unsafe in both directions - a percentage field
+# sampled only in clear weather has a small maximum and would be mistaken for
+# a 0-1 fraction.
+.cl_info   <- cloud_percent_from(res)
+.cl_src    <- .cl_info$src
+.cloud_pct <- .cl_info$pct
+.cl        <- if (.cl_src == "NONE") rep(NA_real_, .n) else as.numeric(res[[.cl_src]])
+
+# A missing cloud field leaves Stability_Class NA. P07 must not then admit the
+# event: the Briggs sigmas are indexed by stability class, so an event with no
+# stability cannot be inverted, and admitting it makes P07's retained count
+# disagree with the sample P08 actually inverts.
+if (.cl_src == "NONE")
+  stop("P06: no cloud-cover field (need `tcdc` or `lcc`) - stability cannot be ",
+       "classified, and every downstream plume would carry NA stability.")
 
 res <- res %>%
   dplyr::mutate(
@@ -152,40 +114,28 @@ res <- res %>%
     Stability_Class_simple = determine_stability_class_daytime(wind_speed_ms, cloud_cover_percent)
   )
 
-# Optional: keep uncollapsed classes too
+# Uncollapsed classes kept alongside the collapsed ones. Both now come from the
+# SAME ladder in P00_met_helpers.R: this block used to re-write the entire
+# Pasquill table by hand, a second copy that could drift from the one the
+# simulations run. `collapse = FALSE` returns the A-B / B-C labels.
 res <- res %>%
   dplyr::mutate(
-    Insolation = dplyr::case_when(
-      is.na(cloud_cover_percent) ~ NA_character_,
-      cloud_cover_percent <= 25 ~ "strong",
-      cloud_cover_percent > 25 & cloud_cover_percent <= 75 ~ "moderate",
-      cloud_cover_percent > 75 ~ "slight",
-      TRUE ~ NA_character_
-    ),
-    Stability_Class = dplyr::case_when(
-      is.na(wind_speed_ms) | is.na(Insolation) ~ NA_character_,
-
-      wind_speed_ms <= 2 & Insolation == "strong"   ~ "A",
-      wind_speed_ms <= 2 & Insolation == "moderate" ~ "A-B",
-      wind_speed_ms <= 2 & Insolation == "slight"   ~ "B",
-
-      wind_speed_ms > 2 & wind_speed_ms <= 3 & Insolation == "strong"   ~ "A-B",
-      wind_speed_ms > 2 & wind_speed_ms <= 3 & Insolation == "moderate" ~ "B",
-      wind_speed_ms > 2 & wind_speed_ms <= 3 & Insolation == "slight"   ~ "C",
-
-      wind_speed_ms > 3 & wind_speed_ms <= 5 & Insolation == "strong"   ~ "B",
-      wind_speed_ms > 3 & wind_speed_ms <= 5 & Insolation == "moderate" ~ "B-C",
-      wind_speed_ms > 3 & wind_speed_ms <= 5 & Insolation == "slight"   ~ "C",
-
-      wind_speed_ms > 5 & wind_speed_ms <= 6 & Insolation == "strong"   ~ "C",
-      wind_speed_ms > 5 & wind_speed_ms <= 6 & Insolation != "strong"   ~ "D",
-
-      wind_speed_ms > 6 & Insolation == "strong"                        ~ "C",
-      wind_speed_ms > 6 & Insolation != "strong"                        ~ "D",
-
-      TRUE ~ NA_character_
-    )
+    Insolation      = insolation_from_cloud(cloud_cover_percent),
+    Stability_Class = determine_stability_class_daytime(
+      wind_speed_ms, cloud_cover_percent, collapse = FALSE)
   )
+
+# The collapsed and uncollapsed labels must agree after folding, or the two
+# calls have somehow diverged.
+stopifnot(identical(
+  dplyr::recode(res$Stability_Class, "A-B" = "A", "B-C" = "B",
+                .default = res$Stability_Class),
+  res$Stability_Class_simple
+))
+message("[MET] stability classes: ",
+        paste(sprintf("%s=%d", names(table(res$Stability_Class_simple, useNA = "ifany")),
+                      as.integer(table(res$Stability_Class_simple, useNA = "ifany"))),
+              collapse = "  "))
 
 # ============================================================
 # Subset: distance + wind-from filtering
@@ -195,14 +145,19 @@ angle_diff <- function(a, b) {
   abs(d)
 }
 
-# Use whichever wind-direction column exists
-wind_col <- if ("winddir" %in% names(res)) {
-  "winddir"
-} else if ("wd" %in% names(res)) {
-  "wd"
-} else {
-  stop("Could not find wind direction column. Expected `winddir` or `wd`.")
+# BUGFIX (2026-08-21): this picked the wind column independently of P05, which
+# had written wwtf_wind_angle_diff from `wd` while this filter preferred HRRR
+# `winddir`. P08 then inverts using P05's angle, so a plume could be admitted
+# under one wind field and inverted under another. Both stages now read the
+# single canonical choice from P00_met_helpers.R.
+wind_col <- pick_wind_geom_col(res)
+if (!is.null(res$wwtf_angle_source) &&
+    !identical(unique(stats::na.omit(res$wwtf_angle_source))[1], wind_col)) {
+  stop("P06: plume admission would use `", wind_col, "` but P05 built the ",
+       "geometry from `", unique(stats::na.omit(res$wwtf_angle_source))[1],
+       "`. Re-run P05 so admission and inversion share one wind field.")
 }
+message("[GEOM] plume admission filtered on `", wind_col, "`")
 
 res_sub <- res %>%
   dplyr::filter(distance_wwtp > 0.5, distance_wwtp <= 5) %>%

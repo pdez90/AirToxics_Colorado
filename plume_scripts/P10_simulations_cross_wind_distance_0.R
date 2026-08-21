@@ -36,6 +36,30 @@ suppressPackageStartupMessages({
   library(tidyr)
   library(ggplot2)
 })
+
+# SHARED MET HELPERS (2026-08-21): this script used to carry its own copy of
+# determine_stability_class_daytime() and its own cloud preparation. The
+# classifier copy differed only cosmetically from P06's, but the CLOUD
+# preparation had genuinely diverged - this file still rescaled cloud cover per
+# row with `cloud_raw <= 1.2 ~ 100 * cloud_raw`, which turns a near-clear HRRR
+# hour (TCDC 0.8%) into 80% cover and 1.2% into an impossible 120%. A
+# simulation that classifies stability differently from the observational chain
+# is not characterising that chain. One shared definition.
+# Resolved rather than hard-coded, so a reader who clones the repository to any
+# other path still gets ONE definition instead of silently falling back to a
+# local copy. If none of these resolve, stop - running with a stale private copy
+# of the classifier is exactly the failure this file was created to end.
+.p00_cand <- c(
+  "/Users/priyanka/Downloads/Suncor/rerun_pipeline/plume_scripts/P00_met_helpers.R",
+  "P00_met_helpers.R",
+  "plume_scripts/P00_met_helpers.R",
+  "rerun_pipeline/plume_scripts/P00_met_helpers.R"
+)
+.p00 <- .p00_cand[file.exists(.p00_cand)]
+if (!length(.p00))
+  stop("P00_met_helpers.R not found. Looked in:\n  ", paste(.p00_cand, collapse = "\n  "))
+message("[MET] shared helpers sourced from: ", .p00[1])
+source(.p00[1])
 set.seed(42)  # reproducible met sampling (sample_size = 600)
 
 # -------------------------
@@ -133,47 +157,10 @@ Y_TRUE_M        <- c(25, 50, 100, 200, 300, 500)
 SAMPLE_SIZE_MET <- 600
 
 # -------------------------
-# Stability class (daytime) using cloud cover proxy
+# Stability class (daytime): now defined once in P00_met_helpers.R and
+# sourced above, so this simulation and the observational chain (P06) run
+# the identical classifier on identically-prepared cloud cover.
 # -------------------------
-determine_stability_class_daytime <- function(wind_speed_ms, cloud_cover_percent) {
-  windspd <- as.numeric(wind_speed_ms)
-  cc      <- as.numeric(cloud_cover_percent)
-  cc[is.nan(cc)] <- NA_real_
-
-  Insolation <- dplyr::case_when(
-    is.na(cc)          ~ NA_character_,
-    cc <= 25           ~ "strong",
-    cc > 25 & cc <= 75 ~ "moderate",
-    cc > 75            ~ "slight",
-    TRUE               ~ NA_character_
-  )
-
-  sc <- dplyr::case_when(
-    is.na(windspd) | is.na(Insolation) ~ NA_character_,
-
-    windspd <= 2 & Insolation == "strong"   ~ "A",
-    windspd <= 2 & Insolation == "moderate" ~ "A-B",
-    windspd <= 2 & Insolation == "slight"   ~ "B",
-
-    windspd > 2 & windspd <= 3 & Insolation == "strong"   ~ "A-B",
-    windspd > 2 & windspd <= 3 & Insolation == "moderate" ~ "B",
-    windspd > 2 & windspd <= 3 & Insolation == "slight"   ~ "C",
-
-    windspd > 3 & windspd <= 5 & Insolation == "strong"   ~ "B",
-    windspd > 3 & windspd <= 5 & Insolation == "moderate" ~ "B-C",
-    windspd > 3 & windspd <= 5 & Insolation == "slight"   ~ "C",
-
-    windspd > 5 & windspd <= 6 & Insolation == "strong"   ~ "C",
-    windspd > 5 & windspd <= 6 & Insolation != "strong"   ~ "D",
-
-    windspd > 6 & Insolation == "strong"                  ~ "C",
-    windspd > 6 & Insolation != "strong"                  ~ "D",
-
-    TRUE ~ NA_character_
-  )
-
-  dplyr::recode(sc, "A-B" = "A", "B-C" = "B", .default = sc)
-}
 
 # -------------------------
 # Pasquill-Gifford sigmas
@@ -192,7 +179,13 @@ calculate_sigma_z <- function(stability_class, distance_km) {
   if (stability_class %in% c("A","B"))       0.24 * X * (1 + (0.001 * X))^(0.5)
   else if (stability_class == "C")           0.20 * X
   else if (stability_class == "D")           0.14 * X * (1 + (0.0003 * X))^(-0.5)
-  # BUGFIX (2026-08-20): Briggs urban sigma_z E-F is 0.08x(1+0.0015x)^(-1/2); the code had 0.00015, one order of magnitude low, which makes sigma_z ~1.75x too large at 2 km and inflates Q by the same factor. Every other Briggs coefficient in these files matches the published table exactly, so this is a transcription slip. E/F never arises from the daytime classifier, so the central estimates are unaffected - but P08's CAT_plus1 scenario shifts D->E, so the published upper stability bound was inflated by ~75%.
+  # BUGFIX (2026-08-20): Briggs urban sigma_z E-F is 0.08x(1+0.0015x)^(-1/2); the code
+  # had 0.00015, one order of magnitude low, which makes sigma_z ~1.75x too large at 2
+  # km and inflates Q by the same factor. Every other Briggs coefficient in these files
+  # matches the published table exactly, so this is a transcription slip. E/F never
+  # arises from the daytime classifier, so the central estimates are unaffected - but
+  # P08's CAT_plus1 scenario shifts D->E, so the published upper stability bound was
+  # inflated by ~75%.
   else if (stability_class %in% c("E","F"))  0.08 * X * (1 + (0.0015 * X))^(-0.5)
   else NA_real_
 }
@@ -253,21 +246,15 @@ estimate_Q_from_C <- function(C_ppm, H_m, z_m, x_m, y_m, u_ms, stab, pbl_m) {
 prepare_met <- function(res_met, sample_size = 600) {
   df <- as.data.frame(res_met)
 
+  # cloud units asserted from the source, exactly as P06 now does
+  .cloud_pct_sim <- cloud_percent_from(df, quiet = TRUE)$pct
+
   df <- df %>%
     dplyr::mutate(
       u10_ms = as.numeric(u10),
       v10_ms = as.numeric(v10),
       wind_speed_ms = sqrt(u10_ms^2 + v10_ms^2),
-      cloud_raw = dplyr::if_else(
-        is.finite(as.numeric(tcdc)),
-        as.numeric(tcdc),
-        as.numeric(lcc)
-      ),
-      cloud_cover_percent = dplyr::case_when(
-        !is.finite(cloud_raw) ~ NA_real_,
-        cloud_raw <= 1.2      ~ 100 * cloud_raw,
-        TRUE                  ~ cloud_raw
-      ),
+      cloud_cover_percent = .cloud_pct_sim,
       pbl_m = as.numeric(hpbl)
     ) %>%
     dplyr::filter(
