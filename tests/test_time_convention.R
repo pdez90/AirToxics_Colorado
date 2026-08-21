@@ -243,15 +243,66 @@ if (!length(h04)) {
   }
 }
 
-# 5c) The two HRRR paths must return the SAME hour for the same reading.
-# P04 and H04 are independent implementations of one step; they disagreed by
-# up to an hour (round vs floor) on top of the zone bug.
-clocks <- ymd_hms(c("2024-07-17 09:22:26", "2024-07-17 09:45:10",
-                    "2024-01-15 09:22:26", "2024-01-15 09:45:10"), tz = "UTC")
-hour_p04 <- with_tz(force_tz(round(clocks, "hour"), "MST"), "UTC")
-hour_h04 <- with_tz(force_tz(round(clocks, "hour"), "MST"), "UTC")
-ok(identical(hour_p04, hour_h04),
-   "P04 and H04 derive the same HRRR hour (both round to nearest, both assert MST)")
+# 5c) END-TO-END: the same wall-clock reading must give the same HRRR hour
+# through BOTH paths. P04 and H04 are independent implementations of one step,
+# and they have already diverged twice - on the zone, and on round vs floor.
+#
+# This lifts the conversion out of each FILE and evaluates it, rather than
+# re-typing the expression here. Re-typing it would make the test tautological:
+# it would compare two copies of whatever this file says, not what the pipeline
+# does.
+section("end-to-end: P04 and H04 map the same clock to the same HRRR hour")
+
+find_one <- function(pat) {
+  hits <- unlist(lapply(dirs, function(d)
+    list.files(d, pattern = pat, recursive = TRUE, full.names = TRUE)))
+  if (length(hits)) hits[1] else NA_character_
+}
+f_p04 <- find_one("^P04_join_with_mobile_toxics_data\\.R$")
+f_h04 <- find_one("^H04_hrrr\\.R$")
+
+if (is.na(f_p04) || is.na(f_h04)) {
+  cat("  SKIP  need both P04 and H04 on disk\n")
+} else {
+  clocks <- ymd_hms(c("2024-07-17 09:22:26",   # summer, rounds down
+                      "2024-07-17 09:45:10",   # summer, rounds UP (floor/round differ)
+                      "2024-01-15 09:22:26",   # winter, rounds down
+                      "2024-01-15 09:45:10"),  # winter, rounds up
+                    tz = "UTC")
+
+  # --- P04: its three df$hour lines, executed verbatim ---
+  p04_lines <- grep("^df\\$hour\\s*<-", readLines(f_p04, warn = FALSE), value = TRUE)
+  ev <- new.env(parent = environment())
+  ev$df <- data.frame(date = clocks)
+  for (l in p04_lines) eval(parse(text = l), envir = ev)
+  hour_p04 <- ev$df$hour
+
+  # --- H04: its constant and its hour_utc expression, executed verbatim ---
+  h04_src  <- readLines(f_h04, warn = FALSE)
+  const    <- grep("^H04_TZ_LOCAL\\s*<-", h04_src, value = TRUE)[1]
+  hour_exp <- grep("hour_utc\\s*=\\s*with_tz\\(", h04_src, value = TRUE)[1]
+  hour_exp <- sub(",\\s*$", "", sub("^\\s*hour_utc\\s*=\\s*", "", hour_exp))
+  ev2 <- new.env(parent = environment())
+  eval(parse(text = const), envir = ev2)
+  ev2$.dt_local <- clocks
+  hour_h04 <- eval(parse(text = hour_exp), envir = ev2)
+
+  cat(sprintf("  P04 lines executed: %d;  H04 constant: %s\n",
+              length(p04_lines), trimws(const)))
+  print(data.frame(
+    mst_clock = format(clocks,   "%Y-%m-%d %H:%M", tz = "UTC"),
+    P04_hour  = format(hour_p04, "%Y-%m-%d %H:%M", tz = "UTC"),
+    H04_hour  = format(hour_h04, "%Y-%m-%d %H:%M", tz = "UTC")
+  ), row.names = FALSE)
+
+  ok(length(p04_lines) == 3 && nzchar(const) && nzchar(hour_exp),
+     "both conversions were located in their source files (not re-typed here)")
+  ok(identical(as.numeric(hour_p04), as.numeric(hour_h04)),
+     "P04 and H04 give the SAME HRRR hour for every summer and winter case")
+  ok(format(hour_p04[1], "%H:%M", tz = "UTC") == "16:00" &&
+     format(hour_p04[3], "%H:%M", tz = "UTC") == "16:00",
+     "09:22 MST -> 16:00 UTC in July AND January (no daylight-saving shift)")
+}
 
 # --------------------------------------------------------------
 cat(sprintf("\n%s  (%d failure%s)\n",
