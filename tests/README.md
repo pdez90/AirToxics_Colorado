@@ -12,6 +12,19 @@ SUNCOR_BASE=~/Downloads/Suncor Rscript tests/impact_of_time_fixes.R
 
 Both tests exit non-zero on failure, so they drop straight into CI.
 
+**`SUNCOR_STRICT=1`** turns "no data found, skipping" into a failure. Set it
+whenever the suite is being used as a gate — `RUN_EVERYTHING.sh` does. Without
+it, a path or configuration error can produce a green run that checked nothing.
+Missing *source files* (P04, H04) are fatal either way, since they ship with the
+repository. The one deliberate exception is the intermediates check, which stays
+a skip even under STRICT: a clean re-run quarantines those files, so their
+absence is a legitimate state.
+
+**Do not override `SUNCOR_CODE_DIRS`** unless you know why. Its default covers
+both layouts (`R_scripts`, `pipeline`, `plume_scripts`, `hrrr_scripts`,
+`methane`, `rerun_pipeline`). A narrower list made sections 5b and 5c skip the
+H04 and P04 checks in a repository checkout while still exiting 0.
+
 ## test_time_convention.R
 
 Locks down the one unusual thing about time here: **`date` is a fixed-MST wall
