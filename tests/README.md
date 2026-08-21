@@ -45,9 +45,15 @@ Four sections:
    control: reintroducing `tz_local = "America/Denver"` makes the test fail and
    names the file and line. Also checks that `download_hrrr_and_join_mobile()`
    exposes no `tz_local` argument at all (the zone is the hard-coded constant
-   `H04_TZ_LOCAL`), and that P04 and H04 derive the same HRRR hour.
+   `H04_TZ_LOCAL`).
+6. **End-to-end, both paths.** The same wall-clock reading must give the same
+   HRRR hour through P04 and through H04. The test *lifts the conversion out of
+   each source file and evaluates it* rather than re-typing the expression —
+   re-typing would compare two copies of whatever the test says, not what the
+   pipeline does. Covers summer and winter, and times either side of the half
+   hour (where the old `floor_date`/`round` split showed up).
 
-Sections 2–4 skip cleanly (5 always runs) when the data isn't present, so the test is still
+Sections 2–4 skip cleanly (5 and 6 always run) when the data isn't present, so the test is still
 useful on a bare checkout.
 
 ## test_p08_geometry.R
