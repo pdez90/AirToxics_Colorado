@@ -208,7 +208,15 @@ mobile$Hydrogen_Cyanide_ppbV<-ifelse(mobile$day=="2025-01-02"|mobile$day=="2025-
 # January 22, 2025 received empirical background correction. Data from January
 # 22, 2025 to present represent absolute measurements." Only the absolute
 # measurements are kept.
-mobile$Hydrogen_Cyanide_ppbV<-ifelse(mobile$date> "2025-01-22 00:00:00", mobile$Hydrogen_Cyanide_ppbV, NA)
+# HARDENING (2026-08-22): the bare-string comparison parsed "2025-01-22
+# 00:00:00" in the MACHINE timezone, so the cutoff instant depended on where
+# the pipeline ran (07:00 on the UTC-labelled clock on a Denver machine, 00:00
+# on a UTC machine). Provably a no-op on this record - the earliest HCN
+# measurement on or after 2025-01-22 is at 07:25:33 wall clock, outside the
+# ambiguous (00:00, 07:00] window (verified across all 2025 monthly CSVs) -
+# but the constant is now pinned to the same UTC label the `date` column
+# carries, so the behaviour is machine-independent.
+mobile$Hydrogen_Cyanide_ppbV<-ifelse(mobile$date > as.POSIXct("2025-01-22 00:00:00", tz = "UTC"), mobile$Hydrogen_Cyanide_ppbV, NA)
 
 # HCN, exclusion 3 of 3. CDPHE HB21-1189 read-me, Q2 2025: "Due to an inaccurate
 # sensitivity calibration performed the week of May 27, 2025, the HCN
