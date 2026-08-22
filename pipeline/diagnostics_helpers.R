@@ -173,6 +173,9 @@ REF <- utils::modifyList(REF, list(
   p99 = c(Benzene_ppb = 1.8, Toluene_ppb = 4.31, Trimethylbenzene_ppb = 2.59,
           Xylene_ppb = 3.19, Hydrogen_Sulfide_ppb = 4.8, Hydrogen_Cyanide_ppb = 11),
   n_blocks = 1668, population = 126607,
+  # refreshed 2026-08-22 from the run's own [CHECK] lines (were 11.1 / 4.6,
+  # which had drifted just past the rounding boundary the documents quote)
+  missing_wind_pct = 10.6, median_dist_met_km = 4.55,
   # BENCHMARK REFRESH (2026-08-21, full CLEAN re-run): risk_mobile and the
   # ratio drifted slightly from the 2026-08-19 values as the GPS/QA screen
   # removed 105,123 rows; plume_retained is 3, not 4. risk_airtox, n_blocks
