@@ -80,6 +80,88 @@ mobile$Hydrogen_Cyanide_flag<-str_trim(mobile$Hydrogen_Cyanide_flag)
   out
 }
 
+# ---------------------------------------------------------------
+# What the null-qualifier rule actually removes (verified 2026-08-21)
+#
+# BR ("Sample value below acceptable range") is a Null Data Qualifier in the
+# CDPHE codebook, and the HB21-1189 read-me defines it operationally as marking
+# negative values - which raised the question of whether voiding BR conflicts
+# with this study's policy of keeping negative values. It does not: across all
+# 58 monthly CSVs, BR appears on tens of thousands of rows per pollutant and
+# carries a value on NONE of them. CDPHE blanks the value itself, so there is
+# nothing for the rule to remove. Negative values that CDPHE did not blank do
+# survive - 358,048 for benzene and 627,134 for H2S.
+#
+# The only null codes that ever accompany a reported value are AL (Voided by
+# Operator) and BH (Interference/co-elution/misidentification). Verified per
+# pollutant 2026-08-22 (R_scripts/72_check_s14_qaqc.R): benzene 0, HCN 480,
+# xylene 2,530, toluene 2,531, trimethylbenzene 2,532, H2S 8,459. Those are
+# explicit operator voids and are honoured.
+#
+# The assertion below fails if a future data revision ever attaches a value to
+# a BR-flagged row, so the reasoning above cannot silently go stale.
+# ---------------------------------------------------------------
+.br_with_value <- function(value, flag) {
+  f <- toupper(trimws(as.character(flag))); f[is.na(f)] <- ""
+  sum(vapply(strsplit(f, "[,.;[:space:]]+"),
+             function(z) "BR" %in% z, logical(1)) & !is.na(value))
+}
+.br_n <- sum(
+  .br_with_value(mobile$Benzene_ppbV,          mobile$Benzene_flag),
+  .br_with_value(mobile$Toluene_ppbV,          mobile$Toluene_flag),
+  .br_with_value(mobile$Trimethylbenzene_ppbV, mobile$Trimethylbenzene_flag),
+  .br_with_value(mobile$Xylene_ppbV,           mobile$Xylene_flag),
+  .br_with_value(mobile$Hydrogen_Sulfide_ppbV, mobile$Hydrogen_Sulfide_flag),
+  .br_with_value(mobile$Hydrogen_Cyanide_ppbV, mobile$Hydrogen_Cyanide_flag))
+message("[QA/QC] BR-flagged rows carrying a reported value: ", .br_n,
+        " (expected 0; CDPHE blanks the value when it sets BR)")
+if (.br_n > 0)
+  stop(sprintf(paste0("03/QA-QC: %d BR-flagged rows now carry a value. BR is a ",
+                      "Null Data Qualifier and voiding it would discard them. ",
+                      "Decide explicitly whether to keep BR before proceeding."), .br_n))
+
+# ---- QA/QC provenance counts written out (ADDED 2026-08-22) ------------
+# SI S1.4 quotes four counts describing the delivered one-second files BEFORE
+# any exclusion: how many MD-flagged values sit at exactly half the audit MDL,
+# how many rows the genuinely-discarding null qualifiers (AL, BH) remove, how
+# many negative values CDPHE did not blank, and how many benzene readings sit at
+# -0.1 ppb. None of them survived into a saved output, so they could not be
+# checked against the run. Emit them here, at the only point in the pipeline
+# where the pre-exclusion values still exist.
+.qa_polls <- list(
+  Benzene          = c("Benzene_ppbV",          "Benzene_flag"),
+  Toluene          = c("Toluene_ppbV",          "Toluene_flag"),
+  Xylene           = c("Xylene_ppbV",           "Xylene_flag"),
+  Trimethylbenzene = c("Trimethylbenzene_ppbV", "Trimethylbenzene_flag"),
+  H2S              = c("Hydrogen_Sulfide_ppbV", "Hydrogen_Sulfide_flag"),
+  HCN              = c("Hydrogen_Cyanide_ppbV", "Hydrogen_Cyanide_flag"))
+.qa <- do.call(rbind, lapply(names(.qa_polls), function(nm) {
+  v <- mobile[[.qa_polls[[nm]][1]]]; f <- mobile[[.qa_polls[[nm]][2]]]
+  has <- !is.na(v)
+  data.frame(
+    pollutant       = nm,
+    n_reported      = sum(has),
+    n_negative      = sum(has & v < 0),
+    n_md_flagged    = sum(has & grepl("MD", f, fixed = TRUE)),
+    n_al_bh_rows    = sum(has & (grepl("AL", f, fixed = TRUE) |
+                                 grepl("BH", f, fixed = TRUE))),
+    n_br_with_value = sum(has & grepl("BR", f, fixed = TRUE)),
+    stringsAsFactors = FALSE)
+}))
+.qa$pct_negative <- round(100 * .qa$n_negative / .qa$n_reported, 2)
+# benzene's single most common negative value, quoted in S1.4
+.bz <- mobile$Benzene_ppbV; .bz <- .bz[!is.na(.bz) & .bz < 0]
+.bz_mode <- if (length(.bz)) as.numeric(names(sort(table(.bz), decreasing = TRUE))[1]) else NA
+.qa$benzene_modal_negative      <- NA_real_
+.qa$benzene_modal_negative_n    <- NA_integer_
+.qa$benzene_modal_negative[.qa$pollutant == "Benzene"]   <- .bz_mode
+.qa$benzene_modal_negative_n[.qa$pollutant == "Benzene"] <- sum(.bz == .bz_mode)
+write.csv(.qa, "/Users/priyanka/Downloads/Suncor/TABLE_qaqc_counts.csv", row.names = FALSE)
+message("[QA/QC] provenance counts -> TABLE_qaqc_counts.csv (the numbers quoted in SI S1.4)")
+print(.qa)
+message("[QA/QC] benzene modal negative value: ", .bz_mode, " ppb, ",
+        format(sum(.bz == .bz_mode), big.mark = ","), " readings")
+
 mobile$Benzene_ppbV          <- .qc_apply(mobile$Benzene_ppbV,
                                           mobile$Benzene_flag,          "Benzene")
 mobile$Toluene_ppbV          <- .qc_apply(mobile$Toluene_ppbV,
@@ -104,23 +186,90 @@ mobile$Wind_Speed_mph <-ifelse(mobile$MetData_flag=="", mobile$Wind_Speed_mph, N
 mobile$Wind_Direction_deg <-ifelse(mobile$MetData_flag=="", mobile$Wind_Direction_deg, NA)
 
 mobile$day<-as.Date(mobile$date)
+
+# ---------------------------------------------------------------
+# Aromatics, 13-14 August 2024. CDPHE HB21-1189 read-me, Q3 2024: the Vocus
+# Eiger's automatic instrument baseline correction was not operational during
+# the deployments on 13 and 14 August 2024, "resulting in ambient
+# concentrations being reported as artificially elevated since the instrument
+# baseline signal was not accounted for". The Eiger measures benzene, toluene,
+# xylenes and trimethylbenzene, so only those four are affected; H2S (Picarro
+# CRDS) and HCN (Vocus Aim CI-ToF-MS) are not, and are left alone here.
+# ---------------------------------------------------------------
 mobile$Benzene_ppbV<-ifelse(mobile$day=="2024-08-13"| mobile$day=="2024-08-14", NA, mobile$Benzene_ppbV )
 mobile$Toluene_ppbV<-ifelse(mobile$day=="2024-08-13"| mobile$day=="2024-08-14", NA, mobile$Toluene_ppbV )
 mobile$Trimethylbenzene_ppbV<-ifelse(mobile$day=="2024-08-13"|mobile$day=="2024-08-14", NA, mobile$Trimethylbenzene_ppbV )
 mobile$Xylene_ppbV<-ifelse(mobile$day=="2024-08-13"|mobile$day=="2024-08-14", NA, mobile$Xylene_ppbV)
+# HCN, exclusion 1 of 3. Superseded by the 2025-01-22 cutoff below; kept so the
+# provenance of each rule stays visible.
 mobile$Hydrogen_Cyanide_ppbV<-ifelse(mobile$day=="2025-01-02"|mobile$day=="2025-01-03", NA, mobile$Hydrogen_Cyanide_ppbV)
+
+# HCN, exclusion 2 of 3. CDPHE HB21-1189 read-me, Q1 2025: "HCN data prior to
+# January 22, 2025 received empirical background correction. Data from January
+# 22, 2025 to present represent absolute measurements." Only the absolute
+# measurements are kept.
 mobile$Hydrogen_Cyanide_ppbV<-ifelse(mobile$date> "2025-01-22 00:00:00", mobile$Hydrogen_Cyanide_ppbV, NA)
+
+# HCN, exclusion 3 of 3. CDPHE HB21-1189 read-me, Q2 2025: "Due to an inaccurate
+# sensitivity calibration performed the week of May 27, 2025, the HCN
+# concentrations reported for May 28, 29, and 30, 2025" rest on averaged
+# calibrations rather than a valid one. Those three days are removed.
+.hcn_cal_bad <- as.Date(c("2025-05-28", "2025-05-29", "2025-05-30"))
+.n_hcn_pre <- sum(!is.na(mobile$Hydrogen_Cyanide_ppbV))
+mobile$Hydrogen_Cyanide_ppbV <- ifelse(mobile$day %in% .hcn_cal_bad, NA,
+                                       mobile$Hydrogen_Cyanide_ppbV)
+message(sprintf("[HCN] 2025-05-28..30 calibration window removed: %s of %s values",
+                format(.n_hcn_pre - sum(!is.na(mobile$Hydrogen_Cyanide_ppbV)), big.mark = ","),
+                format(.n_hcn_pre, big.mark = ",")))
+
+# ---------------------------------------------------------------
+# Inlet line contamination, spring/summer 2023.
+#
+# CDPHE HB21-1189 read-me, Q2 and Q3 2023: "A previously unknown issue of inlet
+# line contamination was discovered on September 20, 2023 after reviewing
+# quarterly data and a physical inspection of the inlet lines which confirmed
+# the presence of visible residue... suspected to have started in the second
+# quarter of sampling on approximately April 26, 2023, based on elevated daily
+# average concentrations of the target compounds, resulting in elevated
+# quarterly averages for compounds detected via PTR-ToF-MS and CI-ToF-MS
+# (benzene, toluene, xylene, trimethylbenzene, and hydrogen cyanide)...
+# Currently, this is not corrected for in the data... sampling inlet lines were
+# replaced on September 20, 2023 and monthly averages of target compounds
+# decreased."
+#
+# The window used here starts 2023-04-16, ten days before CDPHE's
+# "approximately April 26", and ends on the replacement date. The early start is
+# deliberate: CDPHE infers the onset from elevated daily averages, so the true
+# onset is not sharp.
+#
+# The data agree with the account. Median before the window vs inside it:
+# benzene 0.10 -> 0.30 (3.0x), toluene 0.38 -> 0.75 (2.0x), xylene 0.52 -> 0.91
+# (1.8x), HCN 1.00 -> 2.00 (2.0x). Monthly medians fall back immediately after
+# the lines were replaced (benzene 0.90 in July -> 0.10 in October).
+#
+# H2S is RETAINED across this window. CDPHE's affected list is the compounds
+# measured by PTR-ToF-MS and CI-ToF-MS. H2S comes from the Picarro CRDS, a
+# separate analyser on its own inlet, and is not named. The record agrees: H2S
+# shows no elevation in the window at all (median 1.00 ppb both before and
+# during, ratio 1.00x), while benzene rises 3.0x, toluene 2.0x, xylene 1.8x and
+# HCN 2.0x. Excluding H2S here would discard 104,668 values, 6% of the H2S
+# record, on no evidence. Set EXCLUDE_H2S_2023 <- TRUE to restore the earlier,
+# more conservative treatment.
+# ---------------------------------------------------------------
+EXCLUDE_H2S_2023 <- FALSE
+
+.inlet_cols <- c("Benzene_ppbV", "Toluene_ppbV", "Trimethylbenzene_ppbV",
+                 "Xylene_ppbV", "Hydrogen_Cyanide_ppbV")
+if (EXCLUDE_H2S_2023) .inlet_cols <- c(.inlet_cols, "Hydrogen_Sulfide_ppbV")
+message("[inlet 2023] excluding 2023-04-16..2023-09-20 for: ",
+        paste(sub("_ppbV", "", .inlet_cols), collapse = ", "),
+        if (EXCLUDE_H2S_2023) "" else "  (H2S retained per CDPHE's affected list)")
 
 mobile <- mobile %>%
   dplyr::mutate(date = as.Date(date)) %>%  # ensure Date format
   dplyr::mutate(
     across(
-      c(Benzene_ppbV,
-        Toluene_ppbV,
-        Trimethylbenzene_ppbV,
-        Xylene_ppbV,
-        Hydrogen_Sulfide_ppbV,
-        Hydrogen_Cyanide_ppbV),
+      dplyr::all_of(.inlet_cols),
       ~ ifelse(
           date >= as.Date("2023-04-16") &
           date <= as.Date("2023-09-20"),

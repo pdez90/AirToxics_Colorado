@@ -3,9 +3,10 @@
 # Re-runs the hotspot pipeline on corrected data:
 #   - source-probability surfaces (Figure 3)
 #   - DBSCAN clustering + persistence filtering (Figure 4, Table S5.1)
-# Then checks the manuscript's cluster counts:
-#   160 initial clusters -> 40 (>=2 pollutants) -> 17 (>=3) -> 8 (>=4)
-#   -> 17 final persistent multi-pollutant groups.
+# Then checks the manuscript's cluster counts (2026-08-22 vintage; the
+# submitted 160 -> 40 -> 17 -> 8 funnel predates the delay/cadence rework):
+#   2,713 initial clusters (sum over the six pollutants) -> 37 (>=2 pollutants)
+#   -> 17 (>=3) -> 8 (>=4) -> 17 final persistent multi-pollutant groups.
 #
 # Sources:
 #   R_scripts/26_hotspot_rotated_wind_source_probability_profiles.R

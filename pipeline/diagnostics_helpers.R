@@ -171,17 +171,31 @@ REF_SUBMITTED <- REF
 
 REF <- utils::modifyList(REF, list(
   p99 = c(Benzene_ppb = 1.8, Toluene_ppb = 4.31, Trimethylbenzene_ppb = 2.59,
-          Xylene_ppb = 3.19, Hydrogen_Sulfide_ppb = 4.6, Hydrogen_Cyanide_ppb = 11),
+          Xylene_ppb = 3.19, Hydrogen_Sulfide_ppb = 4.8, Hydrogen_Cyanide_ppb = 11),
   n_blocks = 1668, population = 126607,
   # BENCHMARK REFRESH (2026-08-21, full CLEAN re-run): risk_mobile and the
   # ratio drifted slightly from the 2026-08-19 values as the GPS/QA screen
   # removed 105,123 rows; plume_retained is 3, not 4. risk_airtox, n_blocks
   # and population reproduced exactly.
   risk_airtox = c(0.117, 0.416), risk_mobile = c(0.108, 0.384), risk_ratio = 0.92,
-  dbscan_initial = 2650, clusters_ge3 = 18, final_groups = 18,
-  plume_candidates = 33, plume_retained = 3,
+  # BENCHMARK REFRESH (2026-08-22, full CLEAN re-run with H2S retained across
+  # the 2023 inlet window and the 28-30 May 2025 HCN calibration window
+  # dropped). Verified against the run's own outputs:
+  #   p99 H2S            4.8   hotspot_thresholds_summary.csv (was 4.6)
+  #   dbscan_initial     2713  sum of n_clusters_all over the six pollutants
+  #   clusters_ge3 / final_groups  17  MASTER_hotspot_group_index.csv
+  #   plume_candidates   37    WWTP_H2S_plume_step_counts.csv
+  #   plume_retained     4     same
+  #   emission_baseline_mean_tpy 1036  WWTP_..._summary_mean_ci_METRIC_TPY.csv
+  #   emission_range_tpy_wellposed  unchanged at 126-3929 (per-plume tpy_metric
+  #                                 across the 26 usable scenarios)
+  # clusters_ge2 re-derived 2026-08-22 from group_summary_persistent.csv:
+  # n_pollutants >= 2 now holds for 37 groups (was 40 as submitted);
+  # >= 3 gives 17 and >= 4 gives 8, both unchanged.
+  dbscan_initial = 2713, clusters_ge2 = 37, clusters_ge3 = 17, final_groups = 17,
+  plume_candidates = 37, plume_retained = 4,
   emission_range_tpy_wellposed = c(126, 3929),
-  emission_baseline_mean_tpy = 1146
+  emission_baseline_mean_tpy = 1036
 ))
 
 .ref_delta <- names(REF)[vapply(names(REF), function(k)

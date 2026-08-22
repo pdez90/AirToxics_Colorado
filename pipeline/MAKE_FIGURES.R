@@ -62,9 +62,27 @@ GROUPS <- list(
   I = list(desc = "HYSPLIT low-TMB/B trajectories (S4.8; slow, needs .gbl met files)",
            pre = character(0),
            scripts = "36_hysplit_of_lowest_trimethylbenzene_benzene_ratios.R"),
-  J = list(desc = "FIGURE S1.1: daily-route GIF/panel",
+  J = list(desc = "FIGURE S3.1: daily-route GIF + per-run summary + segment speeds",
            pre = character(0),
-           scripts = "37_creating_gif_claude_figure_s1_1.R"),
+           scripts = c("37_creating_gif_claude_figure_s1_1.R",
+                       "43_figure_s31_routes.R")),
+  # ADDED 2026-08-22. Script 42 rebuilds FIGURE 1 (redesigned per Reviewer 1:
+  # side-by-side 500 m sampling-density panels) and was in no group at all, so
+  # the re-run never regenerated it. FinalFig/Figure1_sampling_density.png was
+  # left at its 2026-08-17 vintage while every other figure moved to the
+  # 2026-08-21/22 data.
+  J3 = list(desc = "FIGURE 1: 500 m sampling-density panels per route",
+            pre = character(0),
+            scripts = "42_figure1_sampling_density.R"),
+  J2 = list(desc = "TABLES S1.1 + S3.1 + SI S1.4 QA/QC counts: CDPHE inputs, MDLs, cells",
+           pre = character(0),
+           scripts = c("68_fetch_cdphe_inputs.R", "69_cdphe_audit_mdls.R",
+                       "70_table_s31.R", "71_table_s11.R",
+                       # ADDED 2026-08-22: recomputes the four QA/QC counts SI
+                       # S1.4 quotes about the delivered files and reports each
+                       # against what the SI says. Reads the same 58 monthly
+                       # CSVs as 70_table_s31.R, so it belongs in this group.
+                       "72_check_s14_qaqc.R")),
   K = list(desc = "TRI proximity figures (S4.2 distributions + S4.3 buffers)",
            pre = character(0),
            scripts = c("41_tri_inside_outside_distributions.R",

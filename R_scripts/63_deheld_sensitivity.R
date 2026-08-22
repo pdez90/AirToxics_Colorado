@@ -55,8 +55,10 @@ stopifnot(all(unlist(POLLS) %in% names(df)))
 setorder(df, AssetSiteDay, date)
 genuine_mask <- function(col) {
   v      <- df[[col]]
-  prev_v <- shift(v, 1L)
-  same   <- df$AssetSiteDay == shift(df$AssetSiteDay, 1L)
+  # namespaced for the same reason as 43_figure_s31_routes.R (2026-08-22):
+  # a masked shift() here would not error, it would silently return the wrong lag.
+  prev_v <- data.table::shift(v, 1L)
+  same   <- df$AssetSiteDay == data.table::shift(df$AssetSiteDay, 1L)
   # genuine if finite AND (first row of group, OR previous value NA/absent,
   # OR value changed from the previous row)
   is.finite(v) & !(same & is.finite(prev_v) & (v == prev_v))

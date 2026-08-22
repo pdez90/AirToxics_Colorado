@@ -35,8 +35,13 @@ hav_km <- function(lat1, lon1, lat2, lon2) {
        cos(lat1 * p) * cos(lat2 * p) * sin((lon2 - lon1) * p / 2)^2
   2 * Rk * asin(pmin(1, sqrt(a)))
 }
-df[, `:=`(lat1 = shift(Latitude), lon1 = shift(Longitude),
-          t1 = shift(as.numeric(date))), by = .(Site, day)]
+# BUGFIX (2026-08-22): bare shift() failed in the MAKE_FIGURES group-J run with
+# "argument \"n\" is missing, with no default" -- data.table::shift was masked by
+# another package attached earlier in that session. Namespace it explicitly so
+# the script behaves the same standalone and inside the pipeline.
+df[, `:=`(lat1 = data.table::shift(Latitude),
+          lon1 = data.table::shift(Longitude),
+          t1   = data.table::shift(as.numeric(date))), by = .(Site, day)]
 df[, dt_s := as.numeric(date) - t1]
 df[, seg_km := hav_km(lat1, lon1, Latitude, Longitude)]
 ok <- df[is.finite(seg_km) & is.finite(dt_s) & dt_s > 0 & dt_s <= 5]
@@ -51,6 +56,36 @@ runs[, speed_kmh := km / move_h]
 message("  runs (site x day): ", nrow(runs))
 stopifnot(nrow(runs) > 0, all(is.finite(runs$speed_kmh)))
 fwrite(runs, file.path(BASE, "figureS31_runs_summary.csv"))
+
+# ---- segment-level speed distribution -------------------------
+# ADDED 2026-08-22. SI S4.1.2 justifies the 500 m grid cell from how fast the
+# vehicles actually travel, so those numbers must come from here rather than
+# from an ad hoc calculation. `ok$seg_kmh` is the per-second speed between
+# consecutive GPS fixes, already filtered to 0 < dt <= 5 s and <= 130 km/h.
+# NOTE the distinction the SI relies on: runs$speed_kmh is a per-run average
+# (distance / moving time, so stops drag it down), while seg_kmh is the
+# instantaneous rate. They are different quantities and the SI quotes seg_kmh.
+.spq <- c(0, 0.05, 0.25, 0.5, 0.75, 0.9, 0.95, 1)
+seg_speed <- data.table::data.table(
+  quantity = c(sprintf("p%02d", round(.spq * 100)),
+               "mean", "n_segments", "pct_stationary_le1kmh",
+               "pct_in_30_60", "median_moving_gt1kmh",
+               "metres_per_second_at_p95", "seconds_to_cross_500m_at_p95"),
+  value = c(as.numeric(quantile(ok$seg_kmh, .spq)),
+            mean(ok$seg_kmh),
+            nrow(ok),
+            100 * mean(ok$seg_kmh <= 1),
+            100 * mean(ok$seg_kmh >= 30 & ok$seg_kmh <= 60),
+            median(ok$seg_kmh[ok$seg_kmh > 1]),
+            as.numeric(quantile(ok$seg_kmh, 0.95)) * 1000 / 3600,
+            500 / (as.numeric(quantile(ok$seg_kmh, 0.95)) * 1000 / 3600)))
+fwrite(seg_speed, file.path(BASE, "figureS31_segment_speed.csv"))
+message("  segment speed: median ", sprintf("%.1f", median(ok$seg_kmh)),
+        " km/h, IQR ", sprintf("%.1f", quantile(ok$seg_kmh, .25)),
+        "-", sprintf("%.1f", quantile(ok$seg_kmh, .75)),
+        ", p95 ", sprintf("%.1f", quantile(ok$seg_kmh, .95)),
+        " km/h; ", sprintf("%.0f%%", 100 * mean(ok$seg_kmh <= 1)), " stationary")
+message("  -> figureS31_segment_speed.csv (the numbers quoted in SI S4.1.2)")
 
 stats <- runs[, .(n_runs = .N,
                   med_dur_h = median(dur_h),
