@@ -74,7 +74,7 @@ GROUPS <- list(
   J3 = list(desc = "FIGURE 1: 500 m sampling-density panels per route",
             pre = character(0),
             scripts = "42_figure1_sampling_density.R"),
-  J2 = list(desc = "TABLES S1.1 + S3.1 + SI S1.4 QA/QC counts: CDPHE inputs, MDLs, cells",
+  J2 = list(desc = "TABLES S1.1 + S3.1 + S1.4 QA/QC + S7 hazard: CDPHE inputs, MDLs, cells",
            pre = character(0),
            scripts = c("68_fetch_cdphe_inputs.R", "69_cdphe_audit_mdls.R",
                        "70_table_s31.R", "71_table_s11.R",
@@ -82,7 +82,19 @@ GROUPS <- list(
                        # S1.4 quotes about the delivered files and reports each
                        # against what the SI says. Reads the same 58 monthly
                        # CSVs as 70_table_s31.R, so it belongs in this group.
-                       "72_check_s14_qaqc.R")),
+                       "72_check_s14_qaqc.R",
+                       # ADDED 2026-08-23: SI Section S7 screening cumulative
+                       # noncancer hazard assessment (Tables S7.1 chronic HQ/HI
+                       # + S7.2 acute screen), census-BLOCK basis, ppb->ug/m3
+                       # at the 830 hPa site pressure (the Section 2.4 IUR
+                       # convention). Numbered 74 because 73_cumulative_risk.R
+                       # (group T) is the 500 m grid-CELL companion analysis
+                       # that S7.3 cites as its sensitivity check. Needs
+                       # TABLE_S3.1.csv, so it runs after 70; also reads the
+                       # block-level RData written by the main pipeline.
+                       # Self-checks every number quoted in SI S7
+                       # ([OK]/[EDIT] lines) like 72 does for S1.4.
+                       "74_health_hazard_screening.R")),
   K = list(desc = "TRI proximity figures (S4.2 distributions + S4.3 buffers)",
            pre = character(0),
            scripts = c("41_tri_inside_outside_distributions.R",
@@ -105,7 +117,12 @@ GROUPS <- list(
            scripts = c("47_dbscan_threshold_sensitivity.R",
                        "52_split_sample_hotspots.R",
                        "60_sampling_sufficiency.R")),
-  Q = list(desc = "Methane at the toxics hotspot groups (S7.2 / Section 3.7)",
+  # NOTE 2026-08-23: this group's outputs supported the methane-discrimination
+  # section of the PRE-REVISION draft (then SI S7.2 / manuscript 3.7). The
+  # revised manuscript dropped that section, and "S7" now names the NEW
+  # cumulative noncancer hazard section (script 74, group J2). Q's diagnostics
+  # remain useful background for the Section 3.4/3.6 source discussion.
+  Q = list(desc = "Methane at the toxics hotspot groups (diagnostic; pre-revision S7.2)",
            pre = character(0),
            scripts = "../rerun_pipeline/methane/M06_methane_at_toxics_hotspots.R"),
   U = list(desc = "Methane chain re-run (CH4 native cadence -> hotspots -> maps)",
@@ -123,10 +140,16 @@ GROUPS <- list(
   W = list(desc = "WWTP-vs-refinery plume source attribution (re-run after CH4 change)",
            pre = character(0),
            scripts = "70_source_attribution_wwtp_vs_refinery.R"),
-  T = list(desc = "Cumulative non-cancer HI + total cancer risk (Chiger/Robinson)",
+  # NOTE 2026-08-23: group T is the 500 m grid-CELL hazard analysis; the SI
+  # Section S7 numbers come from the census-BLOCK script 74 (group J2), which
+  # cites T's TABLE_cumulative_HI_completeset.csv values as the S7.3
+  # exposure-construction sensitivity. Keep both: they must keep agreeing.
+  T = list(desc = "Cumulative non-cancer HI + cancer bound, 500 m cells (S7.3 sensitivity)",
            pre = character(0),
            scripts = "73_cumulative_risk.R"),
-  S = list(desc = "Table S3.2 health-reference / hazard-quotient table",
+  # NOTE 2026-08-23: the "Table S3.2" this script was written for is not in the
+  # revised SI; its output TABLE_health_reference_HQ.csv is a diagnostic.
+  S = list(desc = "Health-reference / HQ table (diagnostic; not in current SI)",
            pre = character(0),
            scripts = "54_health_reference_table.R"),
   R = list(desc = "MDL / smoke / stability / seasonal / CAT-EMU (S1.2, S3.11-S3.14)",
