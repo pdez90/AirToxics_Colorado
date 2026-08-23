@@ -117,12 +117,9 @@ GROUPS <- list(
            scripts = c("47_dbscan_threshold_sensitivity.R",
                        "52_split_sample_hotspots.R",
                        "60_sampling_sufficiency.R")),
-  # NOTE 2026-08-23: this group's outputs supported the methane-discrimination
-  # section of the PRE-REVISION draft (then SI S7.2 / manuscript 3.7). The
-  # revised manuscript dropped that section, and "S7" now names the NEW
-  # cumulative noncancer hazard section (script 74, group J2). Q's diagnostics
-  # remain useful background for the Section 3.4/3.6 source discussion.
-  Q = list(desc = "Methane at the toxics hotspot groups (diagnostic; pre-revision S7.2)",
+  # 2026-08-23: the methane section is RESTORED as manuscript 3.7 and SI S8
+  # (the hazard section is SI S7). M06's figure is SI Figure S8.2.
+  Q = list(desc = "Methane at the toxics hotspot groups (3.7 / SI Figure S8.2)",
            pre = character(0),
            scripts = "../rerun_pipeline/methane/M06_methane_at_toxics_hotspots.R"),
   U = list(desc = "Methane chain re-run (CH4 native cadence -> hotspots -> maps)",
@@ -147,11 +144,21 @@ GROUPS <- list(
   T = list(desc = "Cumulative non-cancer HI + cancer bound, 500 m cells (S7.3 sensitivity)",
            pre = character(0),
            scripts = "73_cumulative_risk.R"),
-  # NOTE 2026-08-23: the "Table S3.2" this script was written for is not in the
-  # revised SI; its output TABLE_health_reference_HQ.csv is a diagnostic.
-  S = list(desc = "Health-reference / HQ table (diagnostic; not in current SI)",
+  # 2026-08-23: Table S3.2 RESTORED to the SI (health-reference comparison) and
+  # the EJ overlay feeds SI S4.6 + manuscript 3.3. 54 now converts at the
+  # 830 hPa site pressure like 73/74.
+  S = list(desc = "SI Table S3.2 health-reference HQ + S4.6 EJ overlay",
            pre = character(0),
-           scripts = "54_health_reference_table.R"),
+           scripts = c("54_health_reference_table.R",
+                       "59_enviroscreen_overlay.R")),
+  # ADDED 2026-08-23: restored SI sections S4.3 (scaling-factor sensitivity),
+  # S4.4 (La Casa day/night), S4.5 (day-resampling bootstrap) and S5.4
+  # (La Casa CPF). These scripts were in no group, so the 2026-08-21/22 rerun
+  # never refreshed their figures; this group keeps them current.
+  X = list(desc = "SI S4.3-S4.5 + S5.4: scaling sens, day/night, bootstrap, CPF",
+           pre = character(0),
+           scripts = c("48_scaling_sensitivity.R", "49_lacasa_daynight_ratios.R",
+                       "58_bootstrap_blocks.R", "61_lacasa_cpf.R")),
   R = list(desc = "MDL / smoke / stability / seasonal / CAT-EMU (S1.2, S3.11-S3.14)",
            pre = character(0),
            scripts = c("45_mdl_sensitivity.R", "50_below_mdl_maps.R",

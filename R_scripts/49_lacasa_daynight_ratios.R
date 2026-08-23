@@ -57,8 +57,12 @@ stats <- rbindlist(lapply(c("benzene", "toluene", "xylene"), function(poll) {
   s[, pollutant := poll]
   s
 }))
-wide_m <- dcast(stats, pollutant ~ period, value.var = "mean")
-wide_md <- dcast(stats, pollutant ~ period, value.var = "median")
+# BUGFIX (2026-08-23): under MAKE_FIGURES group X the subprocess loads
+# 01_libraries.R first, whose reshape2 masks data.table::dcast; the unqualified
+# call then returned a data.frame and the data.table syntax below crashed with
+# "invalid subscript type 'list'". Qualify the namespace explicitly.
+wide_m <- data.table::dcast(stats, pollutant ~ period, value.var = "mean")
+wide_md <- data.table::dcast(stats, pollutant ~ period, value.var = "median")
 ratios <- wide_m[, .(
   pollutant,
   mean_mobile_window = round(mobile_window, 3),

@@ -41,12 +41,18 @@ pts <- st_transform(st_as_sf(df[, .(Longitude, Latitude)],
 df[, cell := grid$id[st_nearest_feature(pts, cent_m)]]
 rm(pts); gc()
 
-# molar volumes at 25C: ppb = (mg/m3)*1000/MW*24.45
+# ppb = (mg/m3)*1000/MW*V_m. UNIT FIX (2026-08-23): V_m is the molar volume at
+# the 830 hPa SITE pressure (29.8653 L/mol at 25 C), NOT sea-level 24.45 - the
+# same convention as the Section 2.4 benzene IURs, 73_cumulative_risk.R and
+# 74_health_hazard_screening.R. Expected HQ_chronic after this fix:
+#   benzene 0.040 | toluene 0.001 | TMB 0.025 | xylene 0.027
+#   H2S 1.398 | HCN 1.697   (rfc_ppb: 11.47/1620.7/14.91/28.13/1.753/0.884)
+VM_L_PER_MOL <- 8.314 * 298.15 / 83000 * 1000   # 29.8653
 mw <- c(Benzene = 78.11, Toluene = 92.14, Trimethylbenzene = 120.19,
         Xylene = 106.17, H2S = 34.08, HCN = 27.03)
 rfc_mgm3 <- c(Benzene = 0.03, Toluene = 5, Trimethylbenzene = 0.06,
               Xylene = 0.1, H2S = 0.002, HCN = 0.0008)
-rfc_ppb <- rfc_mgm3 * 1000 / mw * 24.45
+rfc_ppb <- rfc_mgm3 * 1000 / mw * VM_L_PER_MOL
 scale_f <- c(Benzene = 1.149, Toluene = 1.228, Trimethylbenzene = NA,
              Xylene = 1.377, H2S = NA, HCN = NA)
 mrl_ppb <- data.table(
