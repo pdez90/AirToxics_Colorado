@@ -464,7 +464,23 @@ plot_sourceprob <- function(obj) {
     lims <- c(0, max(df_r$prob, na.rm = TRUE))
   }
 
-  title_txt <- paste0(gsub("_ppb", "", obj$pol_col), " source probability")
+  # EDIT 2026-08-23 (Reviewer 2 comment 11 + Reviewer 3 comment 10): panel
+  # letters (a)-(f) and chemical formulas (H2S, HCN) instead of the raw
+  # column names ("Hydrogen_Sulfide", "Hydrogen_Cyanide"). Letter order
+  # matches the combined-panel order (order_keys below) and Figure 2.
+  disp_names <- c(
+    benzene          = "(a) Benzene",
+    toluene          = "(b) Toluene",
+    trimethylbenzene = "(c) Trimethylbenzene",
+    xylene           = "(d) Xylene",
+    h2s              = "(e) H2S",
+    hcn              = "(f) HCN"
+  )
+  title_txt <- if (!is.null(obj$pol_key) && obj$pol_key %in% names(disp_names)) {
+    paste0(disp_names[[obj$pol_key]], " source probability")
+  } else {
+    paste0(gsub("_ppb", "", obj$pol_col), " source probability")
+  }
   subtitle_txt <- paste0(
     "Upwind projection of p99 events | p99=", signif(obj$p99, 4),
     " | n exceed=", obj$n_exc,
