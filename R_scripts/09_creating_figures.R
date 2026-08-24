@@ -198,15 +198,42 @@ suncor_pp_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_
 suncor_pp_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_h2s.jpeg")
 suncor_pp_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_hcn.jpeg")
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor_PolarPlot_openairmaps.jpeg", res=800, width=1500, height=2000)
+# EDIT 2026-08-24 (SI Figure S3.9):
+# (1) Panel order corrected to match the caption — C) trimethylbenzene,
+#     D) xylene. The previous order (xylene third, trimethylbenzene fourth)
+#     contradicted the Figure S3.9 caption.
+# (2) label_size 9 pt on a full-size canvas — on the old 1500x2000 canvas
+#     cowplot's default 14 pt labels rendered enormous relative to the panels.
+# (3) The openair panel jpegs are 5400x3000 with ~950 px of white on each
+#     side, which left the composite mostly whitespace. Each panel is trimmed
+#     to its content (plus a 10 px guard), given a 10% white band on top for
+#     the cowplot label, and the canvas height is computed from the trimmed
+#     aspect so the 2 x 3 grid fills the page.
+trim_white <- function(img, thr = 0.98, pad = 10) {
+  g  <- (img[,,1] + img[,,2] + img[,,3]) / 3
+  nz <- g < thr
+  rr <- range(which(apply(nz, 1, any)))
+  cc <- range(which(apply(nz, 2, any)))
+  img[max(1, rr[1] - pad):min(nrow(g), rr[2] + pad),
+      max(1, cc[1] - pad):min(ncol(g), cc[2] + pad), , drop = FALSE]
+}
+pad_top_white <- function(img, frac = 0.10) {
+  ph  <- max(1L, round(dim(img)[1] * frac))
+  out <- array(1, dim = c(dim(img)[1] + ph, dim(img)[2], dim(img)[3]))
+  out[(ph + 1):dim(out)[1], , ] <- img
+  out
+}
+pp_trim <- lapply(
+  list(suncor_pp_benzene, suncor_pp_toluene, suncor_pp_trimethylbenzene,
+       suncor_pp_xylene, suncor_pp_h2s, suncor_pp_hcn),
+  function(x) pad_top_white(trim_white(x)))
+pp_W <- 5000
+pp_H <- round(3 * (pp_W / 2) * dim(pp_trim[[1]])[1] / dim(pp_trim[[1]])[2])
+jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor_PolarPlot_openairmaps.jpeg", res=800, width=pp_W, height=pp_H)
 cowplot::plot_grid(
-    rasterGrob(suncor_pp_benzene),
-    rasterGrob(suncor_pp_toluene),
-    rasterGrob(suncor_pp_xylene),
-    rasterGrob(suncor_pp_trimethylbenzene),
-    rasterGrob(suncor_pp_h2s),
-    rasterGrob(suncor_pp_hcn),
-    ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.99)
+    plotlist = lapply(pp_trim, rasterGrob),
+    ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"),
+    label_size = 9, scale=0.99)
 dev.off()
 
 jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor_PolarPlot_openairmaps_vertical.jpeg", res=800, width=3500, height=4100)

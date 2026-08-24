@@ -55,8 +55,21 @@ summ <- rbindlist(lapply(names(POLLS), function(pn) {
              median = round(median(v), 3), p95 = round(quantile(v, 0.95), 3),
              p99 = round(quantile(v, 0.99), 3), max = round(max(v), 1))
 }))
-# %<MDL as reported in Table S3.1 (CDPHE flag-based; MDL values with co-authors)
-summ[, pct_below_mdl := c(93, 40, 77, 56, 95, 96)[match(pollutant, names(POLLS))]]
+# %<MDL: read from TABLE_S3.1.csv (written by 70_table_s31.R) rather than
+# hard-coded, so the app cannot drift from the SI table. Falls back to the
+# published values if the file is absent.
+s31f <- file.path(BASE, "TABLE_S3.1.csv")
+if (file.exists(s31f)) {
+  s31 <- fread(s31f)
+  key <- c(Benzene = "Benzene", Toluene = "Toluene",
+           Trimethylbenzene = "Trimethylbenzene", Xylene = "Xylene",
+           H2S = "H2S", HCN = "HCN")
+  summ[, pct_below_mdl := round(s31$pct_belowMDL[match(key[pollutant], s31$pollutant)])]
+  msg("below-MDL fractions read from TABLE_S3.1.csv")
+} else {
+  summ[, pct_below_mdl := c(93, 39, 76, 56, 98, 96)[match(pollutant, names(POLLS))]]
+  warning("TABLE_S3.1.csv not found - using published below-MDL fractions")
+}
 saveRDS(summ, file.path(OUT, "summary_stats.rds"))
 print(summ)
 
@@ -218,6 +231,68 @@ saveRDS(list(key = key, tri = tri, wind = wind, lacasa = lacasa),
         file.path(OUT, "context.rds"))
 msg("context.rds: ", nrow(key), " key facilities + ", nrow(tri), " TRI + ",
     nrow(wind), " wind sites")
+
+# ---------- 6) screening health-hazard tables (SI section S7) ----------
+# Chronic hazard quotients / organ-system hazard indices on the census-block
+# basis (74_health_hazard_screening.R) and the companion acute screen, plus the
+# 500 m cell-resolved hazard indices used as the S7.3 sensitivity check
+# (73_cumulative_risk.R). Every value is read from the written tables - nothing
+# is recomputed here - so the app cannot drift from the SI.
+f71 <- file.path(BASE, "TABLE_S7.1_chronic_hazard.csv")
+f72 <- file.path(BASE, "TABLE_S7.2_acute_screen.csv")
+fcell <- file.path(BASE, "TABLE_cumulative_HQ_by_cell.csv")
+if (file.exists(f71) && file.exists(f72)) {
+  chronic <- fread(f71)
+  acute   <- fread(f72)
+
+  # organ-system hazard indices = sum of the HQs of pollutants sharing an organ
+  hi <- chronic[, .(pollutants = paste(pollutant, collapse = ", "),
+                    HI_pwmean  = sum(HQ_pwmean),
+                    HI_maxblock = sum(HQ_maxblock)), by = target_organ]
+  setorder(hi, -HI_pwmean)
+
+  # per-cell hazard indices by organ system (mean-concentration basis, the
+  # analogue of the block mean-of-daily-means used for the chronic table)
+  hcells <- NULL
+  if (file.exists(fcell) && exists("cells")) {
+    hq <- fread(fcell)
+    if (all(c("cell", "tos", "HQ_mean") %in% names(hq))) {
+      hcells <- hq[is.finite(HQ_mean), .(HI = round(sum(HQ_mean), 3),
+                                         pollutants = paste(sort(unique(pollutant)),
+                                                            collapse = ", "),
+                                         n_days = max(n_days, na.rm = TRUE)),
+                   by = .(cell, organ = tos)]
+      hcells <- merge(hcells, cells, by = "cell")
+    }
+  }
+  saveRDS(list(chronic = chronic, acute = acute, hi = hi, cells = hcells),
+          file.path(OUT, "hazard.rds"))
+  msg("hazard.rds: ", nrow(chronic), " pollutants, ", nrow(hi),
+      " organ systems, ",
+      if (is.null(hcells)) 0 else nrow(hcells), " cell-organ rows")
+  print(hi)
+} else {
+  warning("S7 hazard tables not found - hazard.rds not written, ",
+          "app page 7 will be hidden")
+}
+
+# ---------- 7) sync into the repo copy that actually deploys ----------
+# OUT is the working folder; Posit Connect publishes from the git repo, so a
+# refresh that stopped here would leave the deployed app on old data (this is
+# exactly what happened between 2026-08-17 and 2026-08-24). Copy across
+# whenever the repo working tree is present.
+REPO_OUT <- file.path(BASE, "AirToxics_Colorado", "shiny_app", "data")
+if (dir.exists(dirname(REPO_OUT))) {
+  dir.create(REPO_OUT, showWarnings = FALSE, recursive = TRUE)
+  src <- list.files(OUT, pattern = "\\.rds$", full.names = TRUE)
+  ok <- file.copy(src, REPO_OUT, overwrite = TRUE)
+  msg("synced ", sum(ok), "/", length(src), " .rds files into the repo copy: ",
+      REPO_OUT)
+  if (!all(ok)) warning("some files failed to copy into the repo copy")
+} else {
+  warning("repo working tree not found - remember to copy ", OUT,
+          " into shiny_app/data in the repo before pushing")
+}
 
 msg("DONE. Files in ", OUT, ":")
 print(file.info(list.files(OUT, full.names = TRUE))["size"])

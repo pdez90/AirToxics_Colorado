@@ -24,6 +24,8 @@ camp    <- if (file.exists(file.path(DATA, "campaign.rds")))
              readRDS(file.path(DATA, "campaign.rds")) else NULL
 tracks  <- if (file.exists(file.path(DATA, "daily_tracks.rds")))
              readRDS(file.path(DATA, "daily_tracks.rds")) else NULL
+haz     <- if (file.exists(file.path(DATA, "hazard.rds")))
+             readRDS(file.path(DATA, "hazard.rds")) else NULL
 udays   <- if (!is.null(tracks)) sort(unique(tracks$day)) else NULL
 
 POLLS <- sort(unique(cells$pollutant))
@@ -126,7 +128,9 @@ ui <- navbarPage(
                  "Each carries a Vocus Eiger PTR-ToF-MS (benzene, toluene, ",
                  "xylene, trimethylbenzene), a Vocus CI-ToF-MS (HCN), and a ",
                  "Picarro G2204 cavity ring-down spectrometer (H2S and ",
-                 "methane), all reporting at 1-s resolution."),
+                 "methane). The Eiger acquires once per second; the CI-ToF-MS ",
+                 "acquires HCN every 2 s and the Picarro H2S and methane ",
+                 "every 5 s."),
         helpText("Because sampled air travels through ~3 m of inlet tubing ",
                  "and instrument response times differ, each measurement was ",
                  "shifted back in time by an instrument- and vehicle-specific ",
@@ -135,12 +139,22 @@ ui <- navbarPage(
                  "so every value aligns with the GPS position where the ",
                  "sampled air entered the inlet. All data shown are ",
                  "delay-corrected."),
+        helpText("CDPHE delivers every channel on a common one-second grid, ",
+                 "carrying the most recent reading forward between the ",
+                 "acquisitions of the two slower instruments. To avoid ",
+                 "treating those repeats as independent measurements, HCN, ",
+                 "H2S and methane are averaged to their native acquisition ",
+                 "cadence after the delay correction; the aromatics are kept ",
+                 "at 1 Hz. Plume detection (page 3) is the one exception and ",
+                 "uses the as-delivered H2S signal, because the inversion ",
+                 "depends on sub-five-second peak shape."),
         tags$p(tags$a(href = "https://cdphe.colorado.gov/apcd/monitoring",
                       target = "_blank",
                       "More on CDPHE air quality monitoring")),
-        helpText("Cells are the 500 m analysis grid; values summarize all ",
-                 "1-s measurements in each cell. % below MDL is based on ",
-                 "CDPHE instrument quality flags.")),
+        helpText("Cells are the 500 m analysis grid; values summarize every ",
+                 "measurement in each cell at the native cadence described ",
+                 "above. % below MDL is based on CDPHE instrument quality ",
+                 "flags.")),
       mainPanel(width = 9, leafletOutput("p1_map", height = 640)))),
 
   tabPanel("2. AirToxScreen vs Mobile",
@@ -164,7 +178,20 @@ ui <- navbarPage(
                  "La Casa stationary monitoring site. EPA AirToxScreen ",
                  "values are modeled annual-average ambient benzene for the ",
                  "same blocks; the comparison uses only the 1,668 blocks ",
-                 "covered by both datasets.")),
+                 "covered by both datasets."),
+        h4("What the comparison shows"),
+        helpText("The two datasets agree closely in aggregate - ",
+                 "population-weighted mean benzene of 0.149 ppb from the ",
+                 "mobile data against 0.161 ppb from AirToxScreen, an ",
+                 "aggregate cancer-risk ratio of 0.92 - while disagreeing ",
+                 "almost completely block by block (Pearson r = 0.00). The ",
+                 "screening model captures the regional total but misplaces ",
+                 "it: modelled values span only a 2.5-fold range across the ",
+                 "domain, whereas the mobile surface spans more than an order ",
+                 "of magnitude. Because the block metric is a median of daily ",
+                 "medians, it deliberately suppresses episodic plumes; ",
+                 "metrics weighted toward the upper tail would place ",
+                 "mobile-derived exposure above AirToxScreen overall.")),
       mainPanel(width = 9, leafletOutput("p2_map", height = 420),
                 plotOutput("p2_scatter", height = 240)))),
 
@@ -179,7 +206,8 @@ ui <- navbarPage(
                  "Candidates were segmented by time gaps and retained only ",
                  "with at least three plume-flagged points, a coherent ",
                  "single-peak shape, consistent winds, and a defined ",
-                 "atmospheric stability class: 33 candidates, 4 retained. ",
+                 "atmospheric stability class (Pasquill B-D): 37 candidates, ",
+                 "4 retained. ",
                  "Emission rates are inverse Gaussian-plume estimates from ",
                  "the peak enhancement, distance to the facility, wind speed, ",
                  "and Pasquill-Gifford stability, assuming continuous ",
@@ -198,11 +226,12 @@ ui <- navbarPage(
                            selected = c("Covered facilities", "Wastewater treatment",
                                         "Woodshop", "Refueling stations")),
         h4("How hotspots were identified"),
-        helpText("For each pollutant, high 1-s readings were clustered ",
-                 "spatially within each sampling day (DBSCAN). Day-clusters ",
-                 "recurring at the same location across enough sampling days ",
-                 "- a per-pollutant persistence threshold - became ",
-                 "persistent clusters (2,719 day-clusters reduced to 221 ",
+        helpText("For each pollutant, readings above its campaign 99th ",
+                 "percentile were clustered on their geographic coordinates ",
+                 "with DBSCAN (100 m radius). A cluster was called persistent ",
+                 "if it fell in the top decile of that pollutant's own ",
+                 "distribution on both the number of high readings and the ",
+                 "number of days carrying them (2,713 clusters reduced to 216 ",
                  "persistent). Overlapping persistent clusters of different ",
                  "pollutants were then merged into groups, and the 17 groups ",
                  "persistent in three or more pollutants are the ",
@@ -252,7 +281,51 @@ ui <- navbarPage(
                  "during the campaign, all TRI facilities in the domain, the ",
                  "four EPA AQS meteorological stations, and the La Casa ",
                  "stationary monitoring site.")),
-      mainPanel(width = 9, leafletOutput("p6_map", height = 640))))
+      mainPanel(width = 9, leafletOutput("p6_map", height = 640)))),
+
+  tabPanel("7. Health screening",
+    sidebarLayout(
+      sidebarPanel(width = 3,
+        radioButtons("p7_organ", "Organ-system hazard index",
+                     choices = if (!is.null(haz) && !is.null(haz$cells))
+                                 sort(unique(haz$cells$organ)) else "none"),
+        h4("Organ-system hazard indices"), tableOutput("p7_hi"),
+        h4("What is shown"),
+        helpText("A screening-level cumulative noncancer assessment. Each ",
+                 "pollutant is expressed as a hazard quotient - its exposure ",
+                 "concentration divided by the EPA IRIS chronic inhalation ",
+                 "reference concentration - and the quotients of pollutants ",
+                 "acting on the same target organ system are summed into a ",
+                 "hazard index. A value at or above 1 flags an exposure above ",
+                 "the level judged to be without appreciable risk of that ",
+                 "effect over a lifetime. The table gives the two exposure ",
+                 "metrics used: the population-weighted community average and ",
+                 "the single most-exposed census block. The map resolves the ",
+                 "same indices onto the 500 m grid."),
+        helpText(tags$b("Read the H2S and HCN values with care. "),
+                 "Their reference concentrations (2 and 0.8 ug/m3) lie below ",
+                 "the detection limits of the instruments that measured them, ",
+                 "so these hazard indices are set by values at or below the ",
+                 "detection limit. They indicate a measurement-capability ",
+                 "gap - current mobile instrumentation cannot resolve ambient ",
+                 "concentrations at the level of the health benchmark - not a ",
+                 "demonstrated exceedance."),
+        helpText("This is a screening assessment, not a formal exposure or ",
+                 "risk assessment: it rests on repeated short visits rather ",
+                 "than continuous exposure monitoring, and assumes ",
+                 "dose-additivity within an organ system.")),
+      mainPanel(width = 9,
+                leafletOutput("p7_map", height = 420),
+                h4("Chronic hazard quotients by pollutant"),
+                tableOutput("p7_chronic"),
+                h4("Acute screen: short-term peaks vs 1-hour reference exposure levels"),
+                helpText("Campaign 99th-percentile and maximum short-term ",
+                         "concentrations against the California OEHHA 1-hour ",
+                         "acute RELs. The maximum column compares a sub-minute ",
+                         "peak with a one-hour guideline, so it is a ",
+                         "conservative upper bound rather than an estimate of a ",
+                         "realized one-hour exposure."),
+                tableOutput("p7_acute"))))
 )
 
 # ================= SERVER =================
@@ -593,6 +666,60 @@ server <- function(input, output, session) {
 
   # ---- page 6 ----
   output$p6_map <- renderLeaflet(add_context(base_map(), input$p6_ctx))
+
+  # ---- page 7: screening health hazard (SI S7) ----
+  output$p7_hi <- renderTable({
+    req(haz)
+    data.frame(`Organ system` = haz$hi$target_organ,
+               `Community avg` = sprintf("%.3g", haz$hi$HI_pwmean),
+               `Most-exposed block` = sprintf("%.3g", haz$hi$HI_maxblock),
+               check.names = FALSE)
+  })
+
+  output$p7_chronic <- renderTable({
+    req(haz)
+    d <- haz$chronic
+    data.frame(Pollutant = d$pollutant,
+               `Target organ` = d$target_organ,
+               `IRIS RfC (ug/m3)` = format(d$RfC_ugm3, big.mark = ","),
+               `Community avg (ug/m3)` = sprintf("%.3g", d$pwmean_ugm3),
+               `HQ (community avg)` = sprintf("%.3g", d$HQ_pwmean),
+               `HQ (most-exposed block)` = sprintf("%.3g", d$HQ_maxblock),
+               check.names = FALSE)
+  })
+
+  output$p7_acute <- renderTable({
+    req(haz)
+    d <- haz$acute
+    data.frame(Pollutant = d$pollutant,
+               `OEHHA 1-h REL (ug/m3)` = format(d$acuteREL_ugm3, big.mark = ","),
+               `p99 (ug/m3)` = sprintf("%.3g", d$p99_ugm3),
+               `HQ at p99` = sprintf("%.3g", d$HQ_p99),
+               `Max (ug/m3)` = sprintf("%.4g", d$max_ugm3),
+               `HQ at max` = sprintf("%.3g", d$HQ_max),
+               check.names = FALSE)
+  })
+
+  output$p7_map <- renderLeaflet({
+    req(haz, haz$cells)
+    d <- haz$cells[organ == input$p7_organ]
+    req(nrow(d) > 0)
+    # colour on log10(HI) so the sub-1 range stays legible; HI = 1 is the
+    # screening benchmark, marked in the legend
+    lv <- log10(pmax(d$HI, 1e-4))
+    pal <- colorNumeric("magma", domain = lv, reverse = TRUE)
+    base_map() |>
+      addRectangles(d$lon - 0.00292, d$lat - 0.00226,
+                    d$lon + 0.00292, d$lat + 0.00226,
+                    fillColor = pal(lv), fillOpacity = 0.7, weight = 0,
+                    popup = sprintf(
+                      "<b>%s hazard index: %.3g</b><br>%s<br>%s sampling days",
+                      d$organ, d$HI, d$pollutants, d$n_days)) |>
+      add_context(c("Covered facilities", "Wastewater treatment")) |>
+      addLegend("bottomright", pal = pal, values = lv,
+                title = sprintf("%s HI<br>(log10; 0 = HI of 1)", input$p7_organ),
+                labFormat = labelFormat(transform = function(x) round(x, 1)))
+  })
 }
 
 shinyApp(ui, server)
