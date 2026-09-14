@@ -106,6 +106,25 @@ if (length(.empty_panels)) {
           "These panels are annotated as no-data; do not read them as low concentrations.")
 }
 
+# AXIS LABELS (2026-09-10, reviewer comment on Figure 2): the default
+# coord_sf graticule placed a longitude tick every 0.05 deg, and at the
+# panel width used here the "105.10 W" style labels overlapped into an
+# unreadable band. Thin the longitude breaks to every 0.1 deg and rotate
+# the labels 45 deg. Latitude labels never overlapped and are left as is.
+LON_BREAKS <- seq(-105.2, -104.7, by = 0.1)
+lon_lab <- function(x) sprintf("%.1f\u00b0W", abs(x))
+lat_lab <- function(x) sprintf("%.2f\u00b0N", x)
+
+# BASEMAP (2026-09-10): CARTO now stamps "API KEY REQUIRED" across its Positron
+# tiles when fetched without a key, which ruined the first re-run. Use a
+# key-free source. FIG2_TILES=<rosm type> overrides; otherwise the types below
+# are tried in order and the first one that renders is used.
+TILE_TYPES <- unique(c(Sys.getenv("FIG2_TILES", ""), "osm"))
+TILE_TYPES <- TILE_TYPES[nzchar(TILE_TYPES)]
+TILE_ALPHA <- 0.45
+.tile_type <- TILE_TYPES[1]
+tile_credit <- function(t) if (grepl("carto", t)) "Basemap: CARTO Positron." else "Basemap: \u00a9 OpenStreetMap contributors."
+
 panel <- function(varname, title_txt, tag, lims) {
   .m  <- .map_vals(varname)
   dfv <- pd[.m$keep, ] |> mutate(val = .m$val)
@@ -114,18 +133,23 @@ panel <- function(varname, title_txt, tag, lims) {
                   varname, nrow(dfv),
                   if (.empty) "NO DATA" else sprintf("%.3f-%.2f", min(dfv$val), max(dfv$val)),
                   lims[1], lims[2]))
+  # title_txt may be a plotmath expression (H2S subscript) or a string
+  ttl <- if (is.expression(title_txt) || is.call(title_txt)) title_txt else paste0(tag, " ", title_txt)
   ggplot() +
-    annotation_map_tile(type = "cartolight", zoom = 12) +
+    annotation_map_tile(type = .tile_type, zoom = 12, alpha = TILE_ALPHA) +
     geom_point(data = dfv, aes(Lon, Lat, color = val), size = 1.2, alpha = 0.95) +
     {if (.empty) annotate("text", x = mean(xlim), y = mean(ylim),
                           label = paste0("no cell sampled on >= ", MIN_DAYS_MAP, " days"),
                           size = 4, fontface = "italic", colour = "grey30") } +
     coord_sf(crs = 4326, xlim = xlim, ylim = ylim, expand = FALSE) +
+    scale_x_continuous(breaks = LON_BREAKS, labels = lon_lab) +
+    scale_y_continuous(labels = lat_lab) +
     scale_color_viridis_c(option = "plasma", limits = lims,
                           oob = scales::squish, name = "ppb") +
-    labs(title = paste0(tag, " ", title_txt), x = NULL, y = NULL) +
+    labs(title = ttl, x = NULL, y = NULL) +
     theme_bw(base_size = 12) +
     theme(panel.grid = element_blank(),
+          axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
           plot.title = element_text(face = "bold", size = 12))
 }
 
@@ -149,6 +173,7 @@ lims_h2s <- .panel_lims("H2S")
 lims_hcn <- .panel_lims("HCN")
 message(sprintf("H2S limits (2-98%% of displayed cells): %.3f to %.3f ppb", lims_h2s[1], lims_h2s[2]))
 message(sprintf("HCN limits (2-98%% of displayed cells): %.3f to %.3f ppb", lims_hcn[1], lims_hcn[2]))
+build_fig <- function() {
 p <- (panel(V["Benzene"], "Benzene (bg-corrected) - median of daily medians",
             "(a)", arom_lims) |
       panel(V["Toluene"], "Toluene (bg-corrected) - median of daily medians",
@@ -158,17 +183,27 @@ p <- (panel(V["Benzene"], "Benzene (bg-corrected) - median of daily medians",
             "(c)", arom_lims) |
       panel(V["Xylene"], "Xylene (bg-corrected) - median of daily medians",
             "(d)", arom_lims)) /
-     (panel(V["H2S"], "H2S (bg-corrected) - median of daily medians",
+     (panel(V["H2S"], expression(bold("(e) H"[2]*"S (bg-corrected) - median of daily medians")),
             "(e)", lims_h2s) |
       panel(V["HCN"], "HCN (bg-corrected) - median of daily medians",
             "(f)", lims_hcn)) +
   plot_annotation(caption = paste(
     "Panels (a)-(d) share a single color scale (pooled 2nd-98th percentiles",
-    "across the four aromatics); H2S and HCN use their own scales.",
-    "Basemap: CARTO Positron."),
+    "across the four aromatics); H\u2082S and HCN use their own scales.",
+    tile_credit(.tile_type)),
     theme = theme(plot.caption = element_text(size = 9, hjust = 0)))
 
+  p
+}
 out <- file.path(BASE, "FinalFig", "Figure2_sharedscale.png")
-ggsave(out, p, width = 12, height = 15, dpi = 400, bg = "white")
+.saved <- FALSE
+for (.tt in TILE_TYPES) {
+  .tile_type <<- .tt
+  message("[FIG2] basemap tiles: ", .tt)
+  ok <- tryCatch({ p <- build_fig(); ggsave(out, p, width = 12, height = 15, dpi = 400, bg = "white"); TRUE },
+                 error = function(e) { message("[FIG2] tile source '", .tt, "' failed: ", conditionMessage(e)); FALSE })
+  if (ok) { .saved <- TRUE; break }
+}
+if (!.saved) stop("Figure 2: no basemap tile source worked (tried ", paste(TILE_TYPES, collapse = ", "), ")")
 message("[Saved] ", out)
 message("DONE.")
