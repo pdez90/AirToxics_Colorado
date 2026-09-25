@@ -65,19 +65,20 @@ S_BASE_BENZ <- .sf_get("benzene", 1.149)   # baseline benzene factor, from R04
   lo <- g("^Mobile", "risk_5_75");  hi <- g("^Mobile", "risk_20_40")
   al <- g("^AirToxScreen", "risk_5_75"); ah <- g("^AirToxScreen", "risk_20_40")
   pm <- g("^Mobile", "pop_weighted_mean_ppb"); pa <- g("^AirToxScreen", "pop_weighted_mean_ppb")
-  stopifnot(all(is.finite(c(lo, hi, al, ah, pm, pa))))
+  nb <- g("^Mobile", "n_blocks")
+  stopifnot(all(is.finite(c(lo, hi, al, ah, pm, pa, nb))))
   # the ratio must agree whether taken on concentrations or on either risk
   # endpoint - excess risk is linear in concentration, so a disagreement here
   # means the file is not what this script thinks it is
   rr <- c(pm / pa, lo / al, hi / ah)
   if (diff(range(rr)) > 1e-6)
     warning("[RISK] ratio disagrees across metrics: ", paste(round(rr, 6), collapse = " / "))
-  list(lo = lo, hi = hi, ats_lo = al, ats_hi = ah, ratio = mean(rr))
+  list(lo = lo, hi = hi, ats_lo = al, ats_hi = ah, ratio = mean(rr), n_blocks = nb)
 }
 .ra <- .risk_anchor()
 RISK_LO <- .ra$lo; RISK_HI <- .ra$hi     # mobile risk range at S_BASE_BENZ
 ATS_LO  <- .ra$ats_lo; ATS_HI <- .ra$ats_hi
-RATIO_BASE <- .ra$ratio
+RATIO_BASE <- .ra$ratio; N_BLOCKS <- .ra$n_blocks
 message(sprintf("[RISK] baseline anchors: mobile %.3f-%.3f | AirToxScreen %.3f-%.3f | ratio %.3f",
                 RISK_LO, RISK_HI, ATS_LO, ATS_HI, RATIO_BASE))
 
@@ -189,6 +190,24 @@ lab <- c(A_binweighted = "A: bin-weighted\n(baseline)",
          B_window = "B: weekday\n08-15h window", C_hour_only = "C: hour-only\nweights",
          D_median = "D: median-\nbased", E_none = "E: no\nscaling")
 risk[, clab := factor(lab[construction], levels = lab)]
+# CAPTION. Two things were wrong with the previous version: it hard-coded the
+# AirToxScreen range and the block count (the same staleness trap as the risk
+# anchors), and it was one ~200-character line in an 8.5-inch panel, so ggplot
+# drew it straight off the right edge - the embedded Figure S4.9 has been
+# clipped at "...the benzene scaling factor s and the re" for as long as the
+# figure has existed. Built from the anchors and wrapped to the panel below.
+CAP <- paste(
+  sprintf(paste0("Red dashed line: parity with AirToxScreen (%.3f-%.3f excess cases ",
+                 "across %s common blocks)."), ATS_LO, ATS_HI,
+          format(N_BLOCKS, big.mark = ",")),
+  paste0("Labels give the benzene scaling factor s and the resulting mobile risk range; ",
+         "risk scales exactly linearly with s."),
+  sep = "\n")
+# Guard against the same thing happening again. 125 is measured, not guessed:
+# the 114-character second line renders with clear margin inside the 8.5 in
+# panel at 8.5 pt, while the old single 200-character line ran ~3 in past it.
+stopifnot(max(nchar(strsplit(CAP, "\n", fixed = TRUE)[[1]])) <= 125)
+
 p <- ggplot(risk, aes(clab, ratio_vs_ATS)) +
   geom_col(fill = "#4292c6", width = 0.6, color = "grey20", linewidth = 0.2) +
   geom_hline(yintercept = 1, linetype = 2, color = "red") +
@@ -197,7 +216,7 @@ p <- ggplot(risk, aes(clab, ratio_vs_ATS)) +
   scale_y_continuous(limits = c(0, max(risk$ratio_vs_ATS) * 1.25)) +
   labs(x = NULL,
        y = "Aggregate mobile : AirToxScreen risk ratio",
-       caption = "Red dashed line: parity with AirToxScreen (0.117-0.416 excess cases across 1,667 common blocks). Labels give the benzene scaling factor s and the resulting mobile risk range; risk scales exactly linearly with s.") +
+       caption = CAP) +
   theme_bw(base_size = 12) +
   theme(plot.caption = element_text(size = 8.5, hjust = 0))
 ggsave(file.path(BASE, "FinalFig", "FIG_scaling_sensitivity.png"),
