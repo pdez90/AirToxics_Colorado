@@ -6,6 +6,15 @@
 #
 #   Rscript tests/audit_manuscript_claims.R
 #
+# CLAIM REFRESH (2026-09-25). The `claim` argument of every ok() call is what
+# the DOCUMENTS say, so it has to move whenever they do. After the 300 m
+# ATOPs-headquarters exclusion these were left on the pre-exclusion text and a
+# clean run reported ten failures that were not failures - the documents were
+# right and this file was stale. That is worse than no harness: it trains the
+# reader to skim past FAIL. Refreshed below against the 25 Sep documents.
+# The three correlation claims are the exception: those failures were real and
+# are what caught SI S3 still quoting the submitted-era coefficients.
+#
 # Definitions follow 43_figure_s31_routes.R: the Goodrich route is
 # excluded, and a "run" is one Site x calendar day.
 #
@@ -35,7 +44,7 @@ ok <- function(lab, got, want, tol = 0) {
 
 cat("\n== measurement record (Methods; Results 3.1) ==\n")
 runs <- unique(d[, .(Site, day)])
-ok("1-s measurements",        nrow(d),               2602928L)
+ok("1-s measurements",        nrow(d),               2555285L)
 ok("runs (Site x day)",       nrow(runs),            205L)
 ok("unique sampling days",    uniqueN(runs$day),     203L)
 ok("first day",               format(min(runs$day)), "2023-02-16")
@@ -47,11 +56,11 @@ wd <- table(factor(weekdays(unique(d[, .(day)])$day),
 ok("Mon/Tue/Wed/Thu/Fri", as.integer(wd), c(8L, 39L, 48L, 50L, 58L))
 
 cat("\n== hour of day (SI S3) ==\n")
-ok("% between 9 am and 2 pm", round(100 * mean(d$hr >= 9 & d$hr < 14), 1), 88.2, 0.05)
+ok("% between 9 am and 2 pm", round(100 * mean(d$hr >= 9 & d$hr < 14), 1), 88.6, 0.05)
 frac <- d[, .(pct = round(100 * .N / nrow(d), 1)), by = hr][order(hr)]
 ok("hours present (MST)", frac$hr, 7:16)
 ok("hourly fractions", frac$pct,
-   c(0.2, 3.0, 12.7, 19.0, 20.8, 20.4, 15.2, 6.3, 1.7, 0.6), 0.05)
+   c(0.1, 2.8, 12.2, 19.3, 21.1, 20.6, 15.4, 6.2, 1.7, 0.6), 0.05)
 
 cat("\n== pairwise correlations (SI S3) ==\n")
 P <- c("Benzene_ppb","Toluene_ppb","Trimethylbenzene_ppb","Xylene_ppb",
@@ -61,12 +70,12 @@ for (s in sort(unique(d$Site))) {
   tag <- if (grepl("Suncor", s)) "Suncor" else "Holly "
   if (tag == "Suncor") {
     ok("Suncor toluene-xylene",      round(cr[2,4], 2), 0.94, 0.005)
-    ok("Suncor TMB-xylene",          round(cr[3,4], 2), 0.88, 0.005)
-    ok("Suncor benzene-TMB",         round(cr[1,3], 2), 0.68, 0.005)
+    ok("Suncor TMB-xylene",          round(cr[3,4], 2), 0.90, 0.005)
+    ok("Suncor benzene-TMB",         round(cr[1,3], 2), 0.70, 0.005)
   } else {
-    ok("Holly toluene-xylene",       round(cr[2,4], 2), 0.85, 0.005)
-    ok("Holly TMB-xylene",           round(cr[3,4], 2), 0.85, 0.005)
-    ok("Holly toluene-TMB",          round(cr[2,3], 2), 0.73, 0.005)
+    ok("Holly toluene-xylene",       round(cr[2,4], 2), 0.84, 0.005)
+    ok("Holly TMB-xylene",           round(cr[3,4], 2), 0.88, 0.005)
+    ok("Holly toluene-TMB",          round(cr[2,3], 2), 0.75, 0.005)
   }
   cat(sprintf("       %s max |r| of H2S/HCN vs the aromatics: %.3f\n",
               tag, max(abs(cr[5:6, 1:4]))))
@@ -86,7 +95,7 @@ if (!file.exists(tf)) {
   ok("HCN below MDL (Results 3.1)",      round(s["HCN",     pct_belowMDL]), 96)
   five <- s[pollutant != "HCN"]
   ok("analysis-set values, 5 pollutants (millions)",
-     round(range(five$analysis) / 1e6, 2), c(1.46, 1.55), 0.005)
+     round(range(five$analysis) / 1e6, 2), c(1.44, 1.54), 0.005)
   # H2S now spans 199 days: the 2026-08-22 run retains it across the 2023 inlet
   # window, which affected the Eiger aromatics but not the Picarro. TMB is the
   # floor at 159. If H2S drops back to ~164 the retention has been undone.
@@ -97,7 +106,7 @@ if (!file.exists(tf)) {
   # a re-run tells you exactly which sentences to update instead of just failing.
   # 28-30 May 2025 is excluded as a calibration window, so HCN is 2 days and
   # 27,739 values below the previous run.
-  DOC <- list(hcn_n = 481471L, hcn_days = 39L,
+  DOC <- list(hcn_n = 478660L, hcn_days = 39L,
               hcn_from = "2025-01-22", hcn_to = "2025-06-23")
   cmp <- function(lab, got, doc) {
     same <- isTRUE(all.equal(got, doc, check.attributes = FALSE))
@@ -138,12 +147,12 @@ if (!file.exists(sf)) {
 } else {
   sp <- fread(sf); setkey(sp, quantity)
   g <- function(q) sp[q, value]
-  ok("GPS segments (SI: 2,596,958)", g("n_segments"),          2596958)
+  ok("GPS segments (SI: 2,549,328)", g("n_segments"),          2549328)
   ok("median speed (SI: 26 km/h)",   round(g("p50")),          26)
-  ok("IQR low (SI: 14 km/h)",        round(g("p25")),          14)
-  ok("IQR high (SI: 38 km/h)",       round(g("p75")),          38)
+  ok("IQR low (SI: 15 km/h)",        round(g("p25")),          15)
+  ok("IQR high (SI: 39 km/h)",       round(g("p75")),          39)
   ok("95th percentile (SI: 74 km/h)", round(g("p95")),         74)
-  ok("stationary (SI: 13%)",         round(g("pct_stationary_le1kmh")), 13)
+  ok("stationary (SI: 12%)",         round(g("pct_stationary_le1kmh")), 12)
   ok("1-s advance at p95 (SI: 21 m)", round(g("metres_per_second_at_p95")), 21)
   ok("500 m crossing at p95 (SI: 24 s)", round(g("seconds_to_cross_500m_at_p95")), 24)
   cat(sprintf("       for reference: only %.0f%% of segments fall in the submitted 30-60 km/h band\n",

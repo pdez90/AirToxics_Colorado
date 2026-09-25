@@ -39,9 +39,47 @@ BASE <- "/Users/priyanka/Downloads/Suncor"
   if (length(r) != 1L || !is.finite(r)) fallback else r
 }
 S_BASE_BENZ <- .sf_get("benzene", 1.149)   # baseline benzene factor, from R04
-RISK_LO <- 0.113; RISK_HI <- 0.402   # mobile risk range at S_BASE_BENZ
-ATS_LO <- 0.117; ATS_HI <- 0.416
-RATIO_BASE <- 0.97
+
+# RISK ANCHORS (2026-09-25): read from the file 19/R05 writes, for exactly the
+# reason stated in the note above about the scaling factors - and which this
+# block did not heed. RISK_LO/RISK_HI/RATIO_BASE were hard-coded at 0.113 /
+# 0.402 / 0.97, the PRE-exclusion mobile risk. Every row of
+# TABLE_scaling_sensitivity_risk.csv is RISK_* rescaled by s / S_BASE_BENZ, so
+# the whole table and Figure S4.9 sat on the old surface while the manuscript
+# quoted the new one (0.108 / 0.383 / 0.92). The baseline row is the tell: at
+# construction A, s / S_BASE_BENZ is exactly 1, so the row can only ever echo
+# these constants. The SI then explained the 0.97-vs-0.92 gap as a difference
+# of method - "this sensitivity recomputes the aggregate directly from the
+# population-weighted concentration surface" - which is not what this script
+# does, and a direct recomputation from that surface gives 0.92.
+.risk_file <- file.path(BASE, "FinalFig",
+                        "benzene_risk_summary_BINWEIGHTED_COMMONBLOCKS.csv")
+.risk_anchor <- function() {
+  if (!file.exists(.risk_file)) {
+    warning("[RISK] ", basename(.risk_file), " absent - falling back to the ",
+            "documented 2026-09-23 values; re-run 19/R05 and repeat this script")
+    return(list(lo = 0.108, hi = 0.383, ats_lo = 0.117, ats_hi = 0.416, ratio = 0.92))
+  }
+  r <- data.table::fread(.risk_file)
+  g <- function(pat, col) as.numeric(r[[col]][grep(pat, r$metric)][1])
+  lo <- g("^Mobile", "risk_5_75");  hi <- g("^Mobile", "risk_20_40")
+  al <- g("^AirToxScreen", "risk_5_75"); ah <- g("^AirToxScreen", "risk_20_40")
+  pm <- g("^Mobile", "pop_weighted_mean_ppb"); pa <- g("^AirToxScreen", "pop_weighted_mean_ppb")
+  stopifnot(all(is.finite(c(lo, hi, al, ah, pm, pa))))
+  # the ratio must agree whether taken on concentrations or on either risk
+  # endpoint - excess risk is linear in concentration, so a disagreement here
+  # means the file is not what this script thinks it is
+  rr <- c(pm / pa, lo / al, hi / ah)
+  if (diff(range(rr)) > 1e-6)
+    warning("[RISK] ratio disagrees across metrics: ", paste(round(rr, 6), collapse = " / "))
+  list(lo = lo, hi = hi, ats_lo = al, ats_hi = ah, ratio = mean(rr))
+}
+.ra <- .risk_anchor()
+RISK_LO <- .ra$lo; RISK_HI <- .ra$hi     # mobile risk range at S_BASE_BENZ
+ATS_LO  <- .ra$ats_lo; ATS_HI <- .ra$ats_hi
+RATIO_BASE <- .ra$ratio
+message(sprintf("[RISK] baseline anchors: mobile %.3f-%.3f | AirToxScreen %.3f-%.3f | ratio %.3f",
+                RISK_LO, RISK_HI, ATS_LO, ATS_HI, RATIO_BASE))
 
 # ---- mobile bin weights ---------------------------------------
 message("Loading mobile data for bin weights...")
