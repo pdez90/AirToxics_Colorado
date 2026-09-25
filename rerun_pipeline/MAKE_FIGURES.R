@@ -54,7 +54,9 @@ GROUPS <- list(
            scripts = "22_distance_decay_function.R"),
   G = list(desc = "TRI proximity analysis",
            pre = character(0),
-           scripts = "32_identifying_close_to_tri.R"),
+           # 23 rebuilds TRI_subset.csv (which 32 reads) and writes the domain
+           # and proximity counts quoted in section 2.1; it must precede 32.
+           scripts = c("23_tri.R", "32_identifying_close_to_tri.R")),
   H = list(desc = "FIGURE 4 + hotspot figures (33 -> 34 -> 35 chained)",
            pre = character(0),
            scripts = c("33_final_hotspot_plots.R", "34_fancy_plots_of_hotspots.R",
@@ -94,7 +96,13 @@ GROUPS <- list(
                        # block-level RData written by the main pipeline.
                        # Self-checks every number quoted in SI S7
                        # ([OK]/[EDIT] lines) like 72 does for S1.4.
-                       "74_health_hazard_screening.R")),
+                       "74_health_hazard_screening.R",
+                       # ADDED 2026-09-25: SI S7.4 temporal-scaling sensitivity
+                       # for the hazard screen (Tables S7.3 scenarios + S7.4
+                       # break-even factors). Runs AFTER 74 because it
+                       # self-checks its scenario A against 74's Table S7.1;
+                       # both read the same census-block surface. Seconds.
+                       "77_health_scaling_sensitivity.R")),
   K = list(desc = "TRI proximity figures (S4.2 distributions + S4.3 buffers)",
            pre = character(0),
            scripts = c("41_tri_inside_outside_distributions.R",
@@ -105,7 +113,9 @@ GROUPS <- list(
            scripts = "27_hotspot_sensitivity_sensitivity.R"),
   M = list(desc = "Table S5.1 per-group reports (maps/scatter/polar + highday tables)",
            pre = character(0),
-           scripts = "31_plotting.R"),
+           # 76 writes the per-group exceedance-day counts quoted in the
+           # Table S5.1 captions; it needs MASTER (group N) to exist first.
+           scripts = c("31_plotting.R", "76_group_exceedance_days.R")),
   N = list(desc = "Rebuild root MASTER_hotspot_group_index.csv (must precede H)",
            pre = character(0),
            scripts = "71_rebuild_master_index.R"),
@@ -158,6 +168,11 @@ GROUPS <- list(
   X = list(desc = "SI S4.3-S4.5 + S5.4: scaling sens, day/night, bootstrap, CPF",
            pre = character(0),
            scripts = c("48_scaling_sensitivity.R", "49_lacasa_daynight_ratios.R",
+                       # ADDED 2026-09-25: evidence behind S7.4 - within-500 m-cell
+                       # diurnal shape + the night:day-ratio-vs-24-h-factor table
+                       # (S7.5-S7.7, Figures S7.1-S7.2). MUST follow 49: it reads
+                       # TABLE_lacasa_daynight_ratios.csv, which 49 writes. ~90 s.
+                       "78_diurnal_scaling_evidence.R",
                        "58_bootstrap_blocks.R", "61_lacasa_cpf.R")),
   R = list(desc = "MDL / smoke / stability / seasonal / CAT-EMU (S1.2, S3.11-S3.14)",
            pre = character(0),
