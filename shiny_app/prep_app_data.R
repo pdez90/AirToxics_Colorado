@@ -32,6 +32,15 @@ cent_m  <- st_centroid(st_geometry(grid))
 cent_ll <- st_coordinates(st_transform(cent_m, 4326))
 pts <- st_transform(st_as_sf(dt[, .(Longitude, Latitude)],
                              coords = c("Longitude", "Latitude"), crs = 4326), 26913)
+
+# TRI DOMAIN BOX (2026-09-25). The context map used to plot every row of
+# TRI.csv - 752 facility-YEAR records for the whole of Colorado - while the
+# panel text claims "all TRI facilities in the domain". Section 2.1 of the
+# manuscript quotes 67: TRI.csv de-duplicated on coordinates (284 statewide
+# locations, written by 23_tri.R as TRI_subset.csv) and restricted to the
+# mobile route's bounding box. Capture that box here, while the full record is
+# still in memory, and apply it where the context layer is built below.
+TRI_BB <- st_bbox(pts)
 dt[, cell := grid$id[st_nearest_feature(pts, cent_m)]]
 cells <- data.table(cell = grid$id, lon = cent_ll[, 1], lat = cent_ll[, 2])
 
@@ -216,12 +225,28 @@ key <- data.frame(
           -104.94754521, -104.88376425, -105.10918240, -104.84531380, -104.88371420),
   type = c(rep("Covered facility (HB21-1189)", 3), rep("Wastewater treatment", 2),
            "Woodshop", rep("Refueling station", 4)))
-tri <- fread(file.path(BASE, "TRI.csv"))
+# TRI_subset.csv is TRI.csv de-duplicated on coordinates by 23_tri.R; fall back
+# to TRI.csv with the same de-duplication if 23 has not been run.
+.trif <- file.path(BASE, "TRI_subset.csv")
+if (file.exists(.trif)) {
+  tri <- fread(.trif)
+} else {
+  message("[prep] TRI_subset.csv absent - de-duplicating TRI.csv here (run 23_tri.R)")
+  tri <- fread(file.path(BASE, "TRI.csv"))
+  tri <- tri[!duplicated(tri[, .(Latitude, Longitude)])]
+}
 loncol <- grep("^lon", names(tri), ignore.case = TRUE, value = TRUE)[1]
 latcol <- grep("^lat", names(tri), ignore.case = TRUE, value = TRUE)[1]
 namecol <- grep("name", names(tri), ignore.case = TRUE, value = TRUE)[1]
 tri <- tri[is.finite(get(loncol)) & is.finite(get(latcol)),
            .(name = get(namecol), lon = get(loncol), lat = get(latcol))]
+.n_state <- nrow(tri)
+.tp <- st_coordinates(st_transform(st_as_sf(tri[, .(lon, lat)],
+         coords = c("lon", "lat"), crs = 4326), 26913))
+tri <- tri[.tp[, 1] >= TRI_BB[["xmin"]] & .tp[, 1] <= TRI_BB[["xmax"]] &
+           .tp[, 2] >= TRI_BB[["ymin"]] & .tp[, 2] <= TRI_BB[["ymax"]]]
+msg("TRI: ", .n_state, " unique statewide locations -> ", nrow(tri),
+    " inside the route bounding box (section 2.1 quotes 67)")
 wind <- fread(file.path(BASE, "wind_sites.csv"))
 wind <- data.frame(lat = wind$Lat_wind, lon = wind$Lon_wind)
 wind <- wind[is.finite(wind$lat), ]

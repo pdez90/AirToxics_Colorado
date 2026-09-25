@@ -20,6 +20,17 @@ events  <- readRDS(file.path(DATA, "events.rds"))
 blocks  <- readRDS(file.path(DATA, "blocks.rds"))
 plumes  <- readRDS(file.path(DATA, "plumes.rds"))
 hs      <- readRDS(file.path(DATA, "hotspots.rds"))
+# Population-weighted means quoted on page 2. Computed from the block table
+# rather than typed in, so they follow the data through a re-run instead of
+# going stale (they were still the pre-exclusion 0.149 / 0.161 before this).
+.b_      <- sf::st_drop_geometry(blocks)
+.k_      <- is.finite(.b_$sBenzene_med_of_daily_med_scaled) &
+            is.finite(.b_$benzene_ppb_airtox) & is.finite(.b_$Population_airtox)
+.pw_mob  <- stats::weighted.mean(.b_$sBenzene_med_of_daily_med_scaled[.k_],
+                                 .b_$Population_airtox[.k_])
+.pw_ats  <- stats::weighted.mean(.b_$benzene_ppb_airtox[.k_],
+                                 .b_$Population_airtox[.k_])
+rm(.b_, .k_)
 ctx     <- readRDS(file.path(DATA, "context.rds"))
 camp    <- if (file.exists(file.path(DATA, "campaign.rds")))
              readRDS(file.path(DATA, "campaign.rds")) else NULL
@@ -149,6 +160,16 @@ ui <- navbarPage(
                  "at 1 Hz. Plume detection (page 3) is the one exception and ",
                  "uses the as-delivered H2S signal, because the inversion ",
                  "depends on sub-five-second peak shape."),
+        helpText("Measurements taken within 300 m of CDPHE's ATOPs ",
+                 "headquarters in Wheat Ridge are excluded throughout. The ",
+                 "vehicles are garaged there and run start-up and shut-down ",
+                 "procedures, including calibrations, before and after each ",
+                 "deployment, so those readings describe warehouse air rather ",
+                 "than ambient conditions. The screen uses the delay-corrected ",
+                 "position and removes about 1.8% of the record; one ",
+                 "multi-pollutant hotspot group reported in earlier versions ",
+                 "of this analysis sat on that address and does not survive ",
+                 "it."),
         tags$p(tags$a(href = "https://cdphe.colorado.gov/apcd/monitoring",
                       target = "_blank",
                       "More on CDPHE air quality monitoring")),
@@ -165,7 +186,8 @@ ui <- navbarPage(
                      c("AirToxScreen benzene" = "ats",
                        "Mobile benzene (scaled)" = "mob",
                        "Ratio mobile / AirToxScreen" = "ratio")),
-        h4("Across 1,668 common blocks"), tableOutput("p2_stats"),
+        h4(paste0("Across ", format(nrow(blocks), big.mark = ","),
+                  " common blocks")), tableOutput("p2_stats"),
         h4("How the mobile surface was built"),
         helpText("Every 1-s benzene measurement is assigned to its census ",
                  "block. Within a block, each sampling day is summarized by ",
@@ -178,13 +200,16 @@ ui <- navbarPage(
                  "concentrations using the diurnal pattern measured at the ",
                  "La Casa stationary monitoring site. EPA AirToxScreen ",
                  "values are modeled annual-average ambient benzene for the ",
-                 "same blocks; the comparison uses only the 1,668 blocks ",
+                 "same blocks; the comparison uses only the ",
+                 format(nrow(blocks), big.mark = ","), " blocks ",
                  "covered by both datasets."),
         h4("What the comparison shows"),
         helpText("The two datasets agree closely in aggregate - ",
-                 "population-weighted mean benzene of 0.149 ppb from the ",
-                 "mobile data against 0.161 ppb from AirToxScreen, an ",
-                 "aggregate cancer-risk ratio of 0.92 - while disagreeing ",
+                 sprintf("population-weighted mean benzene of %.3f ppb from the ",
+                         .pw_mob),
+                 sprintf("mobile data against %.3f ppb from AirToxScreen, an ", .pw_ats),
+                 sprintf("aggregate cancer-risk ratio of %.2f - while disagreeing ",
+                         .pw_mob / .pw_ats),
                  "almost completely block by block (Pearson r = 0.00). The ",
                  "screening model captures the regional total but misplaces ",
                  "it: modelled values span only a 2.5-fold range across the ",
@@ -220,7 +245,9 @@ ui <- navbarPage(
   tabPanel("4. Hotspots",
     sidebarLayout(
       sidebarPanel(width = 3,
-        checkboxInput("p4_groups", "17 persistent multi-pollutant groups", TRUE),
+        checkboxInput("p4_groups",
+                      paste(nrow(hs$groups),
+                            "persistent multi-pollutant groups"), TRUE),
         selectInput("p4_poll", "Per-pollutant persistent clusters",
                     c("(none)", unique(hs$clusters$pollutant), "methane")),
         checkboxGroupInput("p4_ctx", "Context layers", CTX_CHOICES,
@@ -232,9 +259,15 @@ ui <- navbarPage(
                  "with DBSCAN (100 m radius). A cluster was called persistent ",
                  "if it fell in the top decile of that pollutant's own ",
                  "distribution on both the number of high readings and the ",
-                 "number of days carrying them (2,713 clusters reduced to 216 ",
-                 "persistent). Overlapping persistent clusters of different ",
-                 "pollutants were then merged into groups, and the 17 groups ",
+                 "number of days carrying them (",
+                 if (is.null(hs$n_initial) || is.na(hs$n_initial))
+                   "the initial clusters reduced to " else
+                   paste0(format(hs$n_initial, big.mark = ","),
+                          " clusters reduced to "),
+                 format(nrow(hs$clusters), big.mark = ","),
+                 " persistent). Overlapping persistent clusters of different ",
+                 "pollutants were then merged into groups, and the ",
+                 nrow(hs$groups), " groups ",
                  "persistent in three or more pollutants are the ",
                  "multi-pollutant hotspots mapped here. Methane, measured ",
                  "alongside H2S, is analyzed the same way and overlaid as a ",
