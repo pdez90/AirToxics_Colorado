@@ -97,7 +97,25 @@ read_lacasa_ascent <- function(path) {
     new = c("date_mst","date_mst1","date","date_mdt","benzene","toluene","xylene",
             "wd","ws","temp_far","temp_c","rh")[seq_along(names(x))]
   )
-  x[, date := dmy_hm(date)]
+  # TIME CONVENTION (2026-09-22): the ascent files carry FOUR time columns —
+  # 1: MST clock, 2: MST as YYYYMMDDhhmmss, 3: MDT clock, 4: MDT as YYYYMMDDhhmmss.
+  # Column 3 was being used as `date`. In ascent_2024.csv column 3 is one hour
+  # ahead of column 1 (it really is MDT), while the mobile record carries the MST
+  # wall clock, so the 2024 La Casa deployment was being compared one hour out.
+  # (ascent_2023.csv was delivered with columns 1 and 3 identical, both MST, so it
+  # was never affected.) Checked against EPA AQS resultant wind speed at the three
+  # Denver-area stations within 15 km: hourly correlation peaks at lag 0 for
+  # column 1 in both years (r = 0.94 in 2023, 0.96 in 2024) and at -1 h for
+  # column 3 in 2024. La Casa is therefore read from column 1 (MST) below.
+  x[, date_mst := dmy_hm(date_mst)]
+  x[, date_file_col3 := dmy_hm(date)]
+  .off <- as.numeric(difftime(x$date_file_col3, x$date_mst, units = "hours"))
+  stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
+  message("[LACASA] ", basename(path), ": column 3 minus column 1 = ",
+          paste(sort(unique(round(.off[!is.na(.off)]))), collapse = "/"),
+          " h; using column 1 (MST)")
+  x[, date := date_mst]
+  x[, date_file_col3 := NULL]
   x
 }
 
@@ -430,9 +448,10 @@ p_500_2024_x <- scatter_with_distance(
   ylab_txt = "Mobile Xylene (ppb)"
 )
 
-plots_500 <- Filter(Negate(is.null), list(
-  p_500_2023_t, p_500_2023_x, p_500_2024_t, p_500_2024_x
-))
+# MASKING FIX (2026-09-22): base::Filter is masked when this runs inside the
+# figure driver; build the list explicitly.
+.p500 <- list(p_500_2023_t, p_500_2023_x, p_500_2024_t, p_500_2024_x)
+plots_500 <- .p500[!vapply(.p500, is.null, logical(1))]
 
 if (length(plots_500) > 0) {
   out_plot <- file.path(out_dir, "lacasa_mobile_scatterplots_500m_colored_by_distance.png")

@@ -114,6 +114,23 @@ message("  all timestamps carry -0700: TRUE")
 
 gps_ok <- is.finite(raw$Latitude) & is.finite(raw$Longitude)
 message("  rows with finite GPS   : ", format(sum(gps_ok), big.mark = ","))
+# CDPHE headquarters exclusion (added 2026-09-22). 03_checks_flags.R drops every
+# row whose SAMPLING position (after the delay shift) lies within 300 m of the
+# ATOPs headquarters, where the vans are garaged and run start-up/shut-down and
+# calibration procedures. This stage applies the same point and radius to the
+# DELIVERED positions of the raw rows, so it describes the delivered record; the
+# exact, delay-aware exclusion is what the analysis-set row reflects. The two
+# differ only by the few seconds of driving around each departure and arrival.
+HQ_LAT <- 39.785189; HQ_LON <- -105.104411; HQ_RADIUS_M <- 300
+.hav_m <- function(lat1, lon1, lat2, lon2) {
+  r <- pi / 180
+  a <- sin((lat2 - lat1) * r / 2)^2 +
+       cos(lat1 * r) * cos(lat2 * r) * sin((lon2 - lon1) * r / 2)^2
+  2 * 6371008.8 * asin(pmin(1, sqrt(a)))
+}
+hq_ok <- !(gps_ok & .hav_m(raw$Latitude, raw$Longitude, HQ_LAT, HQ_LON) <= HQ_RADIUS_M)
+hq_ok[is.na(hq_ok)] <- TRUE
+message("  rows within ", HQ_RADIUS_M, " m of CDPHE HQ : ", format(sum(!hq_ok), big.mark = ","))
 
 # ---- campaign exclusions, verbatim from 03_checks_flags.R lines 107-130 ----
 # These are hard-coded date windows carrying no comment in the source. They are
@@ -140,7 +157,7 @@ EXCLUDE <- function(nm) {
 
 stage <- POLL[, .(name)]
 stage[, `:=`(reported = NA_integer_, after_qc = NA_integer_,
-             gps = NA_integer_, after_excl = NA_integer_)]
+             gps = NA_integer_, after_excl = NA_integer_, outside_hq = NA_integer_)]
 for (i in seq_len(nrow(POLL))) {
   v <- raw[[POLL$raw[i]]]; f <- raw[[POLL$flag[i]]]
   keep <- !voided(f); ex <- EXCLUDE(POLL$name[i])
@@ -148,6 +165,7 @@ for (i in seq_len(nrow(POLL))) {
   stage$after_qc[i]   <- sum(!is.na(v) & keep)
   stage$gps[i]        <- sum(!is.na(v) & keep & gps_ok)
   stage$after_excl[i] <- sum(!is.na(v) & keep & gps_ok & !ex)
+  stage$outside_hq[i] <- sum(!is.na(v) & keep & gps_ok & !ex & hq_ok)
 }
 print(stage)
 message("\ncampaign exclusions (03_checks_flags.R):")
@@ -169,7 +187,8 @@ message("\nanalysis set rows        : ", format(nrow(d), big.mark = ","))
 fmt  <- function(x, dp = 2) formatC(x, format = "f", digits = dp, big.mark = ",")
 res <- data.table(pollutant = POLL$name)
 res[, `:=`(reported = stage$reported, after_qc = stage$after_qc,
-           gps = stage$gps, after_excl = stage$after_excl)]
+           gps = stage$gps, after_excl = stage$after_excl,
+           outside_hq = stage$outside_hq)]
 
 # Step function on the quarter start month. A measurement before the first
 # quarter the packets give for that lab has no audit MDL and is left NA rather
@@ -224,6 +243,7 @@ lab <- c("Most common flags"                                = "most_common_flags
          "Retained after QA/QC (null qualifiers voided)"    = "after_qc",
          "With valid GPS"                                   = "gps",
          "After campaign date exclusions"                   = "after_excl",
+         "Outside 300 m of the CDPHE headquarters"          = "outside_hq",
          "In the analysis set"                              = "analysis",
          "Sampling days represented"                        = "n_days",
          "  distinct reported values"                       = "n_unique",
@@ -244,7 +264,7 @@ cat(sprintf("%-46s %12s %12s %12s %16s %12s %12s\n", "", res$pollutant[1], res$p
 for (k in names(lab)) {
   col <- lab[[k]]; v <- res[[col]]
   s <- if (is.character(v)) v
-       else if (col %in% c("reported","after_qc","gps","after_excl","analysis","n_unique","n_days","n_no_mdl"))
+       else if (col %in% c("reported","after_qc","gps","after_excl","outside_hq","analysis","n_unique","n_days","n_no_mdl"))
          format(v, big.mark = ",")
        else if (grepl("^pct", col)) paste0(formatC(v, format = "f", digits = 1), "%")
        else formatC(v, format = "f", digits = 2, big.mark = ",")

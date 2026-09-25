@@ -336,7 +336,7 @@ pA2 <- add_stats_plot(df_plot, "toluene_ppb", "sToluene_med_of_daily_med_scaled"
 pA3 <- add_stats_plot(df_plot, "xylene_ppb",  "sXylene_med_of_daily_med_scaled",
                       "AirToxScreen Xylene (ppb)", "Mobile Xylene (A scaled; ppb)")
 
-plotsA <- Filter(Negate(is.null), list(pA1, pA2, pA3))
+plotsA <- base::Filter(Negate(is.null), list(pA1, pA2, pA3))   # base:: - Filter is masked when sourced by the figure driver
 if (length(plotsA) > 0) {
   out_A <- file.path(out_dir_fig, "scatterplot_blocks_BINWEIGHTED_A_medofdailymed.jpeg")
   jpeg(out_A, res = 800, width = 9000, height = 9000)
@@ -355,7 +355,7 @@ pB2 <- add_stats_plot(df_plot, "toluene_ppb", "sToluene_mean_of_daily_mean_scale
 pB3 <- add_stats_plot(df_plot, "xylene_ppb",  "sXylene_mean_of_daily_mean_scaled",
                       "AirToxScreen Xylene (ppb)", "Mobile Xylene (B scaled; ppb)")
 
-plotsB <- Filter(Negate(is.null), list(pB1, pB2, pB3))
+plotsB <- base::Filter(Negate(is.null), list(pB1, pB2, pB3))
 if (length(plotsB) > 0) {
   out_B <- file.path(out_dir_fig, "scatterplot_blocks_BINWEIGHTED_B_meanofdailymean.jpeg")
   jpeg(out_B, res = 800, width = 9000, height = 9000)

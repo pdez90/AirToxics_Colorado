@@ -91,7 +91,9 @@ for (thr in THRS) for (eps in EPSS) {
     recov <- if (nrow(g3)) {
       dm <- outer(seq_len(nrow(mxy)), seq_len(nrow(g3)), Vectorize(function(i, j)
         sqrt((mxy[i, 1] - g3$x[j])^2 + (mxy[i, 2] - g3$y[j])^2)))
-      mean(apply(dm, 1, min) <= 300)
+      # MASKING FIX (2026-09-22): terra/raster make apply() and mean() S4
+      # generics with no matrix method, so this died inside the figure driver.
+      base::mean(base::apply(dm, 1, min) <= 300)
     } else 0
     npp <- data.table::dcast(keep[, .N, by = pollutant], . ~ pollutant, value.var = "N")
     res[[length(res) + 1]] <- data.table(

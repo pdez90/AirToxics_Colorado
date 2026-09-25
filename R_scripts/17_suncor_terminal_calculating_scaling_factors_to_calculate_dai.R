@@ -64,13 +64,29 @@ print(mob_w_hour)
 # ----------------------------
 # 2) READ La Casa (inside this chunk)
 # ----------------------------
+# TIME CONVENTION (2026-09-22): the ascent files carry FOUR time columns —
+# 1: MST clock, 2: MST as YYYYMMDDhhmmss, 3: MDT clock, 4: MDT as YYYYMMDDhhmmss.
+# Column 3 was being used as `date`. In ascent_2024.csv column 3 is one hour
+# ahead of column 1 (it really is MDT), while the mobile record carries the MST
+# wall clock, so the 2024 La Casa deployment was being compared one hour out.
+# (ascent_2023.csv was delivered with columns 1 and 3 identical, both MST, so it
+# was never affected.) Checked against EPA AQS resultant wind speed at the three
+# Denver-area stations within 15 km: hourly correlation peaks at lag 0 for
+# column 1 in both years (r = 0.94 in 2023, 0.96 in 2024) and at -1 h for
+# column 3 in 2024. La Casa is therefore read from column 1 (MST) below.
 lacasa1 <- read.csv("/Users/priyanka/Downloads/Suncor/ascent_2023.csv", stringsAsFactors = FALSE)
 colnames(lacasa1) <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene","xylene","wd","ws","temp_far","temp_c","rh")
-lacasa1$date <- lubridate::dmy_hm(lacasa1$date)
+lacasa1$date_mst <- lubridate::dmy_hm(lacasa1$date_mst)
+.off <- as.numeric(difftime(lubridate::dmy_hm(lacasa1$date), lacasa1$date_mst, units = "hours"))
+stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
+lacasa1$date <- lacasa1$date_mst   # MST clock, to match the mobile record (see note above)
 
 lacasa2 <- read.csv("/Users/priyanka/Downloads/Suncor/ascent_2024.csv", stringsAsFactors = FALSE)
 colnames(lacasa2) <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene","xylene","wd","ws","temp_far","temp_c","rh")
-lacasa2$date <- lubridate::dmy_hm(lacasa2$date)
+lacasa2$date_mst <- lubridate::dmy_hm(lacasa2$date_mst)
+.off <- as.numeric(difftime(lubridate::dmy_hm(lacasa2$date), lacasa2$date_mst, units = "hours"))
+stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
+lacasa2$date <- lacasa2$date_mst   # MST clock, to match the mobile record (see note above)
 
 lacasa3 <- read.csv("/Users/priyanka/Downloads/Suncor/lacasa3.csv", stringsAsFactors = FALSE)
 colnames(lacasa3) <- c("date","toluene","xylene")

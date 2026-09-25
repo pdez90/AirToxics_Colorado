@@ -2,9 +2,12 @@
 # M01_ingest_delay_garage.R
 # Ingest all quarterly methane CSVs (Picarro, same instrument as
 # H2S), apply the SAME asset-specific inlet delay as H2S
-# (CAT: 21 s, EMU: 17 s), remove garage (non-ambient) measurements
-# within 100 m of ATOPs HQ (39.785359, -105.104331), and save a
-# clean 1-s dataset: mobile_methane.RData / mobile_methane.csv.
+# (CAT: 21 s, EMU: 17 s), relocate each reading to the GPS position at
+# which the air was sampled, remove garage (non-ambient) measurements
+# within 300 m of CDPHE's ATOPs headquarters (39.785189, -105.104411;
+# CDPHE's own ~300 m flag radius, A. Ziola, Sep 2026 - the same point and
+# radius applied to the air toxics in R_scripts/03_checks_flags.R), and
+# save a clean 1-s dataset: mobile_methane.RData / mobile_methane.csv.
 #
 # Data notes (from Anna, CDPHE):
 #  - columns: Asset_CAT_EMU, UTC_Time, Methane_ppmv, Latitude, Longitude
@@ -21,9 +24,17 @@ suppressPackageStartupMessages({
   library(data.table); library(dplyr); library(lubridate); library(geosphere)
 })
 
-METH_DIR <- "/Users/priyanka/Toxics_EST/MethaneData"
-ATOPS_HQ <- c(lon = -105.104331, lat = 39.785359)   # garage location
-GARAGE_RADIUS_M <- 100
+METH_DIR <- Sys.getenv("METHANE_DIR", "")
+if (!nzchar(METH_DIR)) {
+  .cands <- c("/Users/priyanka/Downloads/MethaneData", "/Users/priyanka/Toxics_EST/MethaneData")
+  METH_DIR <- .cands[dir.exists(.cands)][1]
+}
+if (is.na(METH_DIR) || !dir.exists(METH_DIR)) stop("MethaneData folder not found; set METHANE_DIR")
+# CDPHE-supplied HQ coordinates and flag radius (2026-09-17). Previously
+# 39.785359, -105.104331 with a 100 m radius, which left near-garage air at
+# 100-300 m in the record (it produced the spurious toxics "Group 9").
+ATOPS_HQ <- c(lon = -105.104411, lat = 39.785189)   # garage location
+GARAGE_RADIUS_M <- 300
 DELAY <- c(CAT = 21, EMU = 17)                      # seconds, same Picarro as H2S
 
 # ----------------------------------------------------------------
@@ -174,9 +185,71 @@ for (i in seq_len(nrow(by_asset)))
                    by_asset$Asset[i], by_asset$mean_shift[i], DELAY[by_asset$Asset[i]]))
 
 # ----------------------------------------------------------------
+# Relocate each reading to its SAMPLING position (added 2026-09-22)
+# ----------------------------------------------------------------
+# The shift above moves each reading's timestamp back to the moment the air
+# entered the inlet, but each row still carried the GPS fix logged when the
+# reading was DELIVERED, 17-21 s later - roughly 100-150 m further along the
+# route at driving speed. M02 joins only wind (ws/wd/Site) from the toxics
+# record, so nothing downstream re-located the reading, and methane was
+# mapped at delivery positions while every air toxic (03_checks_flags.R) is
+# mapped at sampling positions. Here the vehicle's own GPS track (each
+# delivered row's fix, keyed on the delivery clock) is interpolated at the
+# sampling time. Vehicle position is interpolated linearly across gaps of up
+# to 3 s, the same rule as the toxics chokepoint; a reading whose sampling
+# time falls in a longer GPS gap loses its position and is dropped by the
+# missing-GPS filter below. Set CH4_RELOCATE <- FALSE to reproduce the old
+# (delivery-position) behaviour.
+CH4_RELOCATE <- TRUE
+CH4_MAX_GPS_GAP_S <- 3
+if (CH4_RELOCATE) {
+  diag_section("M01: relocating readings to the sampling-time GPS position")
+  pos <- ch4[is.finite(Latitude) & is.finite(Longitude),
+             .(Latitude = mean(Latitude), Longitude = mean(Longitude)),
+             by = .(Asset, t = floor_date(date_predelay, "second"))]
+  setorder(pos, Asset, t)
+  .relocate <- function(qt, tr, max_gap) {
+    x <- as.numeric(tr$t); xq <- as.numeric(qt); n <- length(x)
+    lat <- rep(NA_real_, length(xq)); lon <- lat
+    if (n == 0) return(list(lat, lon))
+    L <- findInterval(xq, x)                         # x[L] <= xq < x[L+1]
+    ok <- L >= 1
+    exact <- ok & x[pmax(L, 1L)] == xq
+    R <- pmin(L + 1L, n)
+    brk <- ok & !exact & L < n & (x[R] - x[pmax(L, 1L)]) <= max_gap
+    i <- which(exact)
+    lat[i] <- tr$Latitude[L[i]]; lon[i] <- tr$Longitude[L[i]]
+    i <- which(brk)
+    w <- (xq[i] - x[L[i]]) / (x[R[i]] - x[L[i]])
+    lat[i] <- tr$Latitude[L[i]]  + w * (tr$Latitude[R[i]]  - tr$Latitude[L[i]])
+    lon[i] <- tr$Longitude[L[i]] + w * (tr$Longitude[R[i]] - tr$Longitude[L[i]])
+    list(lat, lon)
+  }
+  ch4[, `:=`(Latitude_delivered = Latitude, Longitude_delivered = Longitude)]
+  for (a in unique(ch4$Asset)) {
+    ii <- which(ch4$Asset == a)
+    r  <- .relocate(ch4$date[ii], pos[Asset == a], CH4_MAX_GPS_GAP_S)
+    set(ch4, ii, "Latitude",  r[[1]])
+    set(ch4, ii, "Longitude", r[[2]])
+  }
+  .had  <- is.finite(ch4$Latitude_delivered)
+  .has  <- is.finite(ch4$Latitude)
+  .disp <- distHaversine(cbind(ch4$Longitude_delivered, ch4$Latitude_delivered)[.had & .has, , drop = FALSE],
+                         cbind(ch4$Longitude, ch4$Latitude)[.had & .has, , drop = FALSE])
+  diag_msg(sprintf("  readings relocated: %s of %s with a delivery fix (%.1f%%); lost position (GPS gap > %d s): %s",
+                   format(sum(.had & .has), big.mark = ","), format(sum(.had), big.mark = ","),
+                   100 * sum(.had & .has) / max(sum(.had), 1), CH4_MAX_GPS_GAP_S,
+                   format(sum(.had & !.has), big.mark = ",")))
+  diag_msg(sprintf("  displacement delivery -> sampling position: median %.0f m | p90 %.0f m | p99 %.0f m",
+                   median(.disp), quantile(.disp, .90), quantile(.disp, .99)))
+  ch4[, c("Latitude_delivered", "Longitude_delivered") := NULL]
+  rm(pos, .had, .has, .disp)
+}
+
+# ----------------------------------------------------------------
 # Garage filter + missing-GPS handling
 # ----------------------------------------------------------------
-diag_section("M01: garage filter (100 m of ATOPs HQ) + missing GPS")
+diag_section(sprintf("M01: garage filter (%d m of ATOPs HQ) + missing GPS", GARAGE_RADIUS_M))
 n0 <- nrow(ch4)
 n_nogps <- ch4[is.na(Latitude) | is.na(Longitude), .N]
 diag_msg(sprintf("  rows without GPS: %s (%.1f%%) — dropped (mostly garage/startup; cannot be mapped)",

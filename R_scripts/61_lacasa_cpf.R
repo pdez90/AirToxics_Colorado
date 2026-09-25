@@ -14,8 +14,23 @@ suppressPackageStartupMessages({ library(data.table); library(lubridate); librar
 BASE <- "/Users/priyanka/Downloads/Suncor"
 cn12 <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene",
           "xylene","wd","ws","temp_far","temp_c","rh")
+# TIME CONVENTION (2026-09-22): the ascent files carry FOUR time columns —
+# 1: MST clock, 2: MST as YYYYMMDDhhmmss, 3: MDT clock, 4: MDT as YYYYMMDDhhmmss.
+# Column 3 was being used as `date`. In ascent_2024.csv column 3 is one hour
+# ahead of column 1 (it really is MDT), while the mobile record carries the MST
+# wall clock, so the 2024 La Casa deployment was being compared one hour out.
+# (ascent_2023.csv was delivered with columns 1 and 3 identical, both MST, so it
+# was never affected.) Checked against EPA AQS resultant wind speed at the three
+# Denver-area stations within 15 km: hourly correlation peaks at lag 0 for
+# column 1 in both years (r = 0.94 in 2023, 0.96 in 2024) and at -1 h for
+# column 3 in 2024. La Casa is therefore read from column 1 (MST) below.
 rd <- function(f, parser) { x <- read.csv(file.path(BASE,f), stringsAsFactors=FALSE)
-  colnames(x) <- cn12; x$date <- parser(x$date); x }
+  colnames(x) <- cn12
+  .mst <- parser(x$date_mst)
+  .off <- as.numeric(difftime(parser(x$date), .mst, units = "hours"))
+  stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
+  x$date <- .mst                            # MST clock, to match the mobile record
+  x }
 lc <- rbindlist(list(rd("ascent_2023.csv", dmy_hm), rd("ascent_2024.csv", dmy_hm)))
 lc <- as.data.table(lc)[is.finite(wd) & is.finite(ws) & ws > 1]
 message("La Casa rows with valid wind, ws>1: ", format(nrow(lc), big.mark=","))

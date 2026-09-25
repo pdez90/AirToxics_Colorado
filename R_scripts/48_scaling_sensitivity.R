@@ -25,7 +25,20 @@ suppressPackageStartupMessages({
 BASE <- "/Users/priyanka/Downloads/Suncor"
 
 # canonical anchors (delay-corrected pipeline)
-S_BASE_BENZ <- 1.149          # baseline benzene factor
+
+# SCALING FACTORS (2026-09-23): read them from the file R04 writes instead of
+# hard-coding. The 300 m headquarters exclusion moved the factors from
+# 1.149/1.228/1.377 to 1.165/1.274/1.443, and a hard-coded constant would have
+# left this table on the old scaling while the block surface used the new one.
+.sf_file <- file.path("/Users/priyanka/Downloads/Suncor", "lacasa_scaling_factors_option1_binweighted.RData")
+.sf_get <- function(pol, fallback) {
+  if (!file.exists(.sf_file)) { message("[SCALING] file absent - using documented value for ", pol); return(fallback) }
+  e <- new.env(); load(.sf_file, envir = e); o <- get(ls(e)[1], envir = e)
+  if (!all(c("pollutant", "ratio_all_over_mobilelike") %in% names(o))) return(fallback)
+  r <- as.numeric(o[["ratio_all_over_mobilelike"]])[match(pol, o[["pollutant"]])]
+  if (length(r) != 1L || !is.finite(r)) fallback else r
+}
+S_BASE_BENZ <- .sf_get("benzene", 1.149)   # baseline benzene factor, from R04
 RISK_LO <- 0.113; RISK_HI <- 0.402   # mobile risk range at S_BASE_BENZ
 ATS_LO <- 0.117; ATS_HI <- 0.416
 RATIO_BASE <- 0.97
@@ -44,10 +57,26 @@ message("  mobile bins: ", nrow(mob_w), " (weekday x hour), ",
 rm(DT); gc()
 
 # ---- La Casa (same three files as script 17) ------------------
+# TIME CONVENTION (2026-09-22): the ascent files carry FOUR time columns —
+# 1: MST clock, 2: MST as YYYYMMDDhhmmss, 3: MDT clock, 4: MDT as YYYYMMDDhhmmss.
+# Column 3 was being used as `date`. In ascent_2024.csv column 3 is one hour
+# ahead of column 1 (it really is MDT), while the mobile record carries the MST
+# wall clock, so the 2024 La Casa deployment was being compared one hour out.
+# (ascent_2023.csv was delivered with columns 1 and 3 identical, both MST, so it
+# was never affected.) Checked against EPA AQS resultant wind speed at the three
+# Denver-area stations within 15 km: hourly correlation peaks at lag 0 for
+# column 1 in both years (r = 0.94 in 2023, 0.96 in 2024) and at -1 h for
+# column 3 in 2024. La Casa is therefore read from column 1 (MST) below.
 rd <- function(f, cn, parser) {
   x <- read.csv(file.path(BASE, f), stringsAsFactors = FALSE)
   colnames(x) <- cn
   x$date <- parser(x$date)
+  if ("date_mst" %in% cn) {                 # ascent files: use the MST column
+    .mst <- parser(x$date_mst)
+    .off <- as.numeric(difftime(x$date, .mst, units = "hours"))
+    stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
+    x$date <- .mst
+  }
   x
 }
 cn12 <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene",
@@ -130,7 +159,7 @@ p <- ggplot(risk, aes(clab, ratio_vs_ATS)) +
   scale_y_continuous(limits = c(0, max(risk$ratio_vs_ATS) * 1.25)) +
   labs(x = NULL,
        y = "Aggregate mobile : AirToxScreen risk ratio",
-       caption = "Red dashed line: parity with AirToxScreen (0.117-0.416 excess cases across 1,668 common blocks). Labels give the benzene scaling factor s and the resulting mobile risk range; risk scales exactly linearly with s.") +
+       caption = "Red dashed line: parity with AirToxScreen (0.117-0.416 excess cases across 1,667 common blocks). Labels give the benzene scaling factor s and the resulting mobile risk range; risk scales exactly linearly with s.") +
   theme_bw(base_size = 12) +
   theme(plot.caption = element_text(size = 8.5, hjust = 0))
 ggsave(file.path(BASE, "FinalFig", "FIG_scaling_sensitivity.png"),

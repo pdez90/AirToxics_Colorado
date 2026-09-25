@@ -48,7 +48,11 @@ out_dir  <- "/Users/priyanka/Downloads/Suncor/sourceprob_maps"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # basemap
-tile_type <- "cartolight"
+# BASEMAP (2026-09-22): CARTO now serves "API KEY REQUIRED" watermarked tiles
+# when fetched without a key - the same defect fixed in 55_figure2_sharedscale.R
+# for Figure 2. Default to key-free OpenStreetMap tiles; FIG3_TILES=<rosm type>
+# overrides (e.g. FIG3_TILES=cartolight if a keyed source is configured).
+tile_type <- if (nzchar(Sys.getenv("FIG3_TILES"))) Sys.getenv("FIG3_TILES") else "osm"
 tile_zoom <- 11
 dpi_out   <- 450
 surface_alpha <- 0.75
@@ -575,7 +579,10 @@ for (pol_col in names(pollutants)) {
   plots[[pol_key]] <- p
 }
 
-plots_keep <- Filter(Negate(is.null), plots)
+# MASKING FIX (2026-09-22): a package attached by the figure driver masks
+# base::Filter, which returned a function here and broke the six-panel
+# assembly after all six maps had been written. Subset explicitly instead.
+plots_keep <- plots[!vapply(plots, is.null, logical(1))]
 stopifnot(length(plots_keep) > 0)
 
 # ----------------------------

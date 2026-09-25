@@ -115,16 +115,6 @@ LON_BREAKS <- seq(-105.2, -104.7, by = 0.1)
 lon_lab <- function(x) sprintf("%.1f\u00b0W", abs(x))
 lat_lab <- function(x) sprintf("%.2f\u00b0N", x)
 
-# BASEMAP (2026-09-10): CARTO now stamps "API KEY REQUIRED" across its Positron
-# tiles when fetched without a key, which ruined the first re-run. Use a
-# key-free source. FIG2_TILES=<rosm type> overrides; otherwise the types below
-# are tried in order and the first one that renders is used.
-TILE_TYPES <- unique(c(Sys.getenv("FIG2_TILES", ""), "osm"))
-TILE_TYPES <- TILE_TYPES[nzchar(TILE_TYPES)]
-TILE_ALPHA <- 0.45
-.tile_type <- TILE_TYPES[1]
-tile_credit <- function(t) if (grepl("carto", t)) "Basemap: CARTO Positron." else "Basemap: \u00a9 OpenStreetMap contributors."
-
 panel <- function(varname, title_txt, tag, lims) {
   .m  <- .map_vals(varname)
   dfv <- pd[.m$keep, ] |> mutate(val = .m$val)
@@ -136,7 +126,7 @@ panel <- function(varname, title_txt, tag, lims) {
   # title_txt may be a plotmath expression (H2S subscript) or a string
   ttl <- if (is.expression(title_txt) || is.call(title_txt)) title_txt else paste0(tag, " ", title_txt)
   ggplot() +
-    annotation_map_tile(type = .tile_type, zoom = 12, alpha = TILE_ALPHA) +
+    annotation_map_tile(type = "cartolight", zoom = 12) +
     geom_point(data = dfv, aes(Lon, Lat, color = val), size = 1.2, alpha = 0.95) +
     {if (.empty) annotate("text", x = mean(xlim), y = mean(ylim),
                           label = paste0("no cell sampled on >= ", MIN_DAYS_MAP, " days"),
@@ -173,7 +163,6 @@ lims_h2s <- .panel_lims("H2S")
 lims_hcn <- .panel_lims("HCN")
 message(sprintf("H2S limits (2-98%% of displayed cells): %.3f to %.3f ppb", lims_h2s[1], lims_h2s[2]))
 message(sprintf("HCN limits (2-98%% of displayed cells): %.3f to %.3f ppb", lims_hcn[1], lims_hcn[2]))
-build_fig <- function() {
 p <- (panel(V["Benzene"], "Benzene (bg-corrected) - median of daily medians",
             "(a)", arom_lims) |
       panel(V["Toluene"], "Toluene (bg-corrected) - median of daily medians",
@@ -190,20 +179,10 @@ p <- (panel(V["Benzene"], "Benzene (bg-corrected) - median of daily medians",
   plot_annotation(caption = paste(
     "Panels (a)-(d) share a single color scale (pooled 2nd-98th percentiles",
     "across the four aromatics); H\u2082S and HCN use their own scales.",
-    tile_credit(.tile_type)),
+    "Basemap: CARTO Positron."),
     theme = theme(plot.caption = element_text(size = 9, hjust = 0)))
 
-  p
-}
 out <- file.path(BASE, "FinalFig", "Figure2_sharedscale.png")
-.saved <- FALSE
-for (.tt in TILE_TYPES) {
-  .tile_type <<- .tt
-  message("[FIG2] basemap tiles: ", .tt)
-  ok <- tryCatch({ p <- build_fig(); ggsave(out, p, width = 12, height = 15, dpi = 400, bg = "white"); TRUE },
-                 error = function(e) { message("[FIG2] tile source '", .tt, "' failed: ", conditionMessage(e)); FALSE })
-  if (ok) { .saved <- TRUE; break }
-}
-if (!.saved) stop("Figure 2: no basemap tile source worked (tried ", paste(TILE_TYPES, collapse = ", "), ")")
+ggsave(out, p, width = 12, height = 15, dpi = 400, bg = "white")
 message("[Saved] ", out)
 message("DONE.")

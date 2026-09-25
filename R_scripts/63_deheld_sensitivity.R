@@ -148,7 +148,20 @@ blk <- merge(b_fill, b_deh, by = "block")
 ats <- as.data.table(st_drop_geometry(gll))[, .(block = get(idcol),
         ats = benzene_ppb_airtox, pop = Population_airtox)]
 blk <- merge(blk, ats, by = "block")
-SCALE <- 1.149
+
+# SCALING FACTORS (2026-09-23): read them from the file R04 writes instead of
+# hard-coding. The 300 m headquarters exclusion moved the factors from
+# 1.149/1.228/1.377 to 1.165/1.274/1.443, and a hard-coded constant would have
+# left this table on the old scaling while the block surface used the new one.
+.sf_file <- file.path("/Users/priyanka/Downloads/Suncor", "lacasa_scaling_factors_option1_binweighted.RData")
+.sf_get <- function(pol, fallback) {
+  if (!file.exists(.sf_file)) { message("[SCALING] file absent - using documented value for ", pol); return(fallback) }
+  e <- new.env(); load(.sf_file, envir = e); o <- get(ls(e)[1], envir = e)
+  if (!all(c("pollutant", "ratio_all_over_mobilelike") %in% names(o))) return(fallback)
+  r <- as.numeric(o[["ratio_all_over_mobilelike"]])[match(pol, o[["pollutant"]])]
+  if (length(r) != 1L || !is.finite(r)) fallback else r
+}
+SCALE <- .sf_get("benzene", 1.149)
 bres <- data.table(
   blocks               = nrow(blk),
   spearman_fill_deheld = round(cor(blk$filled, blk$deheld, method = "spearman"), 3),

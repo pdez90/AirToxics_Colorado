@@ -6,6 +6,7 @@
 #Download Roads
 
 require(tigris)
+suppressPackageStartupMessages(library(sf))   # st_write (2026-09-22: was missing)
 colorado_counties <- counties(state = "CO", year = 2024)
 colorado_roads_list <- list()
 

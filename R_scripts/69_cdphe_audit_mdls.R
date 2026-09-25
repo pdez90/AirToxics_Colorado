@@ -36,7 +36,9 @@ grab <- function(f) {
                                    range = "A1:F14", col_names = FALSE,
                                    .name_repair = "minimal"))
   x <- as.data.frame(x, stringsAsFactors = FALSE)
-  hdr <- which(apply(x, 1, function(r) any(grepl("CAT Audit MDL", r, fixed = TRUE))))
+  # MASKING FIX (2026-09-22): terra/raster turn apply() into an S4 generic with
+  # no data.frame method, so this failed inside the figure driver.
+  hdr <- which(base::apply(as.matrix(x), 1, function(r) any(grepl("CAT Audit MDL", r, fixed = TRUE))))
   if (!length(hdr)) stop("no 'CAT Audit MDL' header in ", b)
   hdr <- hdr[1]
   cat_col <- which(grepl("CAT Audit MDL", x[hdr, ], fixed = TRUE))[1]

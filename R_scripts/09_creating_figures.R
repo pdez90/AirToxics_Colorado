@@ -1,3 +1,24 @@
+# STANDALONE (2026-09-23): attach what the composites need, so this script
+# can be run on its own without re-rendering the polar plots in script 08.
+suppressPackageStartupMessages({ library(grid); library(ggplot2); library(cowplot)
+  library(jpeg); if (requireNamespace("ragg", quietly = TRUE)) library(ragg) })
+
+# ------------------------------------------------------------------
+# TOLERANT COMPOSITES (2026-09-22): this script assembles composite
+# figures out of JPEGs. The polar-plot panels are written by script 08,
+# but several later composites are built from map images that were
+# exported by hand for the original manuscript and were lost with the
+# rest of the folder - no script in the pipeline writes them. A missing
+# input used to stop the whole group (and with it every composite after
+# it). Each composite is now attempted on its own and a missing input is
+# reported by name instead of halting the run.
+# ------------------------------------------------------------------
+.composite <- function(expr) tryCatch(expr, error = function(e) {
+  try(while (grDevices::dev.cur() > 1) grDevices::dev.off(), silent = TRUE)
+  message("[09] SKIPPED composite: ", conditionMessage(e))
+})
+
+.composite({
 # ==============================================================
 # 09  Creating Figures
 # Auto-split from Suncor.Rmd  (section 9 of 40)
@@ -78,6 +99,8 @@ ragg::agg_jpeg(
 )
 print(p_combined)
 dev.off()
+})
+.composite({
 
 message("Saved: ", out_file)
 
@@ -89,6 +112,8 @@ cowplot::plot_grid(
   rasterGrob(pp_suncor_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"))
 dev.off()
+})
+.composite({
 
 
 #Persistent Hotspots
@@ -111,6 +136,8 @@ cowplot::plot_grid(
   #rasterGrob(hs_suncor_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.99)
 dev.off()
+})
+.composite({
 
 #Hotspots
 hs_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillips_Benzene.jpeg")
@@ -130,6 +157,8 @@ cowplot::plot_grid(
   rasterGrob(hs_suncor_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"))
 dev.off()
+})
+.composite({
 
 #Zoomed into Suncor
 hs_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillipszoom_Benzene.jpeg")
@@ -149,6 +178,8 @@ cowplot::plot_grid(
   rasterGrob(hs_suncor_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale = 0.98)
 dev.off()
+})
+.composite({
 
 #https://stackoverflow.com/questions/52175766/draw-border-around-certain-rows-using-cowplot-and-ggplot2
 
@@ -170,6 +201,8 @@ cowplot::plot_grid(
   rasterGrob(hs_suncor_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"))
 dev.off()
+})
+.composite({
 
 #Persistent Hotspots
 hs_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_benzene.jpeg")
@@ -189,6 +222,8 @@ cowplot::plot_grid(
   rasterGrob(hs_suncor_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.9)
 dev.off()
+})
+.composite({
 
 #Polarplot Suncor
 suncor_pp_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_benzene.jpeg")
@@ -212,8 +247,10 @@ suncor_pp_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_sun
 trim_white <- function(img, thr = 0.98, pad = 10) {
   g  <- (img[,,1] + img[,,2] + img[,,3]) / 3
   nz <- g < thr
-  rr <- range(which(apply(nz, 1, any)))
-  cc <- range(which(apply(nz, 2, any)))
+  # MASKING FIX (2026-09-22): apply() is an S4 generic under terra/raster
+  # with no matrix method when this runs inside the figure driver.
+  rr <- range(which(base::apply(nz, 1, any)))
+  cc <- range(which(base::apply(nz, 2, any)))
   img[max(1, rr[1] - pad):min(nrow(g), rr[2] + pad),
       max(1, cc[1] - pad):min(ncol(g), cc[2] + pad), , drop = FALSE]
 }
@@ -235,6 +272,8 @@ cowplot::plot_grid(
     ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"),
     label_size = 9, scale=0.99)
 dev.off()
+})
+.composite({
 
 jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor_PolarPlot_openairmaps_vertical.jpeg", res=800, width=3500, height=4100)
 cowplot::plot_grid(
@@ -246,6 +285,8 @@ cowplot::plot_grid(
   rasterGrob(suncor_pp_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.99)
 dev.off()
+})
+.composite({
 
 #Maps 500 m Suncor
 suncor_map_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/median_median_benzene_500m.jpeg")
@@ -261,6 +302,8 @@ cowplot::plot_grid(
   rasterGrob(suncor_map_h2s),
 ncol=1, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.99)
 dev.off()
+})
+.composite({
 
 jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Map500m_SI.jpeg", res=800, width=5000, height=4000)
 cowplot::plot_grid(
@@ -270,6 +313,8 @@ cowplot::plot_grid(
   rasterGrob(suncor_map_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.99)
 dev.off()
+})
+.composite({
 
 #Census blocks
 toxscreen_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/airtoxscreen_benzene.jpeg")
@@ -313,6 +358,8 @@ ragg::agg_jpeg(
 
 print(p_combined)
 dev.off()
+})
+.composite({
 
 message("Saved: ", out_file)
 #Stable
@@ -334,6 +381,8 @@ cowplot::plot_grid(
   rasterGrob(suncor_map_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.99)
 dev.off()
+})
+.composite({
 
 
 #Maps 100m
@@ -354,6 +403,8 @@ cowplot::plot_grid(
   rasterGrob(suncor_map_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.99)
 dev.off()
+})
+.composite({
 
 #Maps 100m Stable
 suncor_map_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_benzene_stable.jpeg")
@@ -373,3 +424,4 @@ cowplot::plot_grid(
   rasterGrob(suncor_map_hcn),
              ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"), scale=0.99)
 dev.off()
+})
