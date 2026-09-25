@@ -190,6 +190,14 @@ cand_w <- wnd_ok_hour[cand, on = .(SiteNum, hour), nomatch = 0L]
 setorder(cand_w, Asset, Site, hour, dist_km, rank)
 best <- cand_w[, .SD[1], by = .(Asset, Site, hour)]
 
+# WIND FALLBACK ACCOUNTING (2026-09-23). Section 2.3 of the manuscript quotes
+# the number and percentage of measurements for which the NEAREST station had
+# no observation in the sampling hour, so a more distant one was used. `rank`
+# is the station's distance rank within the group, so rank > 1 is a fallback.
+# Kept as a separate table on purpose: adding a column to `out` would shift the
+# positional indices that a few downstream scripts still rely on.
+.best_rank <- best[, .(Asset, Site, hour, .rank_used = rank)]
+
 # keep only what we need to merge back
 best <- best[, .(
   Asset, Site, hour,
@@ -213,6 +221,18 @@ out <- best[df_dt]
 
 message("Rows with matched wind (same-hour, fallback to next closest): ",
         sum(!is.na(out$ws_wind) & !is.na(out$wd_wind)), " / ", nrow(out))
+
+# ---- fallback rate, weighted by the number of measurements per group -------
+.gn <- df_dt[, .(.n_rows = .N), by = .(Asset, Site, hour)]
+.fb <- merge(.best_rank, .gn, by = c("Asset", "Site", "hour"), all.x = TRUE)
+.fb[is.na(.n_rows), .n_rows := 0L]
+.n_tot  <- sum(.fb$.n_rows)
+.n_back <- sum(.fb[.rank_used > 1L, .n_rows])
+message(sprintf(
+  "[WIND] nearest station reported that hour: %s rows (%.1f%%); fell back to a farther station: %s rows (%.1f%%)",
+  format(.n_tot - .n_back, big.mark = ","), 100 * (.n_tot - .n_back) / .n_tot,
+  format(.n_back, big.mark = ","), 100 * .n_back / .n_tot))
+message("[WIND] the second figure is what section 2.3 quotes.")
 message("Unique wind stations used: ", uniqueN(out$SiteNum_wind))
 message("Median distance (km): ", round(median(out$dist_km, na.rm = TRUE), 2))
 

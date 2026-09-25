@@ -56,7 +56,12 @@ M[cbind((grid$gy - yr[1]) / GRID_M + 1, (grid$gx - xr[1]) / GRID_M + 1)] <- grid
 k1 <- dnorm(seq(-3 * SIGMA_M, 3 * SIGMA_M, by = GRID_M), sd = SIGMA_M); k1 <- k1 / sum(k1)
 smooth1 <- function(v) as.numeric(stats::filter(c(rep(0, length(k1) %/% 2), v, rep(0, length(k1) %/% 2)),
                      k1, sides = 2))[(length(k1) %/% 2 + 1):(length(k1) %/% 2 + length(v))]
-M <- apply(M, 2, smooth1); M <- t(apply(M, 1, smooth1))
+# base:: is required: MAKE_FIGURES group U runs this in a session where
+# raster/terra is already attached, and their S4 `apply` generic has no
+# method for a plain matrix ('unable to find an inherited method for
+# function apply for signature matrix'). Standalone the script only loads
+# data.table + ggplot2, so it worked there and failed only inside group U.
+M <- base::apply(M, 2, smooth1); M <- t(base::apply(M, 1, smooth1))
 M[is.na(M)] <- 0; M <- M / max(M)
 
 diag_msg(sprintf("  surface: %d x %d cells; max-probability cell at:", ny, nx))

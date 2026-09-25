@@ -53,20 +53,53 @@ def _cache_get(key):
         _DS_CACHE.move_to_end(key); return _DS_CACHE[key]
     return None
 
-def _nearest_ij(d, lat, lon):
+def _grid_arrays(d):
     lat_name = next((c for c in ('latitude','lat','gridlat','gridlat_0') if c in d), None)
     lon_name = next((c for c in ('longitude','lon','gridlon','gridlon_0') if c in d), None)
     if lat_name is None or lon_name is None: return None
-    lat2 = np.asarray(d[lat_name].values); lon2 = np.asarray(d[lon_name].values)
-    lon0 = ((lon + 180.0) % 360.0) - 180.0 if (np.nanmin(lon2) >= -180.0 and np.nanmax(lon2) <= 180.0) else (lon % 360.0)
-    dist2 = (lat2 - lat)**2 + (lon2 - lon0)**2
-    if np.all(np.isnan(dist2)): return None
-    flat = int(np.nanargmin(dist2))
+    la2 = np.asarray(d[lat_name].values); lo2 = np.asarray(d[lon_name].values)
     dims = d[lat_name].dims
-    if len(dims) != 2: return None
-    ny, nx = d[lat_name].shape
-    iy, ix = divmod(flat, nx)
-    return {dims[0]: iy, dims[1]: ix}
+    if la2.ndim != 2 or len(dims) != 2: return None
+    return la2, lo2, dims
+
+def _nearest_ij_batch(d, lats, lons):
+    # SPEED FIX (2026-09-24). The previous _nearest_ij scanned the FULL HRRR
+    # grid (1059 x 1799 = 1.9M cells) once PER POINT and PER CUBE: with 5
+    # cubes and ~2,390 points per hour-group that is ~12,000 full-grid scans,
+    # ~3 min per group, i.e. ~62 h for the campaign. Every query point here
+    # lies inside a box a few tens of km across, so crop the grid to the
+    # points bounding box plus a 0.5 deg margin - far larger than the 3 km
+    # grid spacing, so the true nearest cell is always inside the crop - and
+    # search only that. Same nearest cell, same numbers, ~1000x less work.
+    g = _grid_arrays(d)
+    n = len(lats)
+    if g is None: return [None]*n
+    la2, lo2, dims = g
+    qla = np.asarray(lats, dtype=float); qlo = np.asarray(lons, dtype=float)
+    lo_min = np.nanmin(lo2); lo_max = np.nanmax(lo2)
+    if lo_min >= -180.0 and lo_max <= 180.0:
+        qlo = ((qlo + 180.0) % 360.0) - 180.0
+    else:
+        qlo = qlo % 360.0
+    M = 0.5
+    ok = ((la2 >= np.nanmin(qla) - M) & (la2 <= np.nanmax(qla) + M) &
+          (lo2 >= np.nanmin(qlo) - M) & (lo2 <= np.nanmax(qlo) + M))
+    if not ok.any():
+        ok = np.ones(la2.shape, dtype=bool)
+    iy, ix = np.nonzero(ok)
+    cla = la2[iy, ix]; clo = lo2[iy, ix]
+    out = []
+    for k in range(n):
+        dd = (cla - qla[k])**2 + (clo - qlo[k])**2
+        if np.all(np.isnan(dd)):
+            out.append(None); continue
+        j = int(np.nanargmin(dd))
+        out.append({dims[0]: int(iy[j]), dims[1]: int(ix[j])})
+    return out
+
+def _nearest_ij(d, lat, lon):
+    r = _nearest_ij_batch(d, [lat], [lon])
+    return r[0] if r else None
 
 def _reduce_to_scalar(da):
     try:
@@ -117,10 +150,7 @@ def hrrr_fetch_uv_pbl_clouds_batch_fast(dt, lats, lons, fxx=0, model='hrrr'):
     cubes_prs = _open_cubes(dt, 'prs', fxx, 'blh|HPBL') if (not have_blh_sfc and not cubes_nat) else []
 
     def precompute_ij_list(cubes, lats, lons):
-        out = []
-        for d in cubes:
-            out.append([_nearest_ij(d, la, lo) for la,lo in zip(lats,lons)])
-        return out
+        return [_nearest_ij_batch(d, lats, lons) for d in cubes]
     ij_sfc = precompute_ij_list(cubes_sfc, lats, lons)
     ij_nat = precompute_ij_list(cubes_nat, lats, lons) if cubes_nat else []
     ij_prs = precompute_ij_list(cubes_prs, lats, lons) if cubes_prs else []
@@ -221,7 +251,19 @@ worker_fetch <- function(job, fxx_int) {
       )
     }
   } else {
-    res_list <- lapply(jobs, worker_fetch, fxx_int = fxx)
+    # PROGRESS (2026-09-23): the sequential path used to run silently, which
+    # is indistinguishable from the fork deadlock this replaced. Print every
+    # 25 hour-groups with an ETA so a long fetch can be told from a hung one.
+    .n <- length(jobs); .t0 <- Sys.time()
+    res_list <- lapply(seq_along(jobs), function(i) {
+      r <- worker_fetch(jobs[[i]], fxx_int = fxx)
+      if (i %% 25 == 0 || i == .n) {
+        .el <- as.numeric(difftime(Sys.time(), .t0, units = "mins"))
+        message(sprintf("[HRRR] %d/%d hour-groups (%.0f%%) - %.1f min elapsed, ~%.0f min left",
+                        i, .n, 100 * i / .n, .el, .el / i * (.n - i)))
+      }
+      r
+    })
   }
 
   res <- dplyr::bind_rows(res_list)
