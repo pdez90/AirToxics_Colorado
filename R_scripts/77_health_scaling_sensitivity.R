@@ -40,6 +40,14 @@
 #   lacasa_scaling_factors_option1_binweighted.RData   (written by R04/script 17)
 # Outputs
 #   TABLE_S7.3_scaling_scenarios.csv    organ HI under scenarios A-D
+#   TABLE_S7.3b_scaling_by_pollutant.csv  per-pollutant HQ and the factor
+#                                       applied, under scenarios A-D. Written
+#                                       so that the Shiny explorer's scaling
+#                                       toggle reads SI values rather than
+#                                       recomputing them (it also needs the
+#                                       factors themselves to scale the 500 m
+#                                       cell surface, which is why the factor
+#                                       and its provenance are columns here).
 #   TABLE_S7.4_breakeven_factors.csv    factor at which each HI crosses 1
 # ==============================================================
 suppressPackageStartupMessages({ library(data.table) })
@@ -48,6 +56,7 @@ BASE  <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))
 BLOCK <- file.path(BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.RData")
 SF    <- file.path(BASE, "lacasa_scaling_factors_option1_binweighted.RData")
 OUT1  <- file.path(BASE, "TABLE_S7.3_scaling_scenarios.csv")
+OUT1b <- file.path(BASE, "TABLE_S7.3b_scaling_by_pollutant.csv")
 OUT2  <- file.path(BASE, "TABLE_S7.4_breakeven_factors.csv")
 
 # Same unit convention as 73/74: ppb -> ug/m3 at 25 C and the 830 hPa site
@@ -96,6 +105,9 @@ base_hq <- rbindlist(lapply(seq_len(nrow(POLL)), function(i) {
   ok <- is.finite(x) & is.finite(pop)
   pw <- sum(x[ok] * pop[ok]) / sum(pop[ok])
   data.table(pollutant = POLL$name[i], organ = POLL$organ[i],
+             RfC_ugm3 = POLL$RfC_ugm3[i],
+             pwmean_ugm3 = pw * POLL$cf[i],
+             maxblock_ugm3 = max(x[ok]) * POLL$cf[i],
              HQ_pwmean = pw * POLL$cf[i] / POLL$RfC_ugm3[i],
              HQ_maxblock = max(x[ok]) * POLL$cf[i] / POLL$RfC_ugm3[i])
 }))
@@ -147,6 +159,62 @@ scen <- rbindlist(lapply(names(SCEN), function(s) {
 setcolorder(scen, c("scenario","description","organ"))
 setorder(scen, scenario, -HI_pwmean)
 fwrite(scen, OUT1); message("-> ", OUT1)
+
+# ---- the same scenarios, kept per pollutant --------------------------------
+# The organ table above is what the SI prints; the explorer needs the layer
+# underneath it - which factor was applied to which species, and where that
+# factor came from - so that a reader toggling scenarios can see that H2S and
+# HCN are never carrying a measured factor. Provenance is a column rather than
+# a footnote for exactly that reason.
+FSRC <- list(
+  A_none      = rep("unscaled (no factor applied)", 6L),
+  B_aromatics = c("La Casa, measured", "La Casa, measured", "La Casa, measured",
+                  "borrowed: mean of the measured aromatics",
+                  "unscaled (no La Casa channel)", "unscaled (no La Casa channel)"),
+  C_borrowed  = c("La Casa, measured", "La Casa, measured", "La Casa, measured",
+                  "borrowed: mean of the measured aromatics",
+                  "borrowed: mean of the measured aromatics",
+                  "borrowed: mean of the measured aromatics"),
+  D_upper     = c("La Casa, measured", "La Casa, measured", "La Casa, measured",
+                  "borrowed: mean of the measured aromatics",
+                  "borrowed: largest measured aromatic (upper bound)",
+                  "borrowed: largest measured aromatic (upper bound)"))
+stopifnot(identical(names(FSRC), names(SCEN)),
+          all(vapply(FSRC, length, 1L) == nrow(POLL)),
+          identical(base_hq$pollutant, POLL$name))   # the factor vectors are
+                                                     # positional; this is the
+                                                     # assertion that keeps
+                                                     # them aligned with POLL
+scen_poll <- rbindlist(lapply(names(SCEN), function(s) {
+  f <- SCEN[[s]]
+  data.table(scenario = s, description = SCEN_DESC[[s]],
+             pollutant = base_hq$pollutant, organ = base_hq$organ,
+             factor = round(f, 6), factor_source = FSRC[[s]],
+             RfC_ugm3 = base_hq$RfC_ugm3,
+             pwmean_ugm3   = signif(base_hq$pwmean_ugm3   * f, 6),
+             maxblock_ugm3 = signif(base_hq$maxblock_ugm3 * f, 6),
+             HQ_pwmean     = signif(base_hq$HQ_pwmean     * f, 6),
+             HQ_maxblock   = signif(base_hq$HQ_maxblock   * f, 6))
+}))
+fwrite(scen_poll, OUT1b); message("-> ", OUT1b)
+
+# CROSS-CHECK. Summing the per-pollutant table by organ must return the organ
+# table written above, or the two files disagree and the explorer's toggle
+# would show numbers the SI does not.
+.rs <- scen_poll[, .(HI_pwmean = sum(HQ_pwmean), HI_maxblock = sum(HQ_maxblock)),
+                 by = .(scenario, organ)]
+.cm <- merge(.rs, scen[, .(scenario, organ, HI_pwmean, HI_maxblock)],
+             by = c("scenario", "organ"), suffixes = c("_poll", "_organ"))
+.d1 <- max(abs(.cm$HI_pwmean_poll   - .cm$HI_pwmean_organ))
+.d2 <- max(abs(.cm$HI_maxblock_poll - .cm$HI_maxblock_organ))
+# TOLERANCE. `scen` rounds HI_pwmean to 4 decimals and HI_maxblock to 3, so a
+# perfect agreement still shows up to 5e-5 and 5e-4 of pure rounding; 2e-3
+# passes that and would still catch any real disagreement, which would be
+# orders of magnitude larger.
+cat(sprintf("\n== S7.3b sums to S7.3: max abs diff pw %.2e, maxblock %.2e  [%s] ==\n",
+            .d1, .d2, if (max(.d1, .d2) < 2e-3) "OK" else "MISMATCH"))
+if (max(.d1, .d2) >= 2e-3)
+  warning("TABLE_S7.3b does not sum to TABLE_S7.3 - do not publish the app toggle")
 cat("\n== SI Table S7.3  organ hazard index under four scaling scenarios ==\n")
 print(scen[, .(scenario, organ, pollutants, HI_pwmean, HI_maxblock)], row.names = FALSE)
 
