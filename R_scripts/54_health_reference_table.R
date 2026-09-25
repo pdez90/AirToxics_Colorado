@@ -30,6 +30,27 @@ message("Loading mobile data + grid...")
 # same file 73 reads.
 load(file.path(BASE, "bgcorrected_out_merge.RData"))
 df <- as.data.table(df); gc()
+
+# TWO BASES (2026-09-25). The exposure columns above are BACKGROUND-CORRECTED,
+# which is required for the hazard quotients to reconcile with 73/74. But the
+# campaign median and 99th-percentile "event threshold" columns of SI Table S3.2
+# are descriptive statistics of the analysis set, and SI Table S3.1, the
+# manuscript text and R99 all report them on the RAW record. Reporting one basis
+# in S3.1 and the other in S3.2, under the same column names, is not
+# reconcilable by a reader. Both are therefore computed and written, and the SI
+# table shows raw first with the background-corrected value in parentheses.
+.rawenv <- new.env()
+load(file.path(BASE, "mobile_wswd.RData"), envir = .rawenv)   # -> out
+raw <- as.data.table(get("out", envir = .rawenv)); rm(.rawenv); gc()
+# Filter EXACTLY as 70_table_s31.R does for its "analysis set" (Goodrich route
+# dropped, no GPS filter) so these columns equal Table S3.1 cell for cell.
+raw <- raw[Site != "Goodrich Corporation (Collins Aerospace)"]
+RAWCOL <- c(Benzene = "Benzene_ppb", Toluene = "Toluene_ppb",
+            Trimethylbenzene = "Trimethylbenzene_ppb", Xylene = "Xylene_ppb",
+            H2S = "Hydrogen_Sulfide_ppb", HCN = "Hydrogen_Cyanide_ppb")
+stopifnot(all(RAWCOL %in% names(raw)))
+message(sprintf("[BASIS] raw record: %s rows | background-corrected: %s rows",
+                format(nrow(raw), big.mark = ","), format(nrow(df), big.mark = ",")))
 df <- df[is.finite(Latitude) & is.finite(Longitude) &
          Site != "Goodrich Corporation (Collins Aerospace)"]
 df[, day := as.Date(date)]
@@ -53,8 +74,22 @@ mw <- c(Benzene = 78.11, Toluene = 92.14, Trimethylbenzene = 120.19,
 rfc_mgm3 <- c(Benzene = 0.03, Toluene = 5, Trimethylbenzene = 0.06,
               Xylene = 0.1, H2S = 0.002, HCN = 0.0008)
 rfc_ppb <- rfc_mgm3 * 1000 / mw * VM_L_PER_MOL
-scale_f <- c(Benzene = 1.149, Toluene = 1.228, Trimethylbenzene = NA,
-             Xylene = 1.377, H2S = NA, HCN = NA)
+
+# SCALING FACTORS (2026-09-23): read them from the file R04 writes instead of
+# hard-coding. The 300 m headquarters exclusion moved the factors from
+# 1.149/1.228/1.377 to 1.165/1.274/1.443, and a hard-coded constant would have
+# left this table on the old scaling while the block surface used the new one.
+.sf_file <- file.path("/Users/priyanka/Downloads/Suncor", "lacasa_scaling_factors_option1_binweighted.RData")
+.sf_get <- function(pol, fallback) {
+  if (!file.exists(.sf_file)) { message("[SCALING] file absent - using documented value for ", pol); return(fallback) }
+  e <- new.env(); load(.sf_file, envir = e); o <- get(ls(e)[1], envir = e)
+  if (!all(c("pollutant", "ratio_all_over_mobilelike") %in% names(o))) return(fallback)
+  r <- as.numeric(o[["ratio_all_over_mobilelike"]])[match(pol, o[["pollutant"]])]
+  if (length(r) != 1L || !is.finite(r)) fallback else r
+}
+scale_f <- c(Benzene = .sf_get("benzene", 1.149), Toluene = .sf_get("toluene", 1.228),
+             Trimethylbenzene = NA, Xylene = .sf_get("xylene", 1.377), H2S = NA, HCN = NA)
+message(sprintf("[SCALING] benzene %.4f | toluene %.4f | xylene %.4f", scale_f[["Benzene"]], scale_f[["Toluene"]], scale_f[["Xylene"]]))
 mrl_ppb <- data.table(
   pollutant = c("Benzene", "Toluene", "Xylene", "H2S", "HCN", "Trimethylbenzene"),
   mrl_acute = c(9, 2000, 2000, 70, NA, NA),
@@ -86,9 +121,14 @@ res <- rbindlist(lapply(names(POLLS), function(pn) {
   mx <- max(cellmed$m)
   sf_ <- scale_f[[pn]]
   mx_scaled <- if (is.na(sf_)) mx else mx * sf_
+  rv <- raw[[RAWCOL[[pn]]]]; rfin <- is.finite(rv)
   data.table(pollutant = pn,
-             median_1s = round(median(v[fin]), 3),
-             p99_1s = round(quantile(v[fin], 0.99), 2),
+             median_1s_raw = round(median(rv[rfin]), 3),
+             p99_1s_raw = round(quantile(rv[rfin], 0.99), 2),
+             median_1s_bgcorr = round(median(v[fin]), 3),
+             p99_1s_bgcorr = round(quantile(v[fin], 0.99), 2),
+             median_1s = round(median(rv[rfin]), 3),   # kept: raw, = Table S3.1
+             p99_1s = round(quantile(rv[rfin], 0.99), 2),
              max_cell_median = round(mx, 3),
              scale_factor = sf_,
              max_cell_median_24h = round(mx_scaled, 3),
