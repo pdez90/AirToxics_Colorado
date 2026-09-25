@@ -15,6 +15,7 @@
 # - OPTIONAL: log10 color scale on maps (USE_LOG_FILL)
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(dplyr)
@@ -27,7 +28,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 # USER SETTINGS
 # ----------------------------
-out_dir <- "/Users/priyanka/Downloads/Suncor/FinalFig/block_maps_airtox_vs_mobile_scaled_polygons_medofdailymed_ROBUST"
+out_dir <- file.path(SUNCOR_BASE, "FinalFig/block_maps_airtox_vs_mobile_scaled_polygons_medofdailymed_ROBUST")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 dpi_out   <- 450

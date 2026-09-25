@@ -15,6 +15,7 @@
 #   - Outputs: df with u10, v10, hpbl, lcc, tcdc + windspd, winddir
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(lubridate)
@@ -22,7 +23,7 @@ suppressPackageStartupMessages({
   library(future)
 })
 
-load("/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge.RData")
+load(file.path(SUNCOR_BASE, "bgcorrected_out_merge.RData"))
 df<-df[!is.na(df$Longitude),]
 df<-df[!is.na(df$Latitude),]
 # TIME CONVENTION (2026-08-21): `df$date` is a FIXED-MST WALL CLOCK STORED WITH
@@ -79,7 +80,7 @@ download_hrrr_and_join_mobile <- function(
   lat_col      = "Latitude",
   lon_col      = "Longitude",
   fxx          = 0L,               # 0 = analysis hour
-  cache_dir    = "/Users/priyanka/Downloads/Suncor/hrrr_hour_cache",
+  cache_dir    = file.path(SUNCOR_BASE, "hrrr_hour_cache"),
   round_deg    = 3,    # 3 ~ 100m; try 2 (~1km) if still heavy
   chunk_hours  = 24,   # process N hours per batch for memory control
   parallel_hours = TRUE,  # parallelize across hour-batches (recommended)
@@ -272,7 +273,7 @@ download_hrrr_and_join_mobile <- function(
 #    run_hrrr_uv_pbl_clouds_on_df_fast <- function(...) { ... }  # <-- your function
 
 # 2) Load your data
-# load("/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge.RData")  # expects object `df`
+# load(file.path(SUNCOR_BASE, "bgcorrected_out_merge.RData"))  # expects object `df`
 
 # 3) Run HRRR join (writes per-hour parquet cache to disk)
 out_hrrr <- download_hrrr_and_join_mobile(
@@ -282,7 +283,7 @@ out_hrrr <- download_hrrr_and_join_mobile(
   lon_col      = "Longitude",
   # no tz_local argument: the zone is fixed MST, see H04_TZ_LOCAL above
   fxx          = 0L,
-  cache_dir    = "/Users/priyanka/Downloads/Suncor/hrrr_hour_cache",
+  cache_dir    = file.path(SUNCOR_BASE, "hrrr_hour_cache"),
   round_deg    = 3,         # bump to 2 if too many unique points
   chunk_hours  = 24,
   parallel_hours = TRUE,
@@ -296,4 +297,4 @@ cor(out_hrrr$windspd, out_hrrr$ws, use = "pairwise.complete.obs")
 cor(out_hrrr$winddir, out_hrrr$wd, use = "pairwise.complete.obs")
 
 # 5) Save
-save(out_hrrr, file = "/Users/priyanka/Downloads/Suncor/mobile_hrrr.RData")
+save(out_hrrr, file = file.path(SUNCOR_BASE, "mobile_hrrr.RData"))

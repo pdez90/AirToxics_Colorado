@@ -4,7 +4,8 @@
 # Source this at the top of every R* wrapper script.
 # ==============================================================
 
-BASE    <- "/Users/priyanka/Downloads/Suncor"
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+BASE    <- SUNCOR_BASE
 PIPE    <- file.path(BASE, "rerun_pipeline")
 BACKUP  <- file.path(BASE, "old_outputs_predelayfix")   # snapshots of pre-fix outputs
 LOGDIR  <- file.path(PIPE, "logs")

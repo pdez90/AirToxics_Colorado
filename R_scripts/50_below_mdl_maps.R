@@ -12,12 +12,13 @@
 # Output: FinalFig/FIG_belowMDL_maps.png (+ per-panel CSV summary)
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(sf); library(ggplot2); library(ggspatial)
   library(scales); library(patchwork)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 message("Loading mobile data + grid...")
 load(file.path(BASE, "mobile_wswd.RData"))   # out
 df <- as.data.table(out); rm(out); gc()

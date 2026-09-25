@@ -12,6 +12,7 @@
 # No timezone changes.
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table)
   library(dplyr)
@@ -21,7 +22,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 # 0) Load MOBILE (corrected) points -> DT
 # ----------------------------
-load("/Users/priyanka/Downloads/Suncor/mobile_corrected.RData")
+load(file.path(SUNCOR_BASE, "mobile_corrected.RData"))
 # your object name is out_sf in this file
 out_merge <- out_sf
 rm(out_sf)
@@ -74,21 +75,21 @@ print(mob_w_hour)
 # Denver-area stations within 15 km: hourly correlation peaks at lag 0 for
 # column 1 in both years (r = 0.94 in 2023, 0.96 in 2024) and at -1 h for
 # column 3 in 2024. La Casa is therefore read from column 1 (MST) below.
-lacasa1 <- read.csv("/Users/priyanka/Downloads/Suncor/ascent_2023.csv", stringsAsFactors = FALSE)
+lacasa1 <- read.csv(file.path(SUNCOR_BASE, "ascent_2023.csv"), stringsAsFactors = FALSE)
 colnames(lacasa1) <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene","xylene","wd","ws","temp_far","temp_c","rh")
 lacasa1$date_mst <- lubridate::dmy_hm(lacasa1$date_mst)
 .off <- as.numeric(difftime(lubridate::dmy_hm(lacasa1$date), lacasa1$date_mst, units = "hours"))
 stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
 lacasa1$date <- lacasa1$date_mst   # MST clock, to match the mobile record (see note above)
 
-lacasa2 <- read.csv("/Users/priyanka/Downloads/Suncor/ascent_2024.csv", stringsAsFactors = FALSE)
+lacasa2 <- read.csv(file.path(SUNCOR_BASE, "ascent_2024.csv"), stringsAsFactors = FALSE)
 colnames(lacasa2) <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene","xylene","wd","ws","temp_far","temp_c","rh")
 lacasa2$date_mst <- lubridate::dmy_hm(lacasa2$date_mst)
 .off <- as.numeric(difftime(lubridate::dmy_hm(lacasa2$date), lacasa2$date_mst, units = "hours"))
 stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
 lacasa2$date <- lacasa2$date_mst   # MST clock, to match the mobile record (see note above)
 
-lacasa3 <- read.csv("/Users/priyanka/Downloads/Suncor/lacasa3.csv", stringsAsFactors = FALSE)
+lacasa3 <- read.csv(file.path(SUNCOR_BASE, "lacasa3.csv"), stringsAsFactors = FALSE)
 colnames(lacasa3) <- c("date","toluene","xylene")
 lacasa3$date <- lubridate::mdy_hm(lacasa3$date)
 
@@ -180,7 +181,7 @@ message("=== Option 1 BIN-WEIGHTED scaling factors (La Casa overall / mobile-lik
 print(scale_factors)
 
 save(scale_factors,
-     file = "/Users/priyanka/Downloads/Suncor/lacasa_scaling_factors_option1_binweighted.RData")
+     file = file.path(SUNCOR_BASE, "lacasa_scaling_factors_option1_binweighted.RData"))
 
 # ============================================================
 # 4) PLOTS — how bins and scaling factors were developed
@@ -374,32 +375,32 @@ print(p_scale)
 # I) Optional: save plots
 # ----------------------------
 ggsave(
-  "/Users/priyanka/Downloads/Suncor/mobile_weights_heatmap.png",
+  file.path(SUNCOR_BASE, "mobile_weights_heatmap.png"),
   p_weight, width = 10, height = 4.5, dpi = 300
 )
 
 ggsave(
-  "/Users/priyanka/Downloads/Suncor/mobile_bin_counts_heatmap.png",
+  file.path(SUNCOR_BASE, "mobile_bin_counts_heatmap.png"),
   p_count, width = 10, height = 4.5, dpi = 300
 )
 
 ggsave(
-  "/Users/priyanka/Downloads/Suncor/lacasa_bin_coverage.png",
+  file.path(SUNCOR_BASE, "lacasa_bin_coverage.png"),
   p_cov, width = 10, height = 4.5, dpi = 300
 )
 
 ggsave(
-  "/Users/priyanka/Downloads/Suncor/mobile_weight_distribution.png",
+  file.path(SUNCOR_BASE, "mobile_weight_distribution.png"),
   p_wdist, width = 7, height = 4.5, dpi = 300
 )
 
 ggsave(
-  "/Users/priyanka/Downloads/Suncor/lacasa_bin_means_by_pollutant.png",
+  file.path(SUNCOR_BASE, "lacasa_bin_means_by_pollutant.png"),
   p_means, width = 10, height = 11, dpi = 300
 )
 
 ggsave(
-  "/Users/priyanka/Downloads/Suncor/scaling_factor_comparison.png",
+  file.path(SUNCOR_BASE, "scaling_factor_comparison.png"),
   p_scale, width = 8, height = 5, dpi = 300
 )
 
@@ -437,7 +438,7 @@ combined_plot <- (p_weight_labeled | p_means_single) /
                  (p_wdist_labeled | p_scale_labeled)
 
 ggsave(
-  "/Users/priyanka/Downloads/Suncor/FINAL_scaling_figure.png",
+  file.path(SUNCOR_BASE, "FINAL_scaling_figure.png"),
   combined_plot,
   width = 12,
   height = 8,

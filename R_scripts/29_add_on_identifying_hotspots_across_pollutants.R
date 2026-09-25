@@ -5,13 +5,14 @@
 
 #Add on: identifying hotspots across pollutants
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(sf)
 })
 
-in_dir  <- "/Users/priyanka/Downloads/Suncor"
-out_dir <- "/Users/priyanka/Downloads/Suncor"
+in_dir  <- SUNCOR_BASE
+out_dir <- SUNCOR_BASE
 
 match_dist_m <- 100
 poll_names <- c("benzene","toluene","trimethylbenzene","xylene","h2s","hcn")

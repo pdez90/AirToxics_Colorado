@@ -7,12 +7,13 @@
 # Output: FinalFig/Figure2_sharedscale.png
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf); library(dplyr); library(ggplot2); library(ggspatial)
   library(scales); library(patchwork)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 # BUGFIX (2026-08-20): this loaded segment500_summaries_clean.RData, which is
 # 13_...R's PER-ROUTE aggregation. That file casts on `id + Site`, so a grid
 # cell driven on both the Suncor/P66 and the HEP Terminal routes carries TWO

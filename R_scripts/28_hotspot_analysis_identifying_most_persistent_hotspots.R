@@ -16,13 +16,14 @@
 #     hotspot_thresholds_summary.csv
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(sf)
   library(dbscan)
 })
 
-load("/Users/priyanka/Downloads/Suncor/mobile_wswd.RData")
+load(file.path(SUNCOR_BASE, "mobile_wswd.RData"))
 df <- out
 rm(out)
 
@@ -33,7 +34,7 @@ eps_m   <- 100
 min_pts <- 1
 crs_ll  <- 4326
 crs_m   <- 32613  # UTM 13N
-out_dir <- "/Users/priyanka/Downloads/Suncor"
+out_dir <- SUNCOR_BASE
 
 pollutants <- c("Benzene_ppb", "Toluene_ppb",
                 "Trimethylbenzene_ppb", "Xylene_ppb",

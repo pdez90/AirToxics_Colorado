@@ -14,7 +14,8 @@
 # fields keyed by UTC hour, so it is an input cache, not a derived product).
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("RUN_ALL_from_raw: reproducible pipeline (raw CDPHE inputs only)")
 
 # ----------------------------------------------------------------
@@ -33,8 +34,8 @@ mobile_csvs <- list.files(raw_csv_dir, pattern = "^(Suncor|Terminal)_.*\\.csv$",
 METH_DIR <- Sys.getenv("METHANE_DIR", "")
 if (!nzchar(METH_DIR) || !dir.exists(METH_DIR)) {
   .cands <- c(file.path(path.expand("~"), "Downloads", "MethaneData"),
-              "/Users/priyanka/Downloads/MethaneData",
-              "/Users/priyanka/Toxics_EST/MethaneData",
+              file.path(path.expand("~"), "Toxics_EST", "MethaneData"),  # legacy location
+              file.path(dirname(SUNCOR_BASE), "MethaneData"),
               file.path(BASE, "MethaneData"))
   .hit <- .cands[dir.exists(.cands)]
   METH_DIR <- if (length(.hit)) .hit[1] else NA_character_
@@ -108,14 +109,42 @@ if (nzchar(Sys.getenv("CLEAN"))) {
   intermediates <- union(intermediates, .legacy_orphans)
   cent_files <- list.files(BASE, pattern = "^cent_out_.*\\.csv$")
   intermediates <- union(intermediates, cent_files)
+
+  # GAP CLOSED (2026-09-25). The explicit list above covers the .RData chain but
+  # left every derived CSV behind, including four that LATER STAGES TEST FOR:
+  #   MASTER_hotspot_group_index.csv      R05 checks its row count
+  #   pair_counts_persistent.csv          read downstream of the hotspot chain
+  #   hotspot_thresholds_summary.csv      read downstream of the hotspot chain
+  #   FinalFig/benzene_risk_summary_BINWEIGHTED_COMMONBLOCKS.csv   R99 reads it
+  # A stale copy of any of these could satisfy its check without having been
+  # regenerated - which is exactly the failure this project has already had
+  # once, when R05's zero-tolerance group check sat in a branch that was skipped
+  # when the file did not yet exist. Quarantine every derived table by pattern
+  # so a new output cannot silently escape the list the way these four did.
+  .derived_patterns <- c("^TABLE_.*\\.csv$", "^MASTER_.*\\.csv$",
+                         "^pair_counts_.*\\.csv$", "^hotspot_thresholds_.*\\.csv$",
+                         "^group_summary_.*\\.csv$", "^WWTP_H2S_.*\\.csv$",
+                         "^figureS31_segment_speed\\.csv$", "^HQ300_before_after\\.txt$")
+  for (.pat in .derived_patterns)
+    intermediates <- union(intermediates, list.files(BASE, pattern = .pat))
+  # FinalFig holds derived CSVs too; keep the figures, move the tables.
+  .ff <- file.path(BASE, "FinalFig")
+  .ff_csv <- if (dir.exists(.ff)) file.path("FinalFig", list.files(.ff, pattern = "\\.csv$")) else character(0)
+  intermediates <- union(intermediates, .ff_csv)
+  if (length(.ff_csv)) dir.create(file.path(qdir, "FinalFig"), showWarnings = FALSE, recursive = TRUE)
   n_moved <- 0
   for (f in intermediates) {
     src <- file.path(BASE, f)
-    if (file.exists(src)) { file.rename(src, file.path(qdir, f)); n_moved <- n_moved + 1 }
+    if (file.exists(src)) {
+      dst <- file.path(qdir, f)
+      dir.create(dirname(dst), showWarnings = FALSE, recursive = TRUE)
+      file.rename(src, dst); n_moved <- n_moved + 1
+    }
   }
   # also the Downloads-root stale copy that old script 18 used
-  if (file.exists("/Users/priyanka/Downloads/mobile_corrected.RData")) {
-    file.rename("/Users/priyanka/Downloads/mobile_corrected.RData",
+  .dl_root <- file.path(dirname(SUNCOR_BASE), "mobile_corrected.RData")
+  if (file.exists(.dl_root)) {
+    file.rename(.dl_root,
                 file.path(qdir, "mobile_corrected_DOWNLOADSROOT.RData"))
     n_moved <- n_moved + 1
   }

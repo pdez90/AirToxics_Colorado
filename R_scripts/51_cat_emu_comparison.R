@@ -9,11 +9,12 @@
 #   FinalFig/FIG_cat_emu_comparison.png (scatter panels)
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(sf); library(ggplot2); library(scales)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 message("Loading mobile data + grid...")
 load(file.path(BASE, "mobile_wswd.RData"))   # out
 df <- as.data.table(out); rm(out); gc()

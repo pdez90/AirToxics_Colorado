@@ -11,12 +11,13 @@
 # Output: FinalFig/Figure1_sampling_density.png (+ per-panel counts CSV)
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr); library(sf); library(data.table); library(ggplot2)
   library(ggspatial); library(scales)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 message("Loading mobile data + 500 m grid...")
 load(file.path(BASE, "mobile_wswd.RData"))   # out
 df <- as.data.table(out); rm(out)

@@ -3,10 +3,18 @@
 # Re-runs the hotspot pipeline on corrected data:
 #   - source-probability surfaces (Figure 3)
 #   - DBSCAN clustering + persistence filtering (Figure 4, Table S5.1)
-# Then checks the manuscript's cluster counts (2026-08-22 vintage; the
-# submitted 160 -> 40 -> 17 -> 8 funnel predates the delay/cadence rework):
-#   2,713 initial clusters (sum over the six pollutants) -> 37 (>=2 pollutants)
-#   -> 17 (>=3) -> 8 (>=4) -> 17 final persistent multi-pollutant groups.
+# Then checks the manuscript's cluster counts. CURRENT (2026-09-23 run, after
+# the 300 m ATOPs-headquarters exclusion) - these are what the check below
+# actually expects:
+#   2,652 initial clusters (sum over the six pollutants) -> 217 persistent
+#   single-pollutant clusters -> 155 candidate groups -> 37 (>=2 pollutants)
+#   -> 14 (>=3) -> 8 (>=4) -> 14 final persistent multi-pollutant groups.
+# Superseded, kept so the trail is legible: the 2026-08-22 run gave
+# 2,713 -> 37 -> 17 -> 8 -> 17, and the originally submitted analysis
+# 160 -> 40 -> 17 -> 8, which predates the delay/cadence rework. The exclusion
+# itself moved the clustering barely at all (persistent clusters 216 -> 217);
+# the 17 -> 14 change is dominated by the delay and cadence corrections, not
+# by the screen. See HQ300_before_after.txt.
 #
 # Sources:
 #   R_scripts/26_hotspot_rotated_wind_source_probability_profiles.R
@@ -15,7 +23,8 @@
 #   R_scripts/30_multiple_pollutant_hotspots.R
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("R05: Hotspot pipeline")
 
 t0 <- Sys.time()

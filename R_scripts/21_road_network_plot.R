@@ -14,6 +14,7 @@
 # - Pairwise Mann–Whitney U (Wilcoxon rank-sum) per pollutant with BH adjust
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(data.table)
@@ -26,9 +27,9 @@ suppressPackageStartupMessages({
 # ----------------------------
 # 0) Load
 # ----------------------------
-roads_rdata <- "/Users/priyanka/Downloads/Suncor/all_colorado_roads.RData"
-points_rdata <- "/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge.RData"
-out_dir <- "/Users/priyanka/Downloads/Suncor/FinalFig"
+roads_rdata <- file.path(SUNCOR_BASE, "all_colorado_roads.RData")
+points_rdata <- file.path(SUNCOR_BASE, "bgcorrected_out_merge.RData")
+out_dir <- file.path(SUNCOR_BASE, "FinalFig")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 load(roads_rdata)   # all_colorado_roads (sf)

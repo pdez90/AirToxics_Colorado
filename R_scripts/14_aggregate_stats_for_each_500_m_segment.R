@@ -5,6 +5,7 @@
 
 #Aggregate stats for each 500 m segment
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table)
   library(sf)
@@ -15,7 +16,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 # 0) Load + basic prep
 # ----------------------------
-load("/Users/priyanka/Downloads/Suncor/mobile_corrected.RData")
+load(file.path(SUNCOR_BASE, "mobile_corrected.RData"))
 if (exists("out_sf")) out_merge <- out_sf
 stopifnot(exists("out_merge"))
 
@@ -120,7 +121,7 @@ seg_long <- merge(
 # ----------------------------
 # 5) Join geometry from grid (centroid + lon/lat)
 # ----------------------------
-grid <- sf::st_read("/Users/priyanka/Downloads/Suncor/Grid_500m_generated/grid_500m.shp", quiet = TRUE) |>
+grid <- sf::st_read(file.path(SUNCOR_BASE, "Grid_500m_generated/grid_500m.shp"), quiet = TRUE) |>
   sf::st_transform(4326)
 
 grid_cent <- sf::st_centroid(grid)
@@ -190,17 +191,17 @@ seg_wide_sf <- sf::st_as_sf(seg_wide_sf)
 # ----------------------------
 save(
   seg_long_dt, seg_long_sf, seg_wide, seg_wide_sf,
-  file = "/Users/priyanka/Downloads/Suncor/segment500_summaries_acrossSites.RData"
+  file = file.path(SUNCOR_BASE, "segment500_summaries_acrossSites.RData")
 )
 
 sf::st_write(
   seg_long_sf,
-  "/Users/priyanka/Downloads/Suncor/segment500_summaries_long_acrossSites.gpkg",
+  file.path(SUNCOR_BASE, "segment500_summaries_long_acrossSites.gpkg"),
   append = FALSE, quiet = TRUE
 )
 
 sf::st_write(
   seg_wide_sf,
-  "/Users/priyanka/Downloads/Suncor/segment500_summaries_wide_acrossSites.gpkg",
+  file.path(SUNCOR_BASE, "segment500_summaries_wide_acrossSites.gpkg"),
   append = FALSE, quiet = TRUE
 )

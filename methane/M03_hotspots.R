@@ -11,7 +11,8 @@
 #          cent_out_methane_persistent.csv, methane_hotspot_summary.csv
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("M03: Methane hotspots (99th pct -> DBSCAN 100 m -> 10%/10% persistence)")
 
 suppressPackageStartupMessages({

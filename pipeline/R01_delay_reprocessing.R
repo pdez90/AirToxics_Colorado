@@ -11,7 +11,8 @@
 #   R_scripts/03_checks_flags.R   <- contains .asset_delay()
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("R01: Delay reprocessing (corrected asset-specific delays)")
 
 # BUGFIX (2026-08-20): this was a hard stopifnot(dir.exists(BACKUP)), but

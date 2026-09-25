@@ -5,6 +5,7 @@
 
 #Checks (flags) 
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 mobile$Benzene_flag<-str_trim(mobile$Benzene_flag)
 mobile$Toluene_flag<-str_trim(mobile$Toluene_flag)
 mobile$Xylene_flag<-str_trim(mobile$Xylene_flag)
@@ -156,7 +157,7 @@ if (.br_n > 0)
 .qa$benzene_modal_negative_n    <- NA_integer_
 .qa$benzene_modal_negative[.qa$pollutant == "Benzene"]   <- .bz_mode
 .qa$benzene_modal_negative_n[.qa$pollutant == "Benzene"] <- sum(.bz == .bz_mode)
-write.csv(.qa, "/Users/priyanka/Downloads/Suncor/TABLE_qaqc_counts.csv", row.names = FALSE)
+write.csv(.qa, file.path(SUNCOR_BASE, "TABLE_qaqc_counts.csv"), row.names = FALSE)
 message("[QA/QC] provenance counts -> TABLE_qaqc_counts.csv (the numbers quoted in SI S1.4)")
 print(.qa)
 message("[QA/QC] benzene modal negative value: ", .bz_mode, " ppb, ",
@@ -707,7 +708,7 @@ if (HQ_EXCLUDE) {
     n_removed  = sapply(.polls, function(p) sum(!is.na(df_out[[p]]) & .in_hq)),
     radius_m   = HQ_RADIUS_M, hq_lat = HQ_LAT, hq_lon = HQ_LON,
     row.names  = NULL)
-  write.csv(.hq_summary, "/Users/priyanka/Downloads/Suncor/TABLE_hq_exclusion.csv",
+  write.csv(.hq_summary, file.path(SUNCOR_BASE, "TABLE_hq_exclusion.csv"),
             row.names = FALSE)
   df_out <- df_out[which(!.in_hq), ]
   stopifnot(nrow(df_out) > 0)
@@ -721,5 +722,5 @@ if (HQ_EXCLUDE) {
 # ----------------------------
 # 4) Save outputs + counts
 # ----------------------------
-write.csv(df_out, "/Users/priyanka/Downloads/Suncor/mobile.csv", row.names = FALSE)
-save(df_out, file = "/Users/priyanka/Downloads/Suncor/mobile.RData")
+write.csv(df_out, file.path(SUNCOR_BASE, "mobile.csv"), row.names = FALSE)
+save(df_out, file = file.path(SUNCOR_BASE, "mobile.RData"))

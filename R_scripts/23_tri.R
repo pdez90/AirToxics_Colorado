@@ -15,15 +15,16 @@
 # Output: TABLE_tri_domain_counts.csv
 # ==============================================================
 
-tri <- read.csv("/Users/priyanka/Downloads/Suncor/TRI.csv")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+tri <- read.csv(file.path(SUNCOR_BASE, "TRI.csv"))
 tri <- tri[!duplicated(tri[, c(4, 5)]), ]
-write.csv(tri, file = "/Users/priyanka/Downloads/Suncor/TRI_subset.csv")
+write.csv(tri, file = file.path(SUNCOR_BASE, "TRI_subset.csv"))
 
 # ---- domain and proximity counts ------------------------------------------
 # These need the wind-merged analysis set, so they are skipped (with a clear
 # message, not an error) if this script is run before R02.
 suppressPackageStartupMessages({ library(data.table); library(sf) })
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 .mw <- file.path(BASE, "mobile_wswd.RData")
 if (!file.exists(.mw)) {
   message("[23] mobile_wswd.RData not found - TRI_subset.csv written, but the ",

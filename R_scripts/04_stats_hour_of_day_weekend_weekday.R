@@ -5,10 +5,11 @@
 
 #Stats (hour of day, weekend/weekday)
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 library(dplyr)
 library(lubridate)
 require(tidyverse)
-load("/Users/priyanka/Downloads/Suncor/mobile.RData")
+load(file.path(SUNCOR_BASE, "mobile.RData"))
 
 c(
   Benzene_ppb             = sum(!is.na(df_out$Benzene_ppb)),

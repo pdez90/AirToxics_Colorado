@@ -14,11 +14,12 @@
 #   FinalFig/FIG_lacasa_diurnal.png
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(lubridate); library(ggplot2); library(scales)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 # TIME CONVENTION (2026-09-22): the ascent files carry FOUR time columns —
 # 1: MST clock, 2: MST as YYYYMMDDhhmmss, 3: MDT clock, 4: MDT as YYYYMMDDhhmmss.
 # Column 3 was being used as `date`. In ascent_2024.csv column 3 is one hour

@@ -41,11 +41,12 @@
 #   FinalFig/FIG_cumulative_HI.png        HI by target organ system
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(sf); library(ggplot2)
 })
 
-BASE       <- "/Users/priyanka/Downloads/Suncor"
+BASE       <- SUNCOR_BASE
 MIN_VISITS <- 10        # cells must have >= this many visit-days (cf. Chiger et al.)
 hr <- function(s) cat("\n========== ", s, " ==========\n", sep = "")
 

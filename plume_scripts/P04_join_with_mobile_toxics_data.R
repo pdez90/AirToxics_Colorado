@@ -5,6 +5,7 @@
 
 #Join with Mobile Toxics Data
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 library(future)
 options(future.globals.maxSize = 20 * 1024^3)
 
@@ -44,7 +45,7 @@ if (.HRRR_PAR) {
           "in P04). Expect roughly 1-2 h. Progress prints every 25 hour-groups.")
 }
 
-load("/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge.RData")
+load(file.path(SUNCOR_BASE, "bgcorrected_out_merge.RData"))
 df<-df[!is.na(df$Longitude),]
 df<-df[!is.na(df$Latitude),]
 # ===============================================================
@@ -108,4 +109,4 @@ res <- out_hrrr %>%
 cor(res$windspd, res$ws, use="pairwise.complete.obs")
 cor(res$winddir, res$wd, use="pairwise.complete.obs")
 
-save(res, file="/Users/priyanka/Downloads/Suncor/mobile_hrrr.RData")
+save(res, file=file.path(SUNCOR_BASE, "mobile_hrrr.RData"))

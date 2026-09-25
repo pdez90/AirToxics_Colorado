@@ -18,6 +18,7 @@
 # - Panel D: source attribution in ratio space
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(dplyr)
@@ -37,7 +38,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 # USER PATHS
 # ----------------------------
-in_dir  <- "/Users/priyanka/Downloads/Suncor"
+in_dir  <- SUNCOR_BASE
 out_dir <- file.path(in_dir, "hotspot_source_fingerprint_outputs")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 

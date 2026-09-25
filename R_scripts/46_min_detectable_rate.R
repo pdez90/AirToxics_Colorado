@@ -13,11 +13,12 @@
 #   FinalFig/FIG_min_detectable_rate.png
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(ggplot2); library(scales)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 
 # ---- constants copied from P08 (do not change) ----------------
 z_m <- 1.5

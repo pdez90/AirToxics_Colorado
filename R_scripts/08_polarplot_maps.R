@@ -8,6 +8,7 @@
 # ============================================================
 # Stable Polar / Windrose Maps (renamed pollutants)
 # ============================================================
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 library(sf)
 library(data.table)
 library(openair)
@@ -16,7 +17,7 @@ library(openairmaps)
 # ----------------------------
 # Load data
 # ----------------------------
-load("/Users/priyanka/Downloads/Suncor/mobile_wswd.RData")
+load(file.path(SUNCOR_BASE, "mobile_wswd.RData"))
 df <- out
 rm(out)
 setDT(df)
@@ -51,7 +52,7 @@ pollutants <- c(
 # ----------------------------
 # Read grid
 # ----------------------------
-grid <- st_read("/Users/priyanka/Downloads/Suncor/grid5km_generated/grid5km.shp", quiet = TRUE)
+grid <- st_read(file.path(SUNCOR_BASE, "grid5km_generated/grid5km.shp"), quiet = TRUE)
 grid <- st_transform(grid, 4326)
 
 cc_grid <- st_coordinates(st_centroid(st_geometry(grid)))  # robust: polygon or point grid
@@ -138,7 +139,7 @@ w<- windroseMap(
          expand = FALSE
     )
   
-ggplot2::ggsave("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_wind.jpeg",
+ggplot2::ggsave(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_wind.jpeg"),
      plot = w,
      width = 18,
      height = 10,
@@ -167,7 +168,7 @@ for (p in pollutants) {
   }
 
   out_file <- paste0(
-    "/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_",
+    file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_"),
     gsub("[^A-Za-z0-9]+","_",p),
     ".jpeg"
   )

@@ -6,8 +6,9 @@
 # align with audit-period boundaries (MDL changes, Table S1.2).
 # Outputs: TABLE_monthly_stability.csv, FinalFig/FIG_monthly_stability.png
 # ==============================================================
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(data.table); library(ggplot2); library(scales) })
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 load(file.path(BASE, "mobile_wswd.RData")); df <- as.data.table(out); rm(out); gc()
 df <- df[Site != "Goodrich Corporation (Collins Aerospace)"]
 df[, `:=`(month = as.Date(cut(as.Date(date), "month")),

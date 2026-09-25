@@ -15,6 +15,7 @@
 # ADDED: block area in m2, ha, and km2
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(data.table)
@@ -30,10 +31,10 @@ options(tigris_use_cache = TRUE)
 # ----------------------------
 # 0) Load mobile (sf points) + scale_factors from prior chunk outputs
 # ----------------------------
-load("/Users/priyanka/Downloads/Suncor/mobile_corrected.RData")  # loads out_sf (from script 12)
+load(file.path(SUNCOR_BASE, "mobile_corrected.RData"))  # loads out_sf (from script 12)
 if (!exists("out_merge") && exists("out_sf")) out_merge <- out_sf   # normalize object name
 
-sf_path <- "/Users/priyanka/Downloads/Suncor/lacasa_scaling_factors_option1_binweighted.RData"
+sf_path <- file.path(SUNCOR_BASE, "lacasa_scaling_factors_option1_binweighted.RData")
 load(sf_path)  # loads `scale_factors`
 
 stopifnot(exists("out_merge"), inherits(out_merge, "sf"))
@@ -232,7 +233,7 @@ suppressPackageStartupMessages({
   library(dplyr)
 })
 
-xlsx_path <- "/Users/priyanka/Downloads/Suncor/airtoxscreen.xlsx"
+xlsx_path <- file.path(SUNCOR_BASE, "airtoxscreen.xlsx")
 
 # 1) Peek at sheet names (optional)
 # print(excel_sheets(xlsx_path))
@@ -326,7 +327,7 @@ add_stats_plot <- function(df, xvar, yvar, xlabel, ylabel, min_n = 10) {
     )
 }
 
-out_dir_fig <- "/Users/priyanka/Downloads/Suncor/FinalFig"
+out_dir_fig <- file.path(SUNCOR_BASE, "FinalFig")
 
 # ---- A: median-of-daily-median scaled
 pA1 <- add_stats_plot(df_plot, "benzene_ppb", "sBenzene_med_of_daily_med_scaled",
@@ -370,9 +371,9 @@ if (length(plotsB) > 0) {
 # 10) Save block outputs
 # ----------------------------
 save(block_sf, block_dt,
-     file = "/Users/priyanka/Downloads/Suncor/censusblocks_suncor_terminal_BINWEIGHTED_AB.RData")
+     file = file.path(SUNCOR_BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB.RData"))
 
-out_gpkg <- "/Users/priyanka/Downloads/Suncor/censusblocks_suncor_terminal_BINWEIGHTED_AB.gpkg"
+out_gpkg <- file.path(SUNCOR_BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB.gpkg")
 st_write(block_sf, out_gpkg, append = FALSE, quiet = TRUE)
 message("Wrote: ", out_gpkg)
 
@@ -404,9 +405,9 @@ summary(block_sf_overlap$area_km2)
 # 11) Save ONLY overlap blocks
 # ----------------------------
 save(block_sf_overlap,
-     file = "/Users/priyanka/Downloads/Suncor/censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.RData")
+     file = file.path(SUNCOR_BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.RData"))
 
-out_gpkg <- "/Users/priyanka/Downloads/Suncor/censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.gpkg"
+out_gpkg <- file.path(SUNCOR_BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.gpkg")
 st_write(block_sf_overlap, out_gpkg, append = FALSE, quiet = TRUE)
 
 message("Wrote OVERLAP file: ", out_gpkg)

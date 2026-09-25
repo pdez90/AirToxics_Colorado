@@ -18,6 +18,7 @@
 #   5) traj_low_TMBbyBenz_bottom20pct_gg_points.jpeg
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(lubridate)
@@ -35,9 +36,9 @@ suppressPackageStartupMessages({
 # ----------------------------
 # USER SETTINGS
 # ----------------------------
-in_rdata <- "/Users/priyanka/Downloads/Suncor/mobile_wswd.RData"
+in_rdata <- file.path(SUNCOR_BASE, "mobile_wswd.RData")
 
-out_dir  <- "/Users/priyanka/Downloads/Suncor"
+out_dir  <- SUNCOR_BASE
 out_rdata <- file.path(out_dir, "traj_low_TMBbyBenz_bottom20pct.RData")
 out_html  <- file.path(out_dir, "traj_low_TMBbyBenz_bottom20pct_map.html")
 out_jpeg_leaflet <- file.path(out_dir, "traj_low_TMBbyBenz_bottom20pct_map.jpeg")

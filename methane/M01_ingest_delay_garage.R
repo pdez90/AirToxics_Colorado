@@ -17,7 +17,8 @@
 #  - measurements at deployment start are often taken in the garage
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("M01: Methane ingest + delay + garage filter")
 
 suppressPackageStartupMessages({
@@ -26,7 +27,10 @@ suppressPackageStartupMessages({
 
 METH_DIR <- Sys.getenv("METHANE_DIR", "")
 if (!nzchar(METH_DIR)) {
-  .cands <- c("/Users/priyanka/Downloads/MethaneData", "/Users/priyanka/Toxics_EST/MethaneData")
+  .cands <- c(file.path(path.expand("~"), "Downloads", "MethaneData"),
+              file.path(path.expand("~"), "Toxics_EST", "MethaneData"),   # legacy location
+              file.path(dirname(SUNCOR_BASE), "MethaneData"),
+              file.path(SUNCOR_BASE, "MethaneData"))
   METH_DIR <- .cands[dir.exists(.cands)][1]
 }
 if (is.na(METH_DIR) || !dir.exists(METH_DIR)) stop("MethaneData folder not found; set METHANE_DIR")

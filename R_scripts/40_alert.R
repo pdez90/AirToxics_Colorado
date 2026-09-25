@@ -5,11 +5,12 @@
 
 #Alert
 
-load("/Users/priyanka/Downloads/Suncor/lacasa_pbl.RData")
-alerts<-read.csv("/Users/priyanka/Downloads/Suncor/Suncor_alerts.csv")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+load(file.path(SUNCOR_BASE, "lacasa_pbl.RData"))
+alerts<-read.csv(file.path(SUNCOR_BASE, "Suncor_alerts.csv"))
 alerts$Date<-dmy_hm(alerts$Date)
 
-load("/Users/priyanka/Downloads/Suncor/mobile_wswd.RData")
+load(file.path(SUNCOR_BASE, "mobile_wswd.RData"))
 df<-df[df$Site!="Goodrich Corporation (Collins Aerospace)",]
 df<-df[df$Site!="Holly Energy Partners (Sinclair) Terminal",]
 df$HCN<-ifelse(df$date> "2025-01-22 00:00:00", df$HCN, NA)
@@ -38,6 +39,6 @@ df<-subset(df, df$date<= max(alerts$Date))
       geom_point() + geom_vline(data = alerts, aes(xintercept = Date),
                    color = "red", linetype = "dashed")+theme_bw()
         
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/alerts.jpeg", width=6500, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/alerts.jpeg"), width=6500, height=6000, res=600)
 cowplot::plot_grid(p_benzene, p_toluene, p_xylene, p_trimethylbenzene, p_h2s)
 dev.off()

@@ -13,6 +13,7 @@
 # Efficient approach: compute station rank once using sf, then pick first
 # station with available wind for each (Asset,Site,hour).
 # ============================================================
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 require(tidyverse)
 suppressPackageStartupMessages({
   library(sf)
@@ -21,7 +22,7 @@ suppressPackageStartupMessages({
   library(units)
 })
 
-load("/Users/priyanka/Downloads/Suncor/wind_suncor_pueblo1.RData")
+load(file.path(SUNCOR_BASE, "wind_suncor_pueblo1.RData"))
 wind <- wind_2023 %>%
   dplyr::rename(
     Lat = Latitude,
@@ -29,7 +30,7 @@ wind <- wind_2023 %>%
   )
 rm(wind_2023)
 
-load("/Users/priyanka/Downloads/Suncor/mobile.RData")
+load(file.path(SUNCOR_BASE, "mobile.RData"))
 df <- df_out
 rm(df_out)
 
@@ -242,6 +243,6 @@ out <- out %>%
     wd = wd_wind
   )
 
-save(out, file = "/Users/priyanka/Downloads/Suncor/mobile_wswd.RData")
+save(out, file = file.path(SUNCOR_BASE, "mobile_wswd.RData"))
 
 head(out)

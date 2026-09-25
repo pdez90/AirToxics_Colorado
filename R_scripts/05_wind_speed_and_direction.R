@@ -5,21 +5,22 @@
 
 #Wind speed and direction
 
-load("/Users/priyanka/Downloads/Suncor/mobile.RData")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+load(file.path(SUNCOR_BASE, "mobile.RData"))
 #2023
-wind_2023<-read.csv("/Users/priyanka/Downloads/Suncor/hourly_WIND_2023.csv")
+wind_2023<-read.csv(file.path(SUNCOR_BASE, "hourly_WIND_2023.csv"))
 wind_2023<-subset(wind_2023, wind_2023$State.Code==8)
 #wind_2023<-subset(wind_2023, wind_2023$Site.Num ==28)
 #Lat: 39.7861, Lon:-104.9886
 #units: Knots, Degrees Compass
 
-wind_2024<-read.csv("/Users/priyanka/Downloads/Suncor/hourly_WIND_2024.csv")
+wind_2024<-read.csv(file.path(SUNCOR_BASE, "hourly_WIND_2024.csv"))
 wind_2024<-subset(wind_2024, wind_2024$State.Code==8)
 #wind_2024<-subset(wind_2024, wind_2024$Site.Num ==28)
 #Lat: 39.7861, Lon:-104.9886
 #units: Knots, Degrees Compass
 
-wind_2025<-read.csv("/Users/priyanka/Downloads/Suncor/hourly_WIND_2025.csv")
+wind_2025<-read.csv(file.path(SUNCOR_BASE, "hourly_WIND_2025.csv"))
 wind_2025<-subset(wind_2025, wind_2025$State.Code==8)
 #wind_2025<-subset(wind_2025, wind_2025$Site.Num ==28)
 #Lat: 39.7861, Lon:-104.9886
@@ -92,4 +93,4 @@ wind_2023<-merge(ws, wd, all=TRUE)
 rm(ws, wd)
 wind_2023$date<-lubridate::ymd_hm(wind_2023$date)
 
-save(wind_2023, file="/Users/priyanka/Downloads/Suncor/wind_suncor_pueblo1.RData")
+save(wind_2023, file=file.path(SUNCOR_BASE, "wind_suncor_pueblo1.RData"))

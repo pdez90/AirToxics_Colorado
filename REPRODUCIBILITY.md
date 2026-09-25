@@ -1,5 +1,12 @@
 # Reproducibility manifest
 
+**Scope note (2026-09-25).** `RUN_ALL_from_raw.R` runs `R00a` in its default mode, which
+verifies the packet inventory, revisions and monthly-CSV coverage but does **not** re-derive
+the monthly CSVs from the official XLSX packets. Those CSVs are therefore validated inputs
+rather than primary ones on the default path. To close the loop back to the XLSX source, run
+`DEEP=1` (content comparison) or `REBUILD=1` (regenerate the CSVs) - see `R00a` - which is the
+reconstruction test this policy relies on.
+
 **Policy (adopted 2026-08-15): every manuscript number must be reproducible from primary
 inputs. No hand-made or interactive intermediate is accepted.**
 
@@ -268,15 +275,15 @@ checks. Verified this way and now stated correctly in both documents:
 
 | claim | value |
 |---|---|
-| 1-s measurements | 2,602,928 |
+| 1-s measurements | 2,555,285 |
 | runs (Site x day) / unique sampling days | 205 / **203** (2023-02-16 to 2025-06-23) |
 | weekday split | 8 Mon, 39 Tue, 48 Wed, 50 Thu, 58 Fri |
-| measurements 9 am - 2 pm | 88.2% |
-| hourly fractions, 7-8 am through 4-5 pm | 0.2, 3.0, 12.7, 19.0, 20.8, 20.4, 15.2, 6.3, 1.7, 0.6 % |
-| Suncor route r: tol-xyl / TMB-xyl / benz-TMB | 0.94 / 0.88 / 0.68 |
-| Holly route r: tol-xyl / TMB-xyl / tol-TMB | 0.85 / 0.85 / 0.73 |
-| max r, H2S+HCN vs the aromatics | 0.103 (Holly), 0.171 (Suncor) |
-| hotspot max exceedance-days, across the 17 groups | 15 (group 70) to 66 (group 3, benzene) |
+| measurements 9 am - 2 pm | 88.6% |
+| hourly fractions, 7-8 am through 4-5 pm | 0.1, 2.8, 12.2, 19.3, 21.1, 20.6, 15.4, 6.2, 1.7, 0.6 % |
+| Suncor route r: tol-xyl / TMB-xyl / benz-TMB | 0.94 / 0.90 / 0.70 |
+| Holly route r: tol-xyl / TMB-xyl / tol-TMB | 0.84 / 0.88 / 0.75 |
+| max r, H2S+HCN vs the aromatics | 0.103 (Holly), 0.164 (Suncor) |
+| hotspot max exceedance-days, across the 14 groups | 15 to 69 (group 4, toluene) |
 | most persistent group | group 4 - toluene on 61 days, 179 pollutant-days across four pollutants |
 | most heavily sampled group | group 9 - 37,669 measurements within 100 m |
 | retained plumes | 4, at 1.95 / 3.55 / 4.11 / 4.30 km, Nov 2023 / Jan 2024 / Apr 2023 / May 2024 |
@@ -315,8 +322,9 @@ Errors this pass found and corrected, none of which the re-run introduced:
   MAKE_FIGURES group, so the re-run never regenerated it and the manuscript still carried
   the submitted 2048x1448 image with a caption describing the old route map. Group **J3**
   added; figure and caption swapped 2026-08-22. The figure is content-current -
-  `figure1_cell_counts_by_route.csv` sums to 2,602,928 over 924 cells, exactly this run's
-  1-s record count.
+  `figure1_cell_counts_by_route.csv` sums to 2,555,285 over 924 cells, exactly this run's
+  1-s record count (it read 2,602,928 until the 300 m exclusion; the claim held then and
+  holds now, only the total moved).
 - S1.4 said AL/BH discard "between 480 and 8,459 rows per pollutant". True for five
   pollutants; **benzene has none at all**. The paragraph's other three claims verified
   exactly (see below).
@@ -579,8 +587,10 @@ generator and listed in the table caption:
 | 2024-08-13, 2024-08-14 | the four aromatics |
 | 2025-01-02, 2025-01-03, and everything on or before 2025-01-22 | HCN |
 
-**None of the three carries a comment in the source.** They are applied and now
-disclosed; the reasons still need to be written down.
+**Sourced (2026-09-17/22).** All four exclusion windows are now attributed to CDPHE
+and documented in the source; see `claude/exclusion_windows_sourced.md` and the
+comments in `03_checks_flags.R`. The earlier note here - that none of them carried a
+comment and the reasons still needed writing down - is superseded.
 
 The chain, per pollutant (benzene / toluene / xylene / TMB / H2S / HCN):
 

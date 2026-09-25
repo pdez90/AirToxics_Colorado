@@ -12,7 +12,8 @@
 # It also prints file timestamps (provenance: notebook drift check).
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("R04d: stage-by-stage localization of the benzene divergence")
 
 suppressPackageStartupMessages({ library(data.table); library(dplyr); library(sf) })

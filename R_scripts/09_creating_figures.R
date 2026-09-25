@@ -1,5 +1,6 @@
 # STANDALONE (2026-09-23): attach what the composites need, so this script
 # can be run on its own without re-rendering the polar plots in script 08.
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(grid); library(ggplot2); library(cowplot)
   library(jpeg); if (requireNamespace("ragg", quietly = TRUE)) library(ragg) })
 
@@ -30,12 +31,12 @@ require(jpeg)
 require(cowplot)
 
 #Polarplot
-pp_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_Benzene.jpeg")
-pp_suncor_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_Toluene.jpeg")
-pp_suncor_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_Trimethylbenzene.jpeg")
-pp_suncor_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_Xylene.jpeg")
-pp_suncor_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_H2S.jpeg")
-pp_suncor_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_HCN.jpeg")
+pp_suncor_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_Benzene.jpeg"))
+pp_suncor_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_Toluene.jpeg"))
+pp_suncor_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_Trimethylbenzene.jpeg"))
+pp_suncor_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_Xylene.jpeg"))
+pp_suncor_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_H2S.jpeg"))
+pp_suncor_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_HCN.jpeg"))
 
 library(grid)
 library(cowplot)
@@ -86,7 +87,7 @@ p_combined <- cowplot::plot_grid(
 )
 
 # Save with ragg (sharper)
-out_file <- "/Users/priyanka/Downloads/Suncor/FinalFig/polarplot_main.jpeg"
+out_file <- file.path(SUNCOR_BASE, "FinalFig/polarplot_main.jpeg")
 
 ragg::agg_jpeg(
   filename = out_file,
@@ -104,7 +105,7 @@ dev.off()
 
 message("Saved: ", out_file)
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/polarplot_SI.jpeg", res=800, width=4000, height=3500)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/polarplot_SI.jpeg"), res=800, width=4000, height=3500)
 cowplot::plot_grid(
   rasterGrob(pp_suncor_benzene),
   rasterGrob(pp_suncor_trimethylbenzene),
@@ -117,15 +118,15 @@ dev.off()
 
 
 #Persistent Hotspots
-hs_suncor_all<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Hotspots_persistent_all.jpeg")
-hs_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Hotspots_persistent_benzene.jpeg")
-hs_suncor_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Hotspots_persistent_toluene.jpeg")
-hs_suncor_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Hotspots_persistent_trimethylbenzene.jpeg")
-hs_suncor_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Hotspots_persistent_xylene.jpeg")
-hs_suncor_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Hotspots_persistent_h2s.jpeg")
-hs_suncor_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Hotspots_persistent_hcn.jpeg")
+hs_suncor_all<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Hotspots_persistent_all.jpeg"))
+hs_suncor_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Hotspots_persistent_benzene.jpeg"))
+hs_suncor_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Hotspots_persistent_toluene.jpeg"))
+hs_suncor_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Hotspots_persistent_trimethylbenzene.jpeg"))
+hs_suncor_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Hotspots_persistent_xylene.jpeg"))
+hs_suncor_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Hotspots_persistent_h2s.jpeg"))
+hs_suncor_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Hotspots_persistent_hcn.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_suncorw.jpeg",  res=800, width=5500, height=6500)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/hs_persistent_suncorw.jpeg"),  res=800, width=5500, height=6500)
 cowplot::plot_grid(
   rasterGrob(hs_suncor_all),
   rasterGrob(hs_suncor_benzene),
@@ -140,14 +141,14 @@ dev.off()
 .composite({
 
 #Hotspots
-hs_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillips_Benzene.jpeg")
-hs_suncor_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillips_Toluene.jpeg")
-hs_suncor_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillips_Trimethylbenzene.jpeg")
-hs_suncor_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillips_Xylene.jpeg")
-hs_suncor_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillips_H2S.jpeg")
-hs_suncor_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillips_HCN.jpeg")
+hs_suncor_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillips_Benzene.jpeg"))
+hs_suncor_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillips_Toluene.jpeg"))
+hs_suncor_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillips_Trimethylbenzene.jpeg"))
+hs_suncor_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillips_Xylene.jpeg"))
+hs_suncor_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillips_H2S.jpeg"))
+hs_suncor_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillips_HCN.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/hs_suncor.jpeg",  res=800, width=5000, height=6000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/hs_suncor.jpeg"),  res=800, width=5000, height=6000)
 cowplot::plot_grid(
   rasterGrob(hs_suncor_benzene),
   rasterGrob(hs_suncor_toluene),
@@ -161,14 +162,14 @@ dev.off()
 .composite({
 
 #Zoomed into Suncor
-hs_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillipszoom_Benzene.jpeg")
-hs_suncor_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillipszoom_Toluene.jpeg")
-hs_suncor_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillipszoom_Trimethylbenzene.jpeg")
-hs_suncor_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillipszoom_Xylene.jpeg")
-hs_suncor_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillipszoom_H2S.jpeg")
-hs_suncor_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorPhillipszoom_HCN.jpeg")
+hs_suncor_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillipszoom_Benzene.jpeg"))
+hs_suncor_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillipszoom_Toluene.jpeg"))
+hs_suncor_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillipszoom_Trimethylbenzene.jpeg"))
+hs_suncor_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillipszoom_Xylene.jpeg"))
+hs_suncor_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillipszoom_H2S.jpeg"))
+hs_suncor_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorPhillipszoom_HCN.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/hs_suncorzoom.jpeg", res=800, width=5000, height=6000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/hs_suncorzoom.jpeg"), res=800, width=5000, height=6000)
 cowplot::plot_grid(
   rasterGrob(hs_suncor_benzene),
   rasterGrob(hs_suncor_toluene),
@@ -184,14 +185,14 @@ dev.off()
 #https://stackoverflow.com/questions/52175766/draw-border-around-certain-rows-using-cowplot-and-ggplot2
 
 #Zoomed into Suncor & Sinclair terminal
-hs_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorandPhillips_zoomSinclair_Benzene.jpeg")
-hs_suncor_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorandPhillips_zoomSinclair_Toluene.jpeg")
-hs_suncor_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorandPhillips_zoomSinclair_Trimethylbenzene.jpeg")
-hs_suncor_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorandPhillips_zoomSinclair_Xylene.jpeg")
-hs_suncor_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorandPhillips_zoomSinclair_H2S.jpeg")
-hs_suncor_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HS_SuncorandPhillips_zoomSinclair_HCN.jpeg")
+hs_suncor_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorandPhillips_zoomSinclair_Benzene.jpeg"))
+hs_suncor_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorandPhillips_zoomSinclair_Toluene.jpeg"))
+hs_suncor_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorandPhillips_zoomSinclair_Trimethylbenzene.jpeg"))
+hs_suncor_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorandPhillips_zoomSinclair_Xylene.jpeg"))
+hs_suncor_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorandPhillips_zoomSinclair_H2S.jpeg"))
+hs_suncor_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HS_SuncorandPhillips_zoomSinclair_HCN.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/hs_suncorzoom_Sinclair.jpeg", res=800, width=5000, height=6000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/hs_suncorzoom_Sinclair.jpeg"), res=800, width=5000, height=6000)
 cowplot::plot_grid(
   rasterGrob(hs_suncor_benzene),
   rasterGrob(hs_suncor_toluene),
@@ -205,14 +206,14 @@ dev.off()
 .composite({
 
 #Persistent Hotspots
-hs_suncor_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_benzene.jpeg")
-hs_suncor_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_toluene.jpeg")
-hs_suncor_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_trimethylbenzene.jpeg")
-hs_suncor_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_xylene.jpeg")
-hs_suncor_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_h2s.jpeg")
-hs_suncor_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_hcn.jpeg")
+hs_suncor_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/hs_persistent_benzene.jpeg"))
+hs_suncor_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/hs_persistent_toluene.jpeg"))
+hs_suncor_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/hs_persistent_trimethylbenzene.jpeg"))
+hs_suncor_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/hs_persistent_xylene.jpeg"))
+hs_suncor_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/hs_persistent_h2s.jpeg"))
+hs_suncor_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/hs_persistent_hcn.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/hs_persistent_color.jpeg", res=800, width=5000, height=6000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/hs_persistent_color.jpeg"), res=800, width=5000, height=6000)
 cowplot::plot_grid(
   rasterGrob(hs_suncor_benzene),
   rasterGrob(hs_suncor_toluene),
@@ -226,12 +227,12 @@ dev.off()
 .composite({
 
 #Polarplot Suncor
-suncor_pp_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_benzene.jpeg")
-suncor_pp_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_toluene.jpeg")
-suncor_pp_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_trimethylbenzene.jpeg")
-suncor_pp_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_xylene.jpeg")
-suncor_pp_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_h2s.jpeg")
-suncor_pp_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/polarPlot_suncor_hcn.jpeg")
+suncor_pp_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_benzene.jpeg"))
+suncor_pp_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_toluene.jpeg"))
+suncor_pp_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_trimethylbenzene.jpeg"))
+suncor_pp_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_xylene.jpeg"))
+suncor_pp_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_h2s.jpeg"))
+suncor_pp_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/polarPlot_suncor_hcn.jpeg"))
 
 # EDIT 2026-08-24 (SI Figure S3.9):
 # (1) Panel order corrected to match the caption — C) trimethylbenzene,
@@ -266,7 +267,7 @@ pp_trim <- lapply(
   function(x) pad_top_white(trim_white(x)))
 pp_W <- 5000
 pp_H <- round(3 * (pp_W / 2) * dim(pp_trim[[1]])[1] / dim(pp_trim[[1]])[2])
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor_PolarPlot_openairmaps.jpeg", res=800, width=pp_W, height=pp_H)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/Suncor_PolarPlot_openairmaps.jpeg"), res=800, width=pp_W, height=pp_H)
 cowplot::plot_grid(
     plotlist = lapply(pp_trim, rasterGrob),
     ncol=2, labels=c("A)", "B)", "C)", "D)", "E)", "F)"),
@@ -275,7 +276,7 @@ dev.off()
 })
 .composite({
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor_PolarPlot_openairmaps_vertical.jpeg", res=800, width=3500, height=4100)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/Suncor_PolarPlot_openairmaps_vertical.jpeg"), res=800, width=3500, height=4100)
 cowplot::plot_grid(
   rasterGrob(suncor_pp_benzene),
   rasterGrob(suncor_pp_toluene),
@@ -289,14 +290,14 @@ dev.off()
 .composite({
 
 #Maps 500 m Suncor
-suncor_map_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/median_median_benzene_500m.jpeg")
-suncor_map_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/median_median_toluene_500m.jpeg")
-suncor_map_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/median_median_trimethylbenzene_500m.jpeg")
-suncor_map_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/median_median_xylene_500m.jpeg")
-suncor_map_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/median_median_h2s_500m.jpeg")
-suncor_map_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/median_median_hcn_500m.jpeg")
+suncor_map_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/median_median_benzene_500m.jpeg"))
+suncor_map_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/median_median_toluene_500m.jpeg"))
+suncor_map_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/median_median_trimethylbenzene_500m.jpeg"))
+suncor_map_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/median_median_xylene_500m.jpeg"))
+suncor_map_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/median_median_h2s_500m.jpeg"))
+suncor_map_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/median_median_hcn_500m.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Map500m_main.jpeg", res=800, width=5000, height=6000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/Map500m_main.jpeg"), res=800, width=5000, height=6000)
 cowplot::plot_grid(
   rasterGrob(suncor_map_toluene),
   rasterGrob(suncor_map_h2s),
@@ -305,7 +306,7 @@ dev.off()
 })
 .composite({
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Map500m_SI.jpeg", res=800, width=5000, height=4000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/Map500m_SI.jpeg"), res=800, width=5000, height=4000)
 cowplot::plot_grid(
   rasterGrob(suncor_map_benzene),
     rasterGrob(suncor_map_xylene),
@@ -317,12 +318,12 @@ dev.off()
 .composite({
 
 #Census blocks
-toxscreen_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/airtoxscreen_benzene.jpeg")
-mobile_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/mobile_benzene_block.jpeg")
-toxscreen_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/airtoxscreen_toluene.jpeg")
-mobile_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/mobile_toluene_block.jpeg")
-toxscreen_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/airtoxscreen_xylene.jpeg")
-mobile_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/mobile_xylene_block.jpeg")
+toxscreen_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/airtoxscreen_benzene.jpeg"))
+mobile_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/mobile_benzene_block.jpeg"))
+toxscreen_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/airtoxscreen_toluene.jpeg"))
+mobile_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/mobile_toluene_block.jpeg"))
+toxscreen_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/airtoxscreen_xylene.jpeg"))
+mobile_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/mobile_xylene_block.jpeg"))
 
 library(grid)
 library(cowplot)
@@ -344,7 +345,7 @@ p_combined <- cowplot::plot_grid(
 )
 
 # Save with ragg (sharper than base jpeg)
-out_file <- "/Users/priyanka/Downloads/Suncor/FinalFig/toxscreen_mobile_block.jpeg"
+out_file <- file.path(SUNCOR_BASE, "FinalFig/toxscreen_mobile_block.jpeg")
 
 ragg::agg_jpeg(
   filename = out_file,
@@ -363,15 +364,15 @@ dev.off()
 
 message("Saved: ", out_file)
 #Stable
-#suncor_map_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/gen_benzene_500m_stable.jpeg")
-suncor_map_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Benzene_500m.jpeg")
-suncor_map_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Toluene_500m.jpeg")
-suncor_map_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Trimethylbenzene_500m.jpeg")
-suncor_map_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Xylene_500m.jpeg")
-suncor_map_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/H2S_500m.jpeg")
-suncor_map_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/HCN_500m.jpeg")
+#suncor_map_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/gen_benzene_500m_stable.jpeg"))
+suncor_map_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Benzene_500m.jpeg"))
+suncor_map_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Toluene_500m.jpeg"))
+suncor_map_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Trimethylbenzene_500m.jpeg"))
+suncor_map_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Xylene_500m.jpeg"))
+suncor_map_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/H2S_500m.jpeg"))
+suncor_map_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/HCN_500m.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor500m/Map500m_Suncor_all.jpeg", res=800, width=5000, height=6000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/Suncor500m/Map500m_Suncor_all.jpeg"), res=800, width=5000, height=6000)
 cowplot::plot_grid(
   rasterGrob(suncor_map_benzene),
   rasterGrob(suncor_map_toluene),
@@ -386,14 +387,14 @@ dev.off()
 
 
 #Maps 100m
-suncor_map_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_benzene.jpeg")
-suncor_map_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_toluene.jpeg")
-suncor_map_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_trimethylbenzene.jpeg")
-suncor_map_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_xylene.jpeg")
-suncor_map_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_h2s.jpeg")
-suncor_map_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_hcn.jpeg")
+suncor_map_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_benzene.jpeg"))
+suncor_map_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_toluene.jpeg"))
+suncor_map_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_trimethylbenzene.jpeg"))
+suncor_map_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_xylene.jpeg"))
+suncor_map_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_h2s.jpeg"))
+suncor_map_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_hcn.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Map100m_Suncor.jpeg", res=800, width=5000, height=6000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Map100m_Suncor.jpeg"), res=800, width=5000, height=6000)
 cowplot::plot_grid(
   rasterGrob(suncor_map_benzene),
   rasterGrob(suncor_map_toluene),
@@ -407,14 +408,14 @@ dev.off()
 .composite({
 
 #Maps 100m Stable
-suncor_map_benzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_benzene_stable.jpeg")
-suncor_map_toluene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_toluene_stable.jpeg")
-suncor_map_trimethylbenzene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_trimethylbenzene_stable.jpeg")
-suncor_map_xylene<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_xylene_stable.jpeg")
-suncor_map_h2s<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_h2s_stable.jpeg")
-suncor_map_hcn<-readJPEG("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Suncor_100mroute_hcn_stable.jpeg")
+suncor_map_benzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_benzene_stable.jpeg"))
+suncor_map_toluene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_toluene_stable.jpeg"))
+suncor_map_trimethylbenzene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_trimethylbenzene_stable.jpeg"))
+suncor_map_xylene<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_xylene_stable.jpeg"))
+suncor_map_h2s<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_h2s_stable.jpeg"))
+suncor_map_hcn<-readJPEG(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Suncor_100mroute_hcn_stable.jpeg"))
 
-jpeg("/Users/priyanka/Downloads/Suncor/FinalFig/Suncor100m/Map100m_Suncor_stable.jpeg", res=800, width=5000, height=6000)
+jpeg(file.path(SUNCOR_BASE, "FinalFig/Suncor100m/Map100m_Suncor_stable.jpeg"), res=800, width=5000, height=6000)
 cowplot::plot_grid(
   rasterGrob(suncor_map_benzene),
   rasterGrob(suncor_map_toluene),

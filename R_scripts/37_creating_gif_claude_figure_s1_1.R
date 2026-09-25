@@ -13,6 +13,7 @@
 #   (tiles are still raster—higher zoom = sharper)
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(dplyr)
@@ -26,7 +27,7 @@ suppressPackageStartupMessages({
   library(ragg)     # <- for sharper PNG output
 })
 
-load("/Users/priyanka/Downloads/Suncor/mobile_corrected.RData")
+load(file.path(SUNCOR_BASE, "mobile_corrected.RData"))
 if (!exists("out_merge") && exists("out_sf")) out_merge <- out_sf
 stopifnot(exists("out_merge"))
 
@@ -128,7 +129,7 @@ route_map <- function(Run) {
     )
 
   out_path <- paste0(
-    "/Users/priyanka/Downloads/Suncor/GIF_route/individual_route_",
+    file.path(SUNCOR_BASE, "GIF_route/individual_route_"),
     gsub("[^A-Za-z0-9]", "_", Run), ".png"
   )
 
@@ -152,7 +153,7 @@ quick_reverse_time_sort <- function(file_paths) {
 }
 
 png_files_sorted <- list.files(
-  "/Users/priyanka/Downloads/Suncor/GIF_route/",
+  file.path(SUNCOR_BASE, "GIF_route/"),
   pattern = "\\.png$", full.names = TRUE
 ) |> quick_reverse_time_sort()
 
@@ -162,18 +163,18 @@ png_files_sorted %>%
   image_scale("1000x800!") %>%
   image_quantize(max = 128, colorspace = "RGB") %>%
   image_animate(fps = 2, loop = 1, optimize = TRUE) %>%
-  image_write("/Users/priyanka/Downloads/Suncor/routes_runs_optimized.gif")
+  image_write(file.path(SUNCOR_BASE, "routes_runs_optimized.gif"))
 
 # Combine static + gif (unchanged)
-.static_jpg <- "/Users/priyanka/Downloads/Suncor/FinalFig/Suncor_Terminal_Route.jpeg"
-gif_plot    <- ggdraw() + draw_image("/Users/priyanka/Downloads/Suncor/routes_runs_optimized.gif")
+.static_jpg <- file.path(SUNCOR_BASE, "FinalFig/Suncor_Terminal_Route.jpeg")
+gif_plot    <- ggdraw() + draw_image(file.path(SUNCOR_BASE, "routes_runs_optimized.gif"))
 if (file.exists(.static_jpg)) {
   static_plot   <- ggdraw() + draw_image(.static_jpg)
   combined_plot <- plot_grid(static_plot, gif_plot, ncol = 1)
-  ggsave("/Users/priyanka/Downloads/Suncor/combined_gif.png", combined_plot, width = 12, height = 4)
+  ggsave(file.path(SUNCOR_BASE, "combined_gif.png"), combined_plot, width = 12, height = 4)
 } else {
   # the static route panel is a supplied image, not a pipeline output; it was
   # lost with the rest of the folder, so write the animation panel alone.
   message("[GIF] ", .static_jpg, " not found - writing the animation panel only")
-  ggsave("/Users/priyanka/Downloads/Suncor/combined_gif.png", gif_plot, width = 12, height = 4)
+  ggsave(file.path(SUNCOR_BASE, "combined_gif.png"), gif_plot, width = 12, height = 4)
 }

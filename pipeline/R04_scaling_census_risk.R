@@ -11,17 +11,21 @@
 #   R_scripts/20_census_block_level_health_risks.R
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("R04: Scaling factors + census blocks + benzene risk")
 
 # ----------------------------------------------------------------
-# PREFLIGHT: script 18 loads mobile_corrected.RData from
-# /Users/priyanka/Downloads/ (NOT the Suncor subfolder — original
-# code path). If a stale pre-fix copy sits there, script 18 would
-# silently use OLD data. Sync the fresh file to that path first.
+# PREFLIGHT: kept for the legacy interactive code path, which loaded
+# mobile_corrected.RData from the PARENT of the analysis root rather
+# than from the root itself. Script 18 no longer does - it reads
+# file.path(SUNCOR_BASE, "mobile_corrected.RData") - so this copy is
+# now belt-and-braces rather than load-bearing. It is retained (and
+# made root-relative, 2026-09-25) so that a stale pre-fix copy in the
+# parent folder cannot be picked up by anything still looking there.
 # ----------------------------------------------------------------
 src_mc <- file.path(BASE, "mobile_corrected.RData")
-dst_mc <- "/Users/priyanka/Downloads/mobile_corrected.RData"
+dst_mc <- file.path(dirname(SUNCOR_BASE), "mobile_corrected.RData")
 if (file.exists(src_mc)) {
   ok <- file.copy(src_mc, dst_mc, overwrite = TRUE, copy.date = TRUE)
   diag_msg("  [PREFLIGHT] synced fresh mobile_corrected.RData to Downloads root ",

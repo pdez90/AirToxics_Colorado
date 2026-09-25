@@ -26,9 +26,30 @@ CLEAN=1 Rscript RUN_ALL_from_raw.R
 | Census blocks | US Census via `tigris` |
 | HRRR meteorology | NOAA via `Herbie` (AWS) |
 
-File paths in the scripts are absolute to the authors' analysis machine
-(`/Users/priyanka/Downloads/Suncor/...`); adjust the `BASE` constant in
-`pipeline/diagnostics_helpers.R` and the data locations to reproduce elsewhere.
+### Running this elsewhere
+
+Every script resolves the analysis root from one environment variable:
+
+```bash
+export SUNCOR_BASE=/path/to/your/analysis/folder
+Rscript pipeline/RUN_ALL_from_raw.R
+```
+
+`SUNCOR_BASE` defaults to `~/Downloads/Suncor`, which is where the authors' copy lives, so
+nothing changes on the original machine. Each script that needs it carries
+
+```r
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))
+```
+
+near the top, and every path is built from it. The analysis root holds the primary inputs and
+receives all intermediates and outputs; it is a separate folder from this repository, which
+holds only code.
+
+Until 2026-09-25 the paths were hard-coded to the authors' machine in 103 scripts, so a clone
+would not run anywhere else even after editing a `BASE` constant. The replacement was verified
+by evaluating all 252 substituted path expressions in R and confirming each resolves to the
+byte-identical absolute path it replaced.
 
 ## Layout
 

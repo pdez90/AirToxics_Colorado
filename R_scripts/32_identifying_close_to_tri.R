@@ -12,6 +12,7 @@
 # - Updates: tri_dist_m, tri_dist_km, tri_id, tri_name
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(readr)
@@ -19,9 +20,9 @@ suppressPackageStartupMessages({
 })
 
 # ---- paths
-f_tri    <- "/Users/priyanka/Downloads/Suncor/TRI.csv"
-f_master <- "/Users/priyanka/Downloads/Suncor/hotspot_group_reports/MASTER_hotspot_group_index.csv"
-out_master_updated <- "/Users/priyanka/Downloads/Suncor/hotspot_group_reports/MASTER_hotspot_group_index_with_TRI.csv"
+f_tri    <- file.path(SUNCOR_BASE, "TRI.csv")
+f_master <- file.path(SUNCOR_BASE, "hotspot_group_reports/MASTER_hotspot_group_index.csv")
+out_master_updated <- file.path(SUNCOR_BASE, "hotspot_group_reports/MASTER_hotspot_group_index_with_TRI.csv")
 
 # ============================================================
 # 1) Load MASTER (hotspot groups)

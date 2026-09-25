@@ -11,6 +11,7 @@
 # - Reports # common blocks explicitly
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(dplyr)
@@ -91,7 +92,7 @@ results_risk_common <- data.frame(
 print(results_risk_common)
 
 # ---- save CSV
-out_dir_fig <- "/Users/priyanka/Downloads/Suncor/FinalFig"
+out_dir_fig <- file.path(SUNCOR_BASE, "FinalFig")
 out_csv_common <- file.path(out_dir_fig, "benzene_risk_summary_BINWEIGHTED_COMMONBLOCKS.csv")
 utils::write.csv(results_risk_common, out_csv_common, row.names = FALSE)
 message("Saved COMMON-BLOCKS risk summary CSV: ", out_csv_common)
@@ -99,7 +100,7 @@ message("Saved COMMON-BLOCKS risk summary CSV: ", out_csv_common)
 # ---- OPTIONAL: write the common-block subset as a GPKG for mapping
 # (does not overwrite anything)
 block_sf_common <- block_sf_risk %>% filter(GEOID20 %in% common_geoid)
-out_gpkg_common <- "/Users/priyanka/Downloads/Suncor/censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONBLOCKS.gpkg"
+out_gpkg_common <- file.path(SUNCOR_BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONBLOCKS.gpkg")
 sf::st_write(block_sf_common, out_gpkg_common, append = FALSE, quiet = TRUE)
 message("Wrote COMMON-BLOCKS gpkg: ", out_gpkg_common)
 

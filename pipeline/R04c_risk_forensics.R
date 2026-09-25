@@ -12,7 +12,8 @@
 # (1,120 blocks; 83,828 residents; 0.077-0.275; 0.183-0.650; 2.4x).
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("R04c: risk forensics — metric x vintage")
 
 suppressPackageStartupMessages({ library(sf); library(dplyr); library(data.table) })

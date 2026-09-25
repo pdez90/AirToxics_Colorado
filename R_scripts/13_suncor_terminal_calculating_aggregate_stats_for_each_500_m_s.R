@@ -5,6 +5,7 @@
 
 #Suncor + Terminal: Calculating aggregate stats for each 500 m segment
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table)
   library(sf)
@@ -15,7 +16,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 # 0) Load + basic prep
 # ----------------------------
-load("/Users/priyanka/Downloads/Suncor/mobile_corrected.RData")
+load(file.path(SUNCOR_BASE, "mobile_corrected.RData"))
 if (exists("out_sf")) out_merge <- out_sf
 stopifnot(exists("out_merge"))
 
@@ -133,7 +134,7 @@ seg_long <- merge(
 # ----------------------------
 # 5) Join geometry from grid (centroid + lon/lat)
 # ----------------------------
-grid <- st_read("/Users/priyanka/Downloads/Suncor/Grid_500m_generated/grid_500m.shp", quiet = TRUE) |>
+grid <- st_read(file.path(SUNCOR_BASE, "Grid_500m_generated/grid_500m.shp"), quiet = TRUE) |>
   st_transform(4326)
 
 grid_cent <- st_centroid(grid)
@@ -191,12 +192,12 @@ seg_wide_sf <- st_as_sf(seg_wide_sf)
 # 7) Save outputs
 # ----------------------------
 save(seg_long_dt, seg_long_sf, seg_wide, seg_wide_sf,
-     file = "/Users/priyanka/Downloads/Suncor/segment500_summaries_clean.RData")
+     file = file.path(SUNCOR_BASE, "segment500_summaries_clean.RData"))
 
 # Long (tidy) gpkg (will be large because geometry repeats for each pollutant/version)
-st_write(seg_long_sf, "/Users/priyanka/Downloads/Suncor/segment500_summaries_long.gpkg",
+st_write(seg_long_sf, file.path(SUNCOR_BASE, "segment500_summaries_long.gpkg"),
          append = FALSE, quiet = TRUE)
 
 # Wide gpkg (best for mapping)
-st_write(seg_wide_sf, "/Users/priyanka/Downloads/Suncor/segment500_summaries_wide.gpkg",
+st_write(seg_wide_sf, file.path(SUNCOR_BASE, "segment500_summaries_wide.gpkg"),
          append = FALSE, quiet = TRUE)

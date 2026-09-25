@@ -21,6 +21,7 @@
 # - Make 500 m scatterplots colored by distance to La Casa
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table)
   library(lubridate)
@@ -35,11 +36,11 @@ options(scipen = 9999)
 # ----------------------------
 # 0) Paths
 # ----------------------------
-mobile_rdata <- "/Users/priyanka/Downloads/Suncor/mobile_wswd.RData"
-lacasa_2023  <- "/Users/priyanka/Downloads/Suncor/ascent_2023.csv"
-lacasa_2024  <- "/Users/priyanka/Downloads/Suncor/ascent_2024.csv"
-lacasa3_csv  <- "/Users/priyanka/Downloads/Suncor/lacasa3.csv"
-out_dir      <- "/Users/priyanka/Downloads/Suncor/FinalFig"
+mobile_rdata <- file.path(SUNCOR_BASE, "mobile_wswd.RData")
+lacasa_2023  <- file.path(SUNCOR_BASE, "ascent_2023.csv")
+lacasa_2024  <- file.path(SUNCOR_BASE, "ascent_2024.csv")
+lacasa3_csv  <- file.path(SUNCOR_BASE, "lacasa3.csv")
+out_dir      <- file.path(SUNCOR_BASE, "FinalFig")
 
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 

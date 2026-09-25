@@ -34,11 +34,12 @@
 # Reproducible; heavy diagnostics. No new tuning of the H2S funnel.
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr); library(tidyr); library(lubridate); library(readr); library(tibble)
 })
 
-BASE    <- "/Users/priyanka/Downloads/Suncor"
+BASE    <- SUNCOR_BASE
 STAB_FN <- file.path(BASE, "mobile_hrrr_windfromwwtf_stability_filtered.RData")
 CH4_FN  <- file.path(BASE, "mobile_methane.csv")
 

@@ -31,6 +31,7 @@
 #   value below -100% is impossible and indicates a unit error.
 # --------------------------------------------------------------------------
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(tidyr)
@@ -391,7 +392,7 @@ simulate_error_vs_distance_crosswind_mismatch_wwtp <- function(
 # ============================================================
 # USAGE
 # ============================================================
-load("/Users/priyanka/Downloads/Suncor/mobile_hrrr.RData")
+load(file.path(SUNCOR_BASE, "mobile_hrrr.RData"))
 
 res_met <- res[, c("u10", "v10", "hpbl", "tcdc", "lcc")]
 res_met <- res_met[complete.cases(res_met), ]
@@ -409,13 +410,13 @@ cw_res_wwtp <- simulate_error_vs_distance_crosswind_mismatch_wwtp(
 print(cw_res_wwtp$plot)
 
 ggsave(
-  "/Users/priyanka/Downloads/Suncor/error_vs_distance_crosswind_mismatch_WWTP.png",
+  file.path(SUNCOR_BASE, "error_vs_distance_crosswind_mismatch_WWTP.png"),
   cw_res_wwtp$plot,
   width = 9.5, height = 6.0, dpi = 300
 )
 
 write.csv(
   cw_res_wwtp$summary,
-  "/Users/priyanka/Downloads/Suncor/error_vs_distance_crosswind_mismatch_WWTP_summary.csv",
+  file.path(SUNCOR_BASE, "error_vs_distance_crosswind_mismatch_WWTP_summary.csv"),
   row.names = FALSE
 )

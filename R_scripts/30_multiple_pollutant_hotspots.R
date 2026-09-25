@@ -16,6 +16,7 @@
 #   - super_hotspots_3plus_<which>.csv
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(sf)
@@ -29,7 +30,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 which_use <- "persistent"   # "persistent" or "all"
 match_dist_m <- 100         # same as your DBSCAN eps (meters)
-out_dir <- "/Users/priyanka/Downloads/Suncor"
+out_dir <- SUNCOR_BASE
 
 # ----------------------------
 # INPUT

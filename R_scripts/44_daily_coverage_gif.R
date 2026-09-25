@@ -9,12 +9,13 @@
 # Runtime: ~10-25 min (203 frames; map tiles cached after first frame)
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(ggplot2); library(ggspatial); library(scales)
   library(magick)
 })
 
-BASE  <- "/Users/priyanka/Downloads/Suncor"
+BASE  <- SUNCOR_BASE
 FRDIR <- file.path(BASE, "FinalFig", "daily_frames")
 dir.create(FRDIR, recursive = TRUE, showWarnings = FALSE)
 CACHE <- file.path(BASE, "rosm.cache")

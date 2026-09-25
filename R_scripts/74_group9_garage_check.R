@@ -22,9 +22,10 @@
 # Output: TABLE_group9_garage_sensitivity.csv
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(data.table); library(geosphere) })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 HQ   <- c(lon = -105.104331, lat = 39.785359)   # ATOPs HQ / garage
 G9   <- c(lon = -105.10316782735, lat = 39.784898289519)
 BUFFER_M <- 100                                  # group analysis buffer

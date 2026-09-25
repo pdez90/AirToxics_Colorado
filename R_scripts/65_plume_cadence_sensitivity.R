@@ -29,12 +29,13 @@
 #   FinalFig/FIG_plume_cadence_sensitivity.png
 # Runtime ~1-2 min.
 # ==============================================================
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr); library(tidyr); library(purrr); library(tibble)
   library(lubridate); library(zoo); library(ggplot2); library(scales)
   library(patchwork); library(readr)
 })
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 WINDOWS <- c(1, 2, 5, 10)   # seconds; 1 = delivered record (baseline)
 
 # ---- detection settings (verbatim from Suncor_plume.Rmd) ------

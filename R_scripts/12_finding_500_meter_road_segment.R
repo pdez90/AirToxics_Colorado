@@ -7,13 +7,14 @@
 # (https://stackoverflow.com/questions/59766153/left-join-based-on-closest-lat-lon-in-r
 # )
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 library(sf)
 library(dplyr)
 
-load("/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge.RData")
+load(file.path(SUNCOR_BASE, "bgcorrected_out_merge.RData"))
 out_merge <- df
 
-grid <- st_read("/Users/priyanka/Downloads/Suncor/Grid_500m_generated/grid_500m.shp", quiet = TRUE) %>%
+grid <- st_read(file.path(SUNCOR_BASE, "Grid_500m_generated/grid_500m.shp"), quiet = TRUE) %>%
   st_transform(4326)
 
 # One lon/lat per grid feature: centroid coordinates
@@ -74,4 +75,4 @@ if (.n_out > 0) {
   out_sf <- out_sf[out_sf$dist_m <= MAX_SNAP_M, ]
 }
 
-save(out_sf, file = "/Users/priyanka/Downloads/Suncor/mobile_corrected.RData")
+save(out_sf, file = file.path(SUNCOR_BASE, "mobile_corrected.RData"))

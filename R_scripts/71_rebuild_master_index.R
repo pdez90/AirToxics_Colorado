@@ -22,9 +22,10 @@
 # Run AFTER script 31 (groups) and 32 (TRI), BEFORE 33-35.
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(dplyr); library(readr) })
 
-BASE     <- "/Users/priyanka/Downloads/Suncor"
+BASE     <- SUNCOR_BASE
 f_groups <- file.path(BASE, "group_summary_persistent.csv")
 f_tri    <- file.path(BASE, "hotspot_group_reports", "MASTER_hotspot_group_index_with_TRI.csv")
 f_out    <- file.path(BASE, "MASTER_hotspot_group_index.csv")

@@ -17,7 +17,8 @@
 #         GROUPS="C,H" Rscript MAKE_FIGURES.R    # rerun specific groups
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("MAKE_FIGURES: regenerating manuscript + SI figures")
 
 RS <- file.path(BASE, "R_scripts")

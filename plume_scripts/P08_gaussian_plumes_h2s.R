@@ -18,6 +18,7 @@
 # Requires: centerline_keep (from your WWTP plume QA chunk)
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(tidyr)
@@ -30,7 +31,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 # USER SETTINGS
 # ----------------------------
-out_dir <- "/Users/priyanka/Downloads/Suncor/FinalFig"
+out_dir <- file.path(SUNCOR_BASE, "FinalFig")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 z_m <- 1.5                       # instrument height above ground (m)

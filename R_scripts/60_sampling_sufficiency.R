@@ -10,9 +10,10 @@
 #          FinalFig/FIG_sampling_sufficiency.png
 # Runtime ~15-30 min.
 # ==============================================================
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(data.table); library(sf); library(dbscan); library(ggplot2); library(scales) })
 set.seed(42)
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 KS <- c(10,20,40,60,80,120,160,200); M_MAP <- 20; M_HOT <- 10
 load(file.path(BASE,"mobile_wswd.RData")); df <- as.data.table(out); rm(out); gc()
 df <- df[is.finite(Latitude) & is.finite(Longitude) &

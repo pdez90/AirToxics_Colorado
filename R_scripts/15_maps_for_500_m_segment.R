@@ -5,6 +5,7 @@
 
 #Maps for 500 m segment
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(dplyr)
@@ -18,7 +19,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 # USER SETTINGS
 # ----------------------------
-out_dir   <- "/Users/priyanka/Downloads/Suncor/segment500_maps_points"
+out_dir   <- file.path(SUNCOR_BASE, "segment500_maps_points")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 tile_type <- "cartolight"

@@ -5,10 +5,11 @@
 
 #Calculating background air pollution concentrations (rolling lowest 20th percentile for 20 min intervals), identify plumes (Peter de Carlo's methods)
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 library(slider)
 library(dplyr)
 
-load("/Users/priyanka/Downloads/Suncor/mobile_wswd.RData")
+load(file.path(SUNCOR_BASE, "mobile_wswd.RData"))
 df <- out
 rm(out)
 
@@ -107,4 +108,4 @@ for (idx in split_idx) {
   }
 }
 
-save(df, file = "/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge_rolling.RData")
+save(df, file = file.path(SUNCOR_BASE, "bgcorrected_out_merge_rolling.RData"))

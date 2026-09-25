@@ -5,6 +5,7 @@
 
 #TimePlot + Timevariation + GGally correlation plots 
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 library(dplyr)
 library(visdat)
 library(ggplot2)
@@ -14,13 +15,13 @@ library(forcats)
 require(ggridges)
 library(openair)
 
-load("/Users/priyanka/Downloads/Suncor/mobile_wswd.RData")
+load(file.path(SUNCOR_BASE, "mobile_wswd.RData"))
 df<-out
 rm(out)
 
 wind<-subset(df, select=c(Lat_wind, Lon_wind))
 wind<-wind[!duplicated(wind),]
-write.csv(wind, file="/Users/priyanka/Downloads/Suncor/wind_sites.csv")
+write.csv(wind, file=file.path(SUNCOR_BASE, "wind_sites.csv"))
 rm(wind)
 # --- vars you want in the missingness plot
 vars_miss <- c(
@@ -67,7 +68,7 @@ p <- ggplot(miss_long, aes(x = obs_id, y = variable, fill = missing)) +
   )
 
 # Save with sane aspect ratio so it doesn't look squashed
-out_dir <- "/Users/priyanka/Downloads/Suncor"
+out_dir <- SUNCOR_BASE
 ggsave(
   filename = file.path(out_dir, "missingness_by_site.png"),
   plot = p,
@@ -110,7 +111,7 @@ p1<-temp1 %>%
   #scale_y_continuous(name = "Measured Pollutant")+
   scale_y_log10(name="Pollutant (ppb)")
 
-jpeg("/Users/priyanka/Downloads/Suncor/distribution_pollutant_Site.jpeg", width=9000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "distribution_pollutant_Site.jpeg"), width=9000, height=6000, res=600)
 p1
 dev.off()
 
@@ -147,11 +148,11 @@ p2<-temp1 %>%
   #scale_y_continuous(name = "Measured Pollutant")+
   scale_y_log10(name="Meterological Variables")
 
-jpeg("/Users/priyanka/Downloads/Suncor/distribution_meterological_Site.jpeg", width=9000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "distribution_meterological_Site.jpeg"), width=9000, height=6000, res=600)
 p2
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/distribution_Site_pollutant_meteorological.jpeg", width=9000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "distribution_Site_pollutant_meteorological.jpeg"), width=9000, height=6000, res=600)
 cowplot::plot_grid(p1, p2, ncol=1, labels=c("A)", "B)"))
 dev.off()
 
@@ -175,7 +176,7 @@ vars <- c(
   "Hydrogen_Sulfide_ppb", "Hydrogen_Cyanide_ppb"
 )
 
-out_dir <- "/Users/priyanka/Downloads/Suncor"
+out_dir <- SUNCOR_BASE
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 safe_stub <- function(x) gsub("[^A-Za-z0-9]+", "_", x)
@@ -283,7 +284,7 @@ df <- df %>%
 # ---- add year
 df$year <- year(df$date)
 # ---- timePlot for Suncor site
-out_file <- "/Users/priyanka/Downloads/Suncor/TimePlot_Suncor.jpeg"
+out_file <- file.path(SUNCOR_BASE, "TimePlot_Suncor.jpeg")
 jpeg(out_file, width = 6000, height = 6000, res = 600, quality = 100)
 timePlot(
   df[df$Site == "Suncor and Phillips 66 Terminal", ],
@@ -294,7 +295,7 @@ timePlot(
 )
 dev.off()
 
-out_file <- "/Users/priyanka/Downloads/Suncor/TimePlot_Terminal.jpeg"
+out_file <- file.path(SUNCOR_BASE, "TimePlot_Terminal.jpeg")
 jpeg(out_file, width = 6000, height = 6000, res = 600, quality = 100)
 timePlot(
   df[df$Site == "Holly Energy Partners (Sinclair) Terminal", ],
@@ -341,7 +342,7 @@ p2 <- timePlot(
 )
 
 # Save stacked
-jpeg("/Users/priyanka/Downloads/Suncor/TimePlot_BothRoutes_Stacked.jpeg",
+jpeg(file.path(SUNCOR_BASE, "TimePlot_BothRoutes_Stacked.jpeg"),
      width = 8000, height = 10000, res = 600, quality = 100)
 
 print(p1, split = c(1, 2, 1, 2), more = TRUE)   # top
@@ -368,7 +369,7 @@ df_plot <- df %>%
 # ----------------------------
 # 1) BTEX plot (both routes)
 # ----------------------------
-jpeg("/Users/priyanka/Downloads/Suncor/TimeVariation_BTEX_BothRoutes.jpeg",
+jpeg(file.path(SUNCOR_BASE, "TimeVariation_BTEX_BothRoutes.jpeg"),
      width = 8000, height = 6000, res = 600, quality = 100)
 timeVariation(
   df_plot,
@@ -380,7 +381,7 @@ dev.off()
 # ----------------------------
 # 2) H2S + HCN plot (both routes)
 # ----------------------------
-jpeg("/Users/priyanka/Downloads/Suncor/TimeVariation_H2S_HCN_BothRoutes.jpeg",
+jpeg(file.path(SUNCOR_BASE, "TimeVariation_H2S_HCN_BothRoutes.jpeg"),
      width = 8000, height = 4500, res = 600, quality = 100)
 timeVariation(
   df_plot,
@@ -390,51 +391,51 @@ timeVariation(
 dev.off()
 
 #polarPlots
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_benzene_Suncor.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_benzene_Suncor.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Benzene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_toluene_Suncor.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_toluene_Suncor.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Toluene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_trimethylbenzene_Suncor.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_trimethylbenzene_Suncor.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Trimethylbenzene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_xylene_Suncor.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_xylene_Suncor.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Xylene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_h2s_Suncor.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_h2s_Suncor.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="H2S")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_hcn_Suncor.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_hcn_Suncor.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="HCN")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_benzene_Terminal.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_benzene_Terminal.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="Benzene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_toluene_Terminal.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_toluene_Terminal.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="Toluene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_trimethylbenzene_Terminal.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_trimethylbenzene_Terminal.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="Trimethylbenzene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_xylene_Terminal.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_xylene_Terminal.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="Xylene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_h2s_Terminal.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_h2s_Terminal.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="H2S")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/polarplot_hcn_Terminal.jpeg", width=6000, height=6000, res=600)
+jpeg(file.path(SUNCOR_BASE, "polarplot_hcn_Terminal.jpeg"), width=6000, height=6000, res=600)
 polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="HCN")
 dev.off()
 
@@ -452,35 +453,35 @@ df$suncor_distance<-as.numeric(df$suncor_distance)
 
 summary(lm(HCN ~ suncor_distance:H2S + H2S, df))
 
-jpeg("/Users/priyanka/Downloads/Suncor/Scatterplot_HCN_H2S_distance.jpeg", width=10000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Scatterplot_HCN_H2S_distance.jpeg"), width=10000, height=5000, res=600)
 scatterPlot(df, x = "HCN", y = "H2S", z = "suncor_distance",  y.relation="free")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/Trendlevel_HCN_distance.jpeg", width=10000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Trendlevel_HCN_distance.jpeg"), width=10000, height=5000, res=600)
 trendLevel(df, "HCN", x = "month", y = "suncor_distance")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/Trendlevel_Suncor_HCN.jpeg", width=10000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_HCN.jpeg"), width=10000, height=5000, res=600)
 trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="HCN")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/Trendlevel_Suncor_H2S.jpeg", width=10000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_H2S.jpeg"), width=10000, height=5000, res=600)
 trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="H2S")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/Trendlevel_Suncor_Benzene.jpeg", width=10000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_Benzene.jpeg"), width=10000, height=5000, res=600)
 trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Benzene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/Trendlevel_Suncor_Toluene.jpeg", width=10000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_Toluene.jpeg"), width=10000, height=5000, res=600)
 trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Toluene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/Trendlevel_Suncor_Trimethylbenzene.jpeg", width=10000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_Trimethylbenzene.jpeg"), width=10000, height=5000, res=600)
 trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Trimethylbenzene")
 dev.off()
 
-jpeg("/Users/priyanka/Downloads/Suncor/Trendlevel_Suncor_Xylene.jpeg", width=10000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_Xylene.jpeg"), width=10000, height=5000, res=600)
 trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Xylene")
 dev.off()
 
@@ -497,7 +498,7 @@ temp <- as.data.frame(temp)   # GUARD: df comes from mobile_wswd.RData where `ou
                               # and fails with "supply both 'x' and 'y' or a matrix-like 'x'".
 temp <- temp[, sapply(temp, is.numeric), drop = FALSE]
 stopifnot(is.data.frame(temp), ncol(temp) >= 2, nrow(temp) > 0)
-jpeg("/Users/priyanka/Downloads/Suncor/Corrplot_Suncor.jpeg", width=5000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Corrplot_Suncor.jpeg"), width=5000, height=5000, res=600)
 ggcorrplot::ggcorrplot(as.matrix(cor(temp, use="pairwise.complete.obs")),  type = "lower",
    lab = TRUE)
 dev.off()
@@ -515,7 +516,7 @@ temp <- as.data.frame(temp)   # GUARD: df comes from mobile_wswd.RData where `ou
                               # and fails with "supply both 'x' and 'y' or a matrix-like 'x'".
 temp <- temp[, sapply(temp, is.numeric), drop = FALSE]
 stopifnot(is.data.frame(temp), ncol(temp) >= 2, nrow(temp) > 0)
-jpeg("/Users/priyanka/Downloads/Suncor/Corrplot_Terminal.jpeg", width=5000, height=5000, res=600)
+jpeg(file.path(SUNCOR_BASE, "Corrplot_Terminal.jpeg"), width=5000, height=5000, res=600)
 ggcorrplot::ggcorrplot(as.matrix(cor(temp, use="pairwise.complete.obs")),  type = "lower",
    lab = TRUE)
 dev.off()

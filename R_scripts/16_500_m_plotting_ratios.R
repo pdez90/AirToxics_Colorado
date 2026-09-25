@@ -13,6 +13,7 @@
 # - Also saves one combined 2×2 panel figure (JPEG + PNG)
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(dplyr)
@@ -27,7 +28,7 @@ suppressPackageStartupMessages({
 # ----------------------------
 stopifnot(exists("seg_wide_sf"))
 
-out_dir <- "/Users/priyanka/Downloads/Suncor/segment500_ratio_maps"
+out_dir <- file.path(SUNCOR_BASE, "segment500_ratio_maps")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 tile_type <- "cartolight"

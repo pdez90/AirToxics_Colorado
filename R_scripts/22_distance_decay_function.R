@@ -12,6 +12,7 @@
 # - Plots median with 10–90% ribbon by pollutant
 # ------------------------------------------------------------
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(data.table)
@@ -27,8 +28,8 @@ suppressPackageStartupMessages({
 #   all_colorado_roads: sf lines with MTFCC codes
 stopifnot(exists("df"), exists("all_colorado_roads"))
 
-out_rds <- "/Users/priyanka/Downloads/Suncor/dist_road.RData"
-out_fig <- "/Users/priyanka/Downloads/Suncor/FinalFig/road_distance_decay.png"
+out_rds <- file.path(SUNCOR_BASE, "dist_road.RData")
+out_fig <- file.path(SUNCOR_BASE, "FinalFig/road_distance_decay.png")
 
 # road class labels
 mtfcc_labs <- c(

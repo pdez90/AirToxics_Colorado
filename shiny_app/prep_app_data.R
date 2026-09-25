@@ -1,16 +1,17 @@
 # ==============================================================
 # prep_app_data.R — builds compact data files for the Shiny explorer
 # Run ONCE (rerun after any pipeline rerun):
-#   cd /Users/priyanka/Downloads/Suncor/shiny_app
+#   cd "$SUNCOR_BASE"/shiny_app       (SUNCOR_BASE defaults to ~/Downloads/Suncor)
 #   Rscript prep_app_data.R
 # Reads only reproducible pipeline outputs; writes data/*.rds
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(sf); library(dplyr)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 OUT  <- file.path(BASE, "shiny_app", "data")
 dir.create(OUT, recursive = TRUE, showWarnings = FALSE)
 msg <- function(...) message("[prep] ", ...)

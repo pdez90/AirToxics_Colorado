@@ -21,6 +21,7 @@
 #   - FIG_WWTP_H2S_plume_funnel.png
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(tidyr)
@@ -55,13 +56,13 @@ DUR_STRICT       <- TRUE
 max_wind_sd_deg  <- 15
 keep_stab_levels <- c("B", "C", "D")
 
-out_dir <- "/Users/priyanka/Downloads/Suncor"
+out_dir <- SUNCOR_BASE
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # ----------------------------
 # LOAD
 # ----------------------------
-load("/Users/priyanka/Downloads/Suncor/mobile_hrrr_windfromwwtf_stability_filtered.RData")
+load(file.path(SUNCOR_BASE, "mobile_hrrr_windfromwwtf_stability_filtered.RData"))
 
 if (!exists("res_sub")) stop("Expected object `res_sub` in loaded file.")
 dat <- res_sub

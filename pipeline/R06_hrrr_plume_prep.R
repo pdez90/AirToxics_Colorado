@@ -22,7 +22,8 @@
 # all cache entries valid — expect mostly cache hits, fast re-run.
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("R06: HRRR + WWTF alignment + stability classes")
 
 t0 <- Sys.time()

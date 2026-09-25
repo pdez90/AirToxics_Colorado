@@ -9,7 +9,8 @@
 # Outputs: methane_sourceprob.RData + methane_sourceprob_map.png
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("M04: Methane source-probability surface")
 
 suppressPackageStartupMessages({ library(data.table); library(ggplot2) })

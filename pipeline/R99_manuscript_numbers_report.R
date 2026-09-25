@@ -6,7 +6,8 @@
 # Output: rerun_pipeline/manuscript_numbers_old_vs_new.csv
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("R99: Manuscript numbers — old vs new")
 
 rows <- list()
@@ -93,8 +94,24 @@ add_row("S3.3", "census blocks with >=1 mobile point",
 # writes to BASE/FinalFig/. The file was there and fresh - R04b sources script
 # 20, so it regenerates on every run - yet the report said "NOT FOUND, run R04b
 # then script 20" and the manuscript's headline block count went unreported.
-.rc <- list.files(BASE, pattern = "risk.*common.*[.]csv$", ignore.case = TRUE,
-                  full.names = TRUE, recursive = TRUE)
+# HARDENED (2026-09-25): this used to glob for "risk.*common.*[.]csv" and take
+# the first hit, so any similarly-named file anywhere under BASE could stand in
+# for the canonical one, and a stale copy would be reported without complaint.
+# Name the exact file script 20 writes, and fail loudly if it is absent rather
+# than silently reporting nothing. The recursive glob is kept only as a
+# diagnostic: if the canonical path is missing but look-alikes exist, say so.
+.rc_canon <- file.path(BASE, "FinalFig", "benzene_risk_summary_BINWEIGHTED_COMMONBLOCKS.csv")
+.rc <- if (file.exists(.rc_canon)) .rc_canon else character(0)
+if (!length(.rc)) {
+  .lookalikes <- list.files(BASE, pattern = "risk.*common.*[.]csv$", ignore.case = TRUE,
+                            full.names = TRUE, recursive = TRUE)
+  diag_msg("  [R99] CANONICAL RISK SUMMARY MISSING: ", .rc_canon)
+  if (length(.lookalikes))
+    diag_msg("  [R99] look-alike files exist but are NOT used: ",
+             paste(basename(.lookalikes), collapse = ", "))
+  warning("R99: ", basename(.rc_canon), " not found - run R04b (which sources ",
+          "script 20) before reporting manuscript numbers")
+}
 if (length(.rc)) {
   .rcx <- try(utils::read.csv(.rc[1]), silent = TRUE)
   if (!inherits(.rcx, "try-error") && "n_blocks" %in% names(.rcx)) {

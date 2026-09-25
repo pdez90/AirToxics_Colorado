@@ -13,8 +13,9 @@
 #
 # Output: TABLE_S5.1_group_exceedance_days.csv
 # ==============================================================
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(data.table); library(sf) })
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 load(file.path(BASE, "mobile_wswd.RData")); df <- as.data.table(out); rm(out); gc()
 df <- df[is.finite(Latitude) & is.finite(Longitude) &
          Site != "Goodrich Corporation (Collins Aerospace)"]

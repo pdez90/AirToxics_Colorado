@@ -10,8 +10,9 @@
 # Phillips 66 ~52 deg (computed below and printed).
 # Outputs: TABLE_lacasa_cpf.csv, FinalFig/FIG_lacasa_cpf.png
 # ==============================================================
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(data.table); library(lubridate); library(ggplot2); library(scales) })
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 cn12 <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene",
           "xylene","wd","ws","temp_far","temp_c","rh")
 # TIME CONVENTION (2026-09-22): the ascent files carry FOUR time columns —

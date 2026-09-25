@@ -5,7 +5,8 @@
 
 #Correcting for background
 
-load("/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge_rolling.RData")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+load(file.path(SUNCOR_BASE, "bgcorrected_out_merge_rolling.RData"))
 
 library(dplyr)
 
@@ -104,4 +105,4 @@ b6 <- rel_diff(df$HCN,              df$sHCN);              print(summary(b6))
 
 rm(b1, b2, b3, b4, b5, b6); gc()
 
-save(df, file = "/Users/priyanka/Downloads/Suncor/bgcorrected_out_merge.RData")
+save(df, file = file.path(SUNCOR_BASE, "bgcorrected_out_merge.RData"))

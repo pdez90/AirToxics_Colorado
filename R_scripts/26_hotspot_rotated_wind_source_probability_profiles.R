@@ -25,6 +25,7 @@
 # - UPDATED: added WWTF2 and renamed original WWTP to WWTF1
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(sf)
@@ -41,10 +42,10 @@ suppressPackageStartupMessages({
 # ----------------------------
 # USER SETTINGS
 # ----------------------------
-in_rdata <- "/Users/priyanka/Downloads/Suncor/mobile_wswd.RData"
-tri_csv  <- "/Users/priyanka/Downloads/Suncor/TRI.csv"
+in_rdata <- file.path(SUNCOR_BASE, "mobile_wswd.RData")
+tri_csv  <- file.path(SUNCOR_BASE, "TRI.csv")
 
-out_dir  <- "/Users/priyanka/Downloads/Suncor/sourceprob_maps"
+out_dir  <- file.path(SUNCOR_BASE, "sourceprob_maps")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # basemap

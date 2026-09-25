@@ -38,6 +38,7 @@
 #   - Uses ragg::agg_png for sharper PNGs.
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(dplyr)
@@ -55,8 +56,8 @@ suppressPackageStartupMessages({
 # ----------------------------
 # USER PATHS
 # ----------------------------
-in_dir  <- "/Users/priyanka/Downloads/Suncor"
-out_dir <- "/Users/priyanka/Downloads/Suncor/hotspot_group_reports"
+in_dir  <- SUNCOR_BASE
+out_dir <- file.path(SUNCOR_BASE, "hotspot_group_reports")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 f_groups  <- file.path(in_dir, "group_summary_persistent.csv")
@@ -67,7 +68,7 @@ f_tri     <- file.path(in_dir, "TRI.csv")
 # ----------------------------
 # MOBILE DATA
 # ----------------------------
-load("/Users/priyanka/Downloads/Suncor/mobile_wswd.RData")
+load(file.path(SUNCOR_BASE, "mobile_wswd.RData"))
 if (exists("out")) df <- out
 stopifnot(exists("df"))
 

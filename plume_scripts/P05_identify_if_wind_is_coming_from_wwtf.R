@@ -11,7 +11,8 @@
 # Coordinates: 39.81000446758592, -104.95562509611672
 # ============================================================
 
-load("/Users/priyanka/Downloads/Suncor/mobile_hrrr.RData")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+load(file.path(SUNCOR_BASE, "mobile_hrrr.RData"))
 
 # Expect object named `res`
 if (!exists("res")) {
@@ -124,7 +125,7 @@ if (all(c("wwtf_angle_diff_hrrr", "wwtf_angle_diff_obs") %in% names(res))) {
 # Save
 save(
   res,
-  file = "/Users/priyanka/Downloads/Suncor/mobile_hrrr_windfromwwtf.RData"
+  file = file.path(SUNCOR_BASE, "mobile_hrrr_windfromwwtf.RData")
 )
 
-message("Saved updated object to: /Users/priyanka/Downloads/Suncor/mobile_hrrr_windfromwwtf.RData")
+message("Saved updated object to: ", file.path(SUNCOR_BASE, "mobile_hrrr_windfromwwtf.RData"))

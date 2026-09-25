@@ -13,7 +13,8 @@
 #   FinalFig/FIG_methane_at_toxics_hotspots.png (heatmap + map panel)
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("M06: Methane as a discriminator at the persistent toxics hotspot groups")
 
 suppressPackageStartupMessages({

@@ -16,7 +16,8 @@
 #             xlsx -> csv step fully scripted going forward
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("R00a: raw-input verification vs official CDPHE repository")
 
 suppressPackageStartupMessages({ library(data.table); library(readxl) })

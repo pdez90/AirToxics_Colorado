@@ -33,6 +33,7 @@
 #   value below -100% is impossible and indicates a unit error.
 # --------------------------------------------------------------------------
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(tidyr)
@@ -514,7 +515,7 @@ simulate_error_vs_true_stack_height_wwtp <- function(res_met,
 # ============================================================
 # USAGE
 # ============================================================
-load("/Users/priyanka/Downloads/Suncor/mobile_hrrr.RData")
+load(file.path(SUNCOR_BASE, "mobile_hrrr.RData"))
 
 res_met <- res[, c("u10", "v10", "hpbl", "tcdc", "lcc")]
 res_met <- res_met[complete.cases(res_met), ]
@@ -532,13 +533,13 @@ wwtp_stack <- simulate_error_vs_true_stack_height_wwtp(
 print(wwtp_stack$plot)
 
 ggplot2::ggsave(
-  "/Users/priyanka/Downloads/Suncor/error_vs_true_stack_height_WWTP_0p5to5km.png",
+  file.path(SUNCOR_BASE, "error_vs_true_stack_height_WWTP_0p5to5km.png"),
   wwtp_stack$plot,
   width = 10.5, height = 6.8, dpi = 300
 )
 
 write.csv(
   wwtp_stack$summary,
-  "/Users/priyanka/Downloads/Suncor/error_vs_true_stack_height_WWTP_0p5to5km_summary.csv",
+  file.path(SUNCOR_BASE, "error_vs_true_stack_height_WWTP_0p5to5km_summary.csv"),
   row.names = FALSE
 )

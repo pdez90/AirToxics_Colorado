@@ -16,6 +16,7 @@
 #     * wind alignment uses wind_from_deg_wwtf
 # ============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr)
   library(geosphere)
@@ -48,7 +49,7 @@ source(.p00[1])
 # ============================================================
 # Load data
 # ============================================================
-load("/Users/priyanka/Downloads/Suncor/mobile_hrrr_windfromwwtf.RData")
+load(file.path(SUNCOR_BASE, "mobile_hrrr_windfromwwtf.RData"))
 
 if (!exists("res")) {
   stop("Expected object `res` in mobile_hrrr_windfromwwtf.RData")
@@ -170,4 +171,4 @@ res_sub %>% count(Stability_Class_simple)
 summary(res_sub$distance_wwtp)
 
 # Optional save
-save(res, res_sub, file = "/Users/priyanka/Downloads/Suncor/mobile_hrrr_windfromwwtf_stability_filtered.RData")
+save(res, res_sub, file = file.path(SUNCOR_BASE, "mobile_hrrr_windfromwwtf_stability_filtered.RData"))

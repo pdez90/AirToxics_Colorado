@@ -8,11 +8,12 @@
 # Output: FinalFig/tri_inside_outside_1km_distributions.png
 # ==============================================================
 
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(dplyr); library(sf); library(data.table); library(ggplot2); library(readr)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 RADIUS_M <- 1000
 set.seed(42)
 

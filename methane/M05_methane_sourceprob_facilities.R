@@ -11,7 +11,8 @@
 # Output: sourceprob_maps/sourceprob_methane_p99_..._refuel_adjusted.png
 # ==============================================================
 
-source("/Users/priyanka/Downloads/Suncor/rerun_pipeline/diagnostics_helpers.R")
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
+source(file.path(SUNCOR_BASE, "rerun_pipeline/diagnostics_helpers.R"))
 diag_section("M05: Methane source-probability map, Figure-3 style")
 
 suppressPackageStartupMessages({

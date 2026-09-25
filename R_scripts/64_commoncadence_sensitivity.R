@@ -34,12 +34,13 @@
 #   FinalFig/FIG_cadence_sensitivity.png
 # Runtime ~5-10 min.
 # ==============================================================
+SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(sf); library(dbscan)
   library(ggplot2); library(scales); library(patchwork)
 })
 set.seed(42)
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- SUNCOR_BASE
 BINS <- c(2, 5, 10)   # seconds; the 1-s delivered record is the baseline
 DOHOT <- TRUE
 
@@ -73,7 +74,7 @@ ats  <- as.data.table(st_drop_geometry(gll))[, .(block = get(idcol),
 # hard-coding. The 300 m headquarters exclusion moved the factors from
 # 1.149/1.228/1.377 to 1.165/1.274/1.443, and a hard-coded constant would have
 # left this table on the old scaling while the block surface used the new one.
-.sf_file <- file.path("/Users/priyanka/Downloads/Suncor", "lacasa_scaling_factors_option1_binweighted.RData")
+.sf_file <- file.path(SUNCOR_BASE, "lacasa_scaling_factors_option1_binweighted.RData")
 .sf_get <- function(pol, fallback) {
   if (!file.exists(.sf_file)) { message("[SCALING] file absent - using documented value for ", pol); return(fallback) }
   e <- new.env(); load(.sf_file, envir = e); o <- get(ls(e)[1], envir = e)
