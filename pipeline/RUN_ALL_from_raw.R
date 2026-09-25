@@ -23,10 +23,30 @@ diag_section("RUN_ALL_from_raw: reproducible pipeline (raw CDPHE inputs only)")
 diag_section("Step 1: verify primary inputs")
 raw_csv_dir <- file.path(BASE, "Updated", "csv")
 mobile_csvs <- list.files(raw_csv_dir, pattern = "^(Suncor|Terminal)_.*\\.csv$", full.names = TRUE)
+
+# PATH FIX (2026-09-23): this check hard-coded /Users/priyanka/Toxics_EST/MethaneData,
+# the folder the methane CSVs used to live in. They are now under
+# ~/Downloads/MethaneData, so the check reported [MISS] and stopped the whole
+# run at step 1 even though M01 itself resolves the folder correctly - M01 has
+# always searched a candidate list and honoured METHANE_DIR. Use the same
+# resolution here so the gate and the stage that consumes it cannot disagree.
+METH_DIR <- Sys.getenv("METHANE_DIR", "")
+if (!nzchar(METH_DIR) || !dir.exists(METH_DIR)) {
+  .cands <- c(file.path(path.expand("~"), "Downloads", "MethaneData"),
+              "/Users/priyanka/Downloads/MethaneData",
+              "/Users/priyanka/Toxics_EST/MethaneData",
+              file.path(BASE, "MethaneData"))
+  .hit <- .cands[dir.exists(.cands)]
+  METH_DIR <- if (length(.hit)) .hit[1] else NA_character_
+}
+.n_meth <- if (is.na(METH_DIR)) 0L else
+  length(list.files(METH_DIR, pattern = "_Methane\\.csv$", recursive = TRUE))
+diag_msg("  methane folder: ", if (is.na(METH_DIR)) "NOT FOUND" else METH_DIR,
+         "  (", .n_meth, " CSVs)")
+
 inputs <- list(
   "CDPHE mobile monthly CSVs (Updated/csv)" = length(mobile_csvs) >= 55,
-  "CDPHE methane deployment CSVs"           = length(list.files("/Users/priyanka/Toxics_EST/MethaneData",
-                                               pattern = "_Methane\\.csv$", recursive = TRUE)) >= 290,
+  "CDPHE methane deployment CSVs"           = .n_meth >= 290,
   "EPA AQS wind 2023"                       = file.exists(file.path(BASE, "hourly_WIND_2023.csv")),
   "EPA AQS wind 2024"                       = file.exists(file.path(BASE, "hourly_WIND_2024.csv")),
   "EPA AQS wind 2025"                       = file.exists(file.path(BASE, "hourly_WIND_2025.csv")),
@@ -126,8 +146,13 @@ run_stage("R03_background_segments.R")         # background + 500 m segments (Fi
 run_stage("R04_scaling_census_risk.R")         # La Casa scaling + census blocks
 run_stage("R04b_build_block_sf_risk.R")        # CANONICAL block risk (med-of-daily-med, scaled)
 run_stage("R05_hotspots.R")                    # source-prob maps + hotspot groups (Figs 3-4)
-run_stage("R06_hrrr_plume_prep.R")             # HRRR + WWTF + stability
-run_stage("R07_plume_inversion.R")             # H2S plumes + Gaussian inversion
+# SKIP_PLUMES=1 skips the Gaussian plume branch. Used for the 2026-09 HQ-exclusion
+# re-run: every plume candidate lies 0.5-5 km from the wastewater facility, >9 km
+# from CDPHE HQ, so the 300 m HQ exclusion cannot change the plume results.
+if (!nzchar(Sys.getenv("SKIP_PLUMES"))) {
+  run_stage("R06_hrrr_plume_prep.R")           # HRRR + WWTF + stability
+  run_stage("R07_plume_inversion.R")           # H2S plumes + Gaussian inversion
+} else diag_msg("SKIP_PLUMES set: R06/R07 (Gaussian plume branch) not run")
 run_stage("methane/M01_ingest_delay_garage.R")
 run_stage("methane/M02_wind_background.R")
 run_stage("methane/M03_hotspots.R")

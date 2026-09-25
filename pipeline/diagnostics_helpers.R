@@ -201,6 +201,56 @@ REF <- utils::modifyList(REF, list(
   emission_baseline_mean_tpy = 1036
 ))
 
+# --------------------------------------------------------------------
+# BENCHMARK REFRESH (2026-09-23, 300 m ATOPs-headquarters exclusion).
+# The block above was the state of the pipeline BEFORE the exclusion, so
+# after the HQ300 re-run every stage was checking itself against numbers the
+# run was no longer supposed to produce. Nothing failed loudly only because
+# R05's zero-tolerance final_groups check sits inside a branch that is
+# skipped when MASTER_hotspot_group_index.csv does not yet exist (group N
+# runs after R05 in the phase-1 driver), so the one check that would have
+# caught it never executed. Refreshed here so a real regression is visible
+# again. As-submitted values remain in REF_SUBMITTED.
+#
+# Provenance for each entry (HQ300 run, 2026-09-22/23):
+#   missing_wind_pct   0        R02 log: every row matched a station after the
+#                               hourly fallback (2,555,285 / 2,555,285). The
+#                               manuscript still says 10.6% - see below.
+#   median_dist_met_km 4.51     R02 log
+#   p99 toluene        3.8      TABLE_S3.1.csv / hotspot_thresholds_summary.csv
+#   p99 TMB            2.14     (was 4.31 / 2.59 / 3.19 pre-exclusion)
+#   p99 xylene         2.83
+#   scaling            1.165/1.274/1.443   TABLE_scaling_sensitivity_factors.csv
+#                                          (A_binweighted column)
+#   n_blocks           1667     benzene_risk_summary_BINWEIGHTED_COMMONBLOCKS.csv
+#   population         126527   same file
+#   risk_mobile        0.108-0.383   same file (risk_5_75 / risk_20_40)
+#   risk_ratio         0.92     pop-weighted 0.1483 / 0.1611
+#   dbscan_initial     2652     sum of n_clusters_all over the six pollutants
+#   clusters_ge3       14       summary_stats_persistent.csv
+#   final_groups       14       MASTER_hotspot_group_index.csv (14 rows)
+# Unchanged and therefore not restated: delays, risk_airtox, clusters_ge2,
+# clusters_ge4, and the whole plume branch (plume_candidates, plume_retained,
+# emission_*) - the Gaussian plume stages were deliberately not re-run because
+# every plume candidate lies 0.5-5 km from the wastewater facility and >9 km
+# from the headquarters, so the 300 m exclusion cannot reach them.
+#
+# NOTE for the manuscript: missing_wind_pct is now 0, not 10.6%. Section 2.3
+# still reads "Wind speed and direction data were missing for 10.6% of
+# measurements". 06_merge_with_wind.R picks the closest station that HAS an
+# observation in that hour, so after the fallback no measurement lacks wind.
+# The sentence needs rewording, not just a new number.
+# --------------------------------------------------------------------
+REF <- utils::modifyList(REF, list(
+  missing_wind_pct = 0, median_dist_met_km = 4.51,
+  p99 = c(Benzene_ppb = 1.8, Toluene_ppb = 3.8, Trimethylbenzene_ppb = 2.14,
+          Xylene_ppb = 2.83, Hydrogen_Sulfide_ppb = 4.8, Hydrogen_Cyanide_ppb = 11),
+  scaling = c(benzene = 1.165, toluene = 1.274, xylene = 1.443),
+  n_blocks = 1667, population = 126527,
+  risk_mobile = c(0.108, 0.383), risk_ratio = 0.92,
+  dbscan_initial = 2652, clusters_ge3 = 14, final_groups = 14
+))
+
 .ref_delta <- names(REF)[vapply(names(REF), function(k)
   !isTRUE(all.equal(REF[[k]], REF_SUBMITTED[[k]])), logical(1))]
 diag_msg("[BENCHMARKS] REF updated to current values for: ",

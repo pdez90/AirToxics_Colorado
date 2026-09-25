@@ -639,6 +639,86 @@ if (NATIVE_CADENCE) {
 }
 
 # ----------------------------
+# 3c) CDPHE HEADQUARTERS EXCLUSION (added 2026-09-22)
+# ----------------------------
+# The mobile laboratories are garaged at CDPHE's ATOPs headquarters in
+# Wheat Ridge, where the instruments run through start-up procedures
+# (including calibrations) before each deployment and shut-down
+# procedures after it. Those readings are taken inside or beside the
+# warehouse, not in ambient air. CDPHE flags data within ~300 m of the
+# headquarters for this reason (A. Ziola, CDPHE, pers. comm., 16 Sep
+# 2026; coordinates 39.785189 N, 105.104411 W supplied 17 Sep 2026).
+# Every row whose sampling location lies within HQ_RADIUS_M of that
+# point is dropped here, at the single point where the mobile record is
+# assembled, so every downstream analysis inherits the exclusion.
+#
+# The test uses the row's Latitude/Longitude AFTER the delay shift, i.e.
+# the location at which the air was drawn in. That is the physically
+# correct criterion: on departure, a reading delivered just outside the
+# radius was sampled up to 21 s earlier, inside it, and is removed; a
+# test on the delivery-time position would keep it.
+#
+# Rows without a position cannot be located and are left untouched
+# (every spatial analysis already requires finite coordinates).
+# The methane chain applies the same point and radius at its own entry
+# (rerun_pipeline/methane/M01_ingest_delay_garage.R).
+HQ_EXCLUDE  <- TRUE
+HQ_LAT      <- 39.785189
+HQ_LON      <- -105.104411
+HQ_RADIUS_M <- 300
+if (HQ_EXCLUDE) {
+  .hav_m <- function(lat1, lon1, lat2, lon2) {
+    r <- pi / 180
+    a <- sin((lat2 - lat1) * r / 2)^2 +
+         cos(lat1 * r) * cos(lat2 * r) * sin((lon2 - lon1) * r / 2)^2
+    2 * 6371008.8 * asin(pmin(1, sqrt(a)))
+  }
+  .d_hq  <- .hav_m(df_out$Latitude, df_out$Longitude, HQ_LAT, HQ_LON)
+  .in_hq <- !is.na(.d_hq) & .d_hq <= HQ_RADIUS_M
+  .polls <- intersect(c("Benzene_ppb", "Toluene_ppb", "Trimethylbenzene_ppb",
+                        "Xylene_ppb", "Hydrogen_Sulfide_ppb", "Hydrogen_Cyanide_ppb"),
+                      names(df_out))
+  message(sprintf("[HQ] excluding rows within %d m of CDPHE HQ (%.6f, %.6f)",
+                  HQ_RADIUS_M, HQ_LAT, HQ_LON))
+  message(sprintf("[HQ]   rows: %s of %s (%.2f%%); rows without a position left in place: %s",
+                  format(sum(.in_hq), big.mark = ","), format(nrow(df_out), big.mark = ","),
+                  100 * mean(.in_hq), format(sum(is.na(.d_hq)), big.mark = ",")))
+  for (.p in .polls) {
+    .v <- df_out[[.p]]
+    .nv <- sum(!is.na(.v)); .n_hq <- sum(!is.na(.v) & .in_hq)
+    .top <- if (.n_hq > 0) max(.v[.in_hq], na.rm = TRUE) else NA_real_
+    message(sprintf("[HQ]   %-22s %9s of %11s values removed (%.2f%%); max removed %s",
+                    .p, format(.n_hq, big.mark = ","), format(.nv, big.mark = ","),
+                    if (.nv > 0) 100 * .n_hq / .nv else 0,
+                    ifelse(is.na(.top), "-", format(round(.top, 2)))))
+  }
+  if (any(.in_hq)) {
+    .hq_days <- unique(as.Date(df_out$date[.in_hq]))
+    message(sprintf("[HQ]   sampling days with rows inside the radius: %d of %d",
+                    length(.hq_days), length(unique(as.Date(df_out$date)))))
+    message(sprintf("[HQ]   by asset: %s",
+                    paste(names(table(df_out$Asset[.in_hq])),
+                          table(df_out$Asset[.in_hq]), sep = " = ", collapse = ", ")))
+  }
+  # Written so the exclusion is auditable and reportable (Methods / Table S3.1).
+  .hq_summary <- data.frame(
+    pollutant  = .polls,
+    n_before   = sapply(.polls, function(p) sum(!is.na(df_out[[p]]))),
+    n_removed  = sapply(.polls, function(p) sum(!is.na(df_out[[p]]) & .in_hq)),
+    radius_m   = HQ_RADIUS_M, hq_lat = HQ_LAT, hq_lon = HQ_LON,
+    row.names  = NULL)
+  write.csv(.hq_summary, "/Users/priyanka/Downloads/Suncor/TABLE_hq_exclusion.csv",
+            row.names = FALSE)
+  df_out <- df_out[which(!.in_hq), ]
+  stopifnot(nrow(df_out) > 0)
+  # Guard: nothing left inside the radius.
+  .d_after <- .hav_m(df_out$Latitude, df_out$Longitude, HQ_LAT, HQ_LON)
+  stopifnot(!any(!is.na(.d_after) & .d_after <= HQ_RADIUS_M))
+  message("[HQ]   check passed: no remaining row lies within ", HQ_RADIUS_M, " m of HQ")
+  rm(.d_hq, .in_hq, .d_after, .polls, .hq_summary)
+}
+
+# ----------------------------
 # 4) Save outputs + counts
 # ----------------------------
 write.csv(df_out, "/Users/priyanka/Downloads/Suncor/mobile.csv", row.names = FALSE)

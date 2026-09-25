@@ -54,7 +54,9 @@ GROUPS <- list(
            scripts = "22_distance_decay_function.R"),
   G = list(desc = "TRI proximity analysis",
            pre = character(0),
-           scripts = "32_identifying_close_to_tri.R"),
+           # 23 rebuilds TRI_subset.csv (which 32 reads) and writes the domain
+           # and proximity counts quoted in section 2.1; it must precede 32.
+           scripts = c("23_tri.R", "32_identifying_close_to_tri.R")),
   H = list(desc = "FIGURE 4 + hotspot figures (33 -> 34 -> 35 chained)",
            pre = character(0),
            scripts = c("33_final_hotspot_plots.R", "34_fancy_plots_of_hotspots.R",
@@ -94,7 +96,13 @@ GROUPS <- list(
                        # block-level RData written by the main pipeline.
                        # Self-checks every number quoted in SI S7
                        # ([OK]/[EDIT] lines) like 72 does for S1.4.
-                       "74_health_hazard_screening.R")),
+                       "74_health_hazard_screening.R",
+                       # ADDED 2026-09-25: SI S7.4 temporal-scaling sensitivity
+                       # for the hazard screen (Tables S7.3 scenarios + S7.4
+                       # break-even factors). Runs AFTER 74 because it
+                       # self-checks its scenario A against 74's Table S7.1;
+                       # both read the same census-block surface. Seconds.
+                       "77_health_scaling_sensitivity.R")),
   K = list(desc = "TRI proximity figures (S4.2 distributions + S4.3 buffers)",
            pre = character(0),
            scripts = c("41_tri_inside_outside_distributions.R",
@@ -105,7 +113,9 @@ GROUPS <- list(
            scripts = "27_hotspot_sensitivity_sensitivity.R"),
   M = list(desc = "Table S5.1 per-group reports (maps/scatter/polar + highday tables)",
            pre = character(0),
-           scripts = "31_plotting.R"),
+           # 76 writes the per-group exceedance-day counts quoted in the
+           # Table S5.1 captions; it needs MASTER (group N) to exist first.
+           scripts = c("31_plotting.R", "76_group_exceedance_days.R")),
   N = list(desc = "Rebuild root MASTER_hotspot_group_index.csv (must precede H)",
            pre = character(0),
            scripts = "71_rebuild_master_index.R"),
@@ -158,12 +168,31 @@ GROUPS <- list(
   X = list(desc = "SI S4.3-S4.5 + S5.4: scaling sens, day/night, bootstrap, CPF",
            pre = character(0),
            scripts = c("48_scaling_sensitivity.R", "49_lacasa_daynight_ratios.R",
+                       # ADDED 2026-09-25: evidence behind S7.4 - within-500 m-cell
+                       # diurnal shape + the night:day-ratio-vs-24-h-factor table
+                       # (S7.5-S7.7, Figures S7.1-S7.2). MUST follow 49: it reads
+                       # TABLE_lacasa_daynight_ratios.csv, which 49 writes. ~90 s.
+                       "78_diurnal_scaling_evidence.R",
                        "58_bootstrap_blocks.R", "61_lacasa_cpf.R")),
   R = list(desc = "MDL / smoke / stability / seasonal / CAT-EMU (S1.2, S3.11-S3.14)",
            pre = character(0),
            scripts = c("45_mdl_sensitivity.R", "50_below_mdl_maps.R",
                        "51_cat_emu_comparison.R", "56_hms_smoke_days.R",
-                       "57_monthly_stability.R", "62_seasonal_patterns.R"))
+                       "57_monthly_stability.R", "62_seasonal_patterns.R")),
+  # ADDED 2026-08-24: the Section 3.2 exact-minute mobile-vs-La Casa comparison
+  # (n, Pearson r, RMSE, ODR at 100 m and 500 m) was in no group, so its saved
+  # metrics CSV (FinalFig/lacasa_mobile_exact_minute_metrics_100m_500m.csv)
+  # sat at its pre-delay-correction (March) vintage while mobile_wswd.RData
+  # moved on. This group keeps it current with the rest of the pipeline.
+  Y = list(desc = "Section 3.2 La Casa vs mobile exact-minute comparison (100 m / 500 m)",
+           pre = character(0),
+           scripts = "39_la_casa.R"),
+  # ADDED 2026-08-24: manuscript Figure 3 (six-panel source-probability maps).
+  # Script 26 was in no group — the same gap class as script 39 above — so the
+  # panel was regenerated only by hand (last: 2026-08-24, adding (a)-(f) titles).
+  Z = list(desc = "FIGURE 3: six-panel weighted/smoothed source-probability maps",
+           pre = character(0),
+           scripts = "26_hotspot_rotated_wind_source_probability_profiles.R")
 )
 
 sel <- Sys.getenv("GROUPS")

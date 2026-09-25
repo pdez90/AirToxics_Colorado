@@ -66,7 +66,7 @@ if (file.exists(idx_file)) {
     # tol_pct = 0: this one is exact by construction, so it must be checked
     # against the CURRENT expected count (REF, updated 2026-08-20), not the
     # as-submitted 17 (still available as REF_SUBMITTED$final_groups).
-    diag_check_value("final persistent hotspot groups (expect 18)", n_groups,
+    diag_check_value("final persistent hotspot groups (expect 14)", n_groups,
                      REF$final_groups, tol_pct = 0)
   }
 } else diag_msg("  [WARN] MASTER_hotspot_group_index.csv not found")
@@ -93,7 +93,10 @@ th_file <- file.path(BASE, "hotspot_thresholds_summary.csv")
 if (file.exists(th_file)) {
   th <- utils::read.csv(th_file)
   for (i in seq_len(nrow(th))) diag_msg("  ", paste(names(th), "=", unlist(th[i, ]), collapse = "  "))
-  diag_msg("  Compare to ms: benzene 63.8/12d, toluene 43/7, TMB 36/5, xylene 53.5/8, H2S 28/9, HCN 24/3.")
+  # LABEL REFRESH (2026-09-23): these were the AS-SUBMITTED thresholds. The
+  # manuscript now carries the post-exclusion set, so both are printed.
+  diag_msg("  As submitted:  benzene 63.8/12d, toluene 43/7, TMB 36/5, xylene 53.5/8, H2S 28/9, HCN 24/3.")
+  diag_msg("  Current (ms):  benzene 63.7/12d, toluene 55.5/8, TMB 57.1/8, xylene 58/9, H2S 39/13, HCN 24.4/4.")
 } else diag_msg("  [WARN] hotspot_thresholds_summary.csv not found")
 
 diag_msg("\nR05 complete. If group membership changed, Table S5.1, Figures 3-4, and the")
