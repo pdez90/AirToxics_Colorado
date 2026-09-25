@@ -3,11 +3,17 @@
 **Policy (adopted 2026-08-15): every manuscript number must be reproducible from primary
 inputs. No hand-made or interactive intermediate is accepted.**
 
-Last full re-run: **2026-08-21/22**, from raw CDPHE inputs with `CLEAN=1` (~9.2 h). All
-stages completed. Every number in the revised manuscript comes from that run. This run
-retained H2S across the 2023 inlet-contamination window (+93,992 values, +35 sampling days)
-and dropped the 28-30 May 2025 HCN calibration window (-27,739 values, -2 days); those two
-changes moved the plume and hotspot results below.
+Last full re-run: **2026-09-23/25**, from raw CDPHE inputs, after the CDPHE co-authors
+required removal of every measurement within 300 m of the ATOPs headquarters. Every number
+in the manuscript, the SI and the Shiny app comes from that run. Stage 1 (R01-R05) ran
+2026-09-23; stages R06 onward were completed by `RUN_RESUME_from_R06.sh` (R06 133 min,
+figures 901 min). 26 of 28 figure groups passed first time; group U was re-run after an
+`apply` masking fix and group A after being killed on memory pressure. **Zero `[EDIT]`
+flags** across every group log, i.e. nothing in the run disagrees with the documents.
+
+The previous full re-run was **2026-08-21/22** (~9.2 h): it retained H2S across the 2023
+inlet-contamination window (+93,992 values, +35 sampling days) and dropped the 28-30 May 2025
+HCN calibration window (-27,739 values, -2 days).
 
 Group J (Figure S3.1 route summary) failed in that run on a masked `shift()`; the call is now
 namespaced as `data.table::shift` in `43_figure_s31_routes.R` (and in
@@ -33,6 +39,22 @@ Stage 0 is a hard gate: if the guard tests fail nothing else runs. Stages 1–4 
 error and print a pass/fail summary. Only stage 1 quarantines intermediates (to
 `quarantine_intermediates_<ts>/`), so re-running stages 2–4 alone is safe. Everything is
 logged under `rerun_pipeline/logs/run_<timestamp>/`.
+
+To resume after stage 1 without redoing R01-R05 (the expensive part), use
+
+```bash
+bash ~/Downloads/Suncor/rerun_pipeline/RUN_RESUME_from_R06.sh
+```
+
+which pre-flights five R01-R05 outputs, runs R06 → R07 → methane → R99 → P09/P10 →
+`MAKE_FIGURES.R`, never CLEANs, and keeps every stage under `caffeinate -i`.
+
+**Read the per-group logs, not the exit code.** `MAKE_FIGURES.R` exits 0 even when a group
+fails. Its `[PASS]`/`[FAIL]` lines go to `figures.log`, *not* to the per-group
+`FIG_<g>_console.txt` files — a check that grepped the console logs (as both runners did
+until 2026-09-25) never matched, so a run with failed groups still printed
+"all groups completed" and "ALL STAGES COMPLETED". Both runners now read `figures.log` and
+additionally warn when the number of groups started differs from the number of result lines.
 
 `RUN_ALL_from_raw.R` can still be run alone. `hrrr_hour_cache/` holds raw NOAA fields keyed
 by UTC hour — an input cache, not a derived product — so a warm cache speeds re-runs without
@@ -116,14 +138,14 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
 
 2. **Block-level benzene risk** = population-weighted, using
    `sBenzene_med_of_daily_med_scaled` (median of daily medians, La Casa bin-weighted scaling
-   ×1.149), on blocks with AirToxScreen benzene + population > 0. Implemented in R04b +
+   ×1.165), on blocks with AirToxScreen benzene + population > 0. Implemented in R04b +
    script 20. **This replaces the manuscript's irreproducible Feb-2026 numbers** (1,120
    blocks / 2.4×): that aggregation was interactive, left no code, and no tested
    reconstruction (10 candidates) reproduces it.
 
-   Reproducible result, 2026-08-21 run: **1,668 blocks, 126,607 residents**; AirToxScreen
-   0.117–0.416 excess cases, mobile 0.108–0.384, **ratio 0.92**. Per block, mobile benzene is
-   *lower* than AirToxScreen in **77%** of blocks (median ratio 0.77), ≥2× higher in 6%, and
+   Reproducible result, 2026-09-23/25 run: **1,667 blocks, 126,527 residents**; AirToxScreen
+   0.117–0.416 excess cases, mobile 0.108–0.383, **ratio 0.92**. Per block, mobile benzene is
+   *lower* than AirToxScreen in **77%** of blocks (median ratio 0.78), ≥2× higher in 6%, and
    an order of magnitude higher in **3** blocks. Block-level correlation is nil (Pearson
    0.004, Spearman −0.040). Framing: the two datasets disagree in **spatial pattern**, not in
    overall level — screening models approximate the aggregate but misplace it spatially.
@@ -151,12 +173,32 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
    volumetric quantity and `kg_s` is a rate — neither is t/yr. Use
    `pick_emission_col()` (in `diagnostics_helpers.R`); do not pattern-match column names.
 
-4. **Hotspots**: **17** persistent multi-pollutant groups. Group 70 (H2S + TMB + xylene,
-   1.63 km from the nearest TRI facility) is new; groups 49 and 52 no longer qualify; group
-   10 lost its reduced species and group 12 gained H2S, so the classification is now
-   9 petroleum-VOC + 6 reduced-species + 2 BTEX-dominated.
+4. **Hotspots**: **14** persistent multi-pollutant groups after the 300 m exclusion
+   (group ids 4, 8, 10, 11, 12, 13, 22, 28, 29, 30, 34, 40, 43, 60), from 2,652 initial
+   DBSCAN clusters → 217 persistent → 155 candidate → 37 / 14 / 8. The 2026-08 run had 17;
+   the three that no longer qualify sat within the excluded radius or lost persistence with
+   the records removed. Table S5.1 and its 56 panels (14 groups × 4) follow this set.
 
-5. **Cadence**: native-cadence averaging (H2S 5 s, HCN 2 s, CH4 5 s), block mean assigned only
+5. **300 m CDPHE-headquarters exclusion** (added 2026-09-23 at the request of the CDPHE
+   co-authors): every measurement within 300 m of 39.785189, −105.104411 is removed. The rule
+   lives in `03_checks_flags.R` section 3c, is unconditional, and carries a `stopifnot` that
+   nothing inside the radius survives, so it holds across a CLEAN re-run. It removes **47,643
+   of 2,602,928 records (1.8%) on 114 of the 203 sampling days**. The methane chain applies
+   the same radius as its garage filter (M01).
+
+6. **Concentration bases.** Three quantities recur and are not interchangeable. *Raw* =
+   delay-corrected, native-cadence values as delivered, negatives and below-MDL retained;
+   these are Table S3.1, the p99 event thresholds and the values quoted in the main text.
+   *Background-corrected* = minus the rolling background (lowest 20th percentile over a
+   20-minute window, SI S4.1.1); these underlie the 500 m maps, the census-block surface and
+   the S7 hazard quotients. *Temporally scaled* = block-level background-corrected × the La
+   Casa bin-weighted factors; used only where a 24-h average is required (the §3.3 benzene
+   comparison, and the maximum sustained cell in Table S3.2). SI Table S3.2 reports the
+   median and p99 on **both** bases, raw first and background-corrected in parentheses;
+   `54_health_reference_table.R` emits both and filters the raw record exactly as
+   `70_table_s31.R` does so its raw columns equal Table S3.1 cell for cell.
+
+7. **Cadence**: native-cadence averaging (H2S 5 s, HCN 2 s, CH4 5 s), block mean assigned only
    to seconds that already held a value, applied after delay correction. Plume detection is
    exempt and uses the delivered `*_raw` signal.
 
@@ -176,8 +218,33 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
 Unchanged: benzene / toluene / TMB / xylene 99th percentiles (1.8 / 4.31 / 2.59 / 3.19 ppb),
 median benzene 0.1 ppb, median HCN 1 ppb, La Casa scaling factors (1.15 / 1.23 / 1.38).
 
+## What the 2026-09-23/25 re-run changed
+
+| item | 2026-08-21/22 | this run |
+|---|---|---|
+| 1-s measurements | 2,602,928 | 2,555,285 |
+| common blocks / residents | 1,668 / 126,607 | **1,667 / 126,527** |
+| persistent hotspot groups | 17 | **14** |
+| La Casa scaling (benzene/toluene/xylene) | 1.149 / 1.228 / 1.377 | **1.165 / 1.274 / 1.443** |
+| p99 toluene / TMB / xylene | 4.31 / 2.59 / 3.19 | **3.80 / 2.14 / 2.83** |
+| p99 H2S / HCN | 4.6 / 11 | **4.8 / 11** |
+| mobile benzene risk | 0.108–0.384 | 0.108–0.383 |
+| TRI facilities quoted in §2.1 | 752 (facility-*year* rows, statewide) | **67** in the route bounding box |
+
+Unchanged and re-verified: the plume funnel (**37 candidates → 4 retained**), the four
+baseline intercepts (471 / 706 / 1,003 / 1,964 t/yr, mean 1,036.04), the well-posed scenario
+envelope (126–3,929 t/yr over 104 of 112 rows), the risk ratio 0.92, and every S7 organ
+hazard index (endocrine 1.61 / 8.71, respiratory 0.371 / 4.97, neurological 0.031 / 0.555,
+hematological 0.015 / 0.237).
+
+**Two emission ranges exist and must not be confused**: the *baseline per-plume* range
+471–1,964 t/yr (mean 1,036) is what both documents quote; the *all-well-posed-scenario*
+envelope 126–3,929 t/yr is a `REF` diagnostic and is deliberately not quoted.
+
 ## Known exclusions
 
+- **Within 300 m of the CDPHE ATOPs headquarters** (39.785189, −105.104411) — see canonical
+  definition 5. 47,643 records on 114 days.
 - `40_alert.R` (alerts add-on) reads `Suncor_alerts.csv` + orphan `lacasa_pbl.RData`; not part
   of any manuscript number → excluded.
 - Figure-only scripts are run by `MAKE_FIGURES.R` after stage 1; they consume only pipeline
@@ -570,10 +637,79 @@ Figure and table numbers are unchanged: Figures S5.1-S5.5 and Table S5.1 were
 already one continuous sequence across the two former sections. S2's subheadings,
 which were numbered 2.2.1 / 2.2.2, are now S2.1 / S2.2.
 
-## Manuscript and SI figure provenance (2026-08-21)
+**Added 2026-09-25: S7.4 "Sensitivity to temporal scaling"**, carrying Tables S7.3-S7.7 and
+Figures S7.1-S7.2. La Casa measures only benzene, toluene and C8 aromatics, so no 24-h
+scaling factor exists for 1,2,4-TMB, H2S or HCN — and H2S and HCN drive every hazard index
+in S7. `77_health_scaling_sensitivity.R` recomputes the organ indices under four scaling
+constructions (exact arithmetic: HQ is linear in concentration and each scaling is one
+multiplicative constant, so no pipeline stage is re-run) and reports the break-even factor at
+which each index would cross 1. `78_diurnal_scaling_evidence.R` estimates the hour effect
+**within 500 m cells** — hour of day is confounded with location on a fixed route — and shows
+the La Casa night:day ratio ranks the three measured species exactly as their 24-h factors
+rank while within-window shape does not, so the factor is an overnight quantity and the
+missing H2S/HCN factor is a measurement gap rather than an analysis choice.
 
-Every numbered figure in both documents is the file the 2026-08-21 run wrote; none is
-hand-edited or carried over. The swap scripts (`swap_figs.py` for the manuscript,
+**Added 2026-09-25 (later): the scaling toggle on Shiny page 7.** Page 7 previously
+showed a single hazard basis and said nothing about scaling, while its 500 m map sat on a
+*different* basis from its own sidebar: `73_cumulative_risk.R` writes EC/HQ columns that
+already carry the La Casa factor for benzene, toluene and xylenes (a `scale_factor` column
+in `TABLE_cumulative_HQ_by_cell.csv`), whereas `74_health_hazard_screening.R` writes
+Table S7.1 unscaled. The app read both straight and labelled neither. Three changes close
+this:
+
+- `77_health_scaling_sensitivity.R` now also writes
+  **`TABLE_S7.3b_scaling_by_pollutant.csv`** — the S7.3 scenarios kept per pollutant, with
+  the factor applied and its provenance (`La Casa, measured` / `borrowed: …` / `unscaled`)
+  as columns. It asserts that this table sums by organ to Table S7.3.
+- `shiny_app/prep_app_data.R` reads S7.3, S7.3b and S7.4 into `hazard.rds`, and rebuilds the
+  cell surface from **one** baseline: the unscaled HQ recovered as `mean_ppb / rfc`, then
+  multiplied by the scenario factor. It checks that `unscaled × scale_factor` reproduces
+  73's own `HQ_mean` (rel. diff ≈ 1e-14) before using it, and fails loudly on any species or
+  target-organ name it cannot map between the two files.
+- `shiny_app/app.R` exposes scenarios A–D as a radio control. The organ-index table, the
+  per-pollutant chronic table (now carrying factor and basis columns) and the map all follow
+  it; the acute screen does not, and says so — a 24-h-equivalence factor adjusts a long-term
+  mean, not a short-term peak. The break-even table (S7.4) is shown alongside, and the
+  sidebar text naming the measured factor range and the break-even factors is built at load
+  from the written tables rather than typed in.
+
+Two display defects were fixed in the same pass. The page 7 map was continuous
+`log10(HI)` on **reversed** magma, which put the darkest colour on the *lowest* cells and
+made the legend read upside down; it is now fixed HI bins on the same light→dark ramp as
+page 1, with a break exactly at the screening benchmark (`right = FALSE`, so HI = 1 lands in
+the "at or above" bin) and a `-Inf` floor so the negative-HI cells that come from retained
+below-background values still draw. And CARTO began watermarking its keyless raster
+basemap tiles with "API KEY REQUIRED", which was printing diagonally across every map in
+the deployed app; `base_map()` now uses `Esri.WorldGrayCanvas`, with a fallback to
+`CartoDB.Positron` on any leaflet build that lacks the entry.
+
+Re-run order after touching any of this: `77_health_scaling_sensitivity.R`, then
+`shiny_app/prep_app_data.R` (which syncs `.rds` into the repo copy), then push — Posit
+Connect Cloud redeploys on push. Do **not** run `writeManifest()`.
+
+## Manuscript and SI figure provenance (2026-09-25)
+
+Every numbered figure in both documents is the file the 2026-09-23/25 run wrote; none is
+hand-edited or carried over. Re-embedded 2026-09-25: **44 SI figures, 4 manuscript figures
+and the 56 Table S5.1 panels** (14 groups × 4), each verified afterwards against its current
+source by alpha-composited grayscale comparison (all RMS < 0.7 against a noise floor of
+~0.5). Before that pass, 35 of 44 SI figures and 3 of 4 manuscript figures were stale: the
+documents had been built on 23 Sep at 16:10, *before* that day's run finished at 17:33, and
+the 23 Sep vet covered text and numbers only.
+
+Three traps in this operation, all of which produced silent wrong answers first:
+
+1. **The part names in `swap_si_figs.py` are dead.** The SI has been rebuilt since; every
+   `word/media/imageNN` number changed. Derive `rId → part` from
+   `word/_rels/document.xml.rels` and match figures to parts by *content*, then reverse-look
+   up the rId, asserting exactly one embedding rId per part.
+2. **Caption proximity mis-assigns figures.** A "next `Figure SX.Y` within N characters"
+   heuristic shifted S5.6-S5.9 by one, because an unlabelled image sits in that block.
+3. **A `<w:drawing>` must be inside a `<w:r>`.** Placed directly in `<w:p>` it validates
+   perfectly — well-formed XML, declared rIds, present media, unique docPr — and renders as
+   *nothing*. Only a PDF proof catches it.
+
+Older provenance notes, from the 2026-08-21 pass, follow. The swap scripts (`swap_figs.py` for the manuscript,
 `swap_si_figs.py` for the SI) rewrite the `word/media` part in place and recompute
 `<wp:extent>`/`<a:ext>` from the new image's aspect ratio, so nothing is stretched.
 
@@ -599,6 +735,27 @@ only three of the four panel types.
 
 ## Fixes applied for reproducibility
 
+### Found during the 2026-09 re-run
+- **`P04_join_with_mobile_toxics_data.R`** — `plan(multicore)` forks, and forking a process
+  that holds a live multi-threaded Python interpreter (reticulate/Herbie) deadlocks. R06 hung
+  for 6 h 15 min with no output. Now `plan(sequential)` unless `HRRR_PARALLEL` is set.
+- **`P03_code_to_download_hrrr.R`** — the nearest-grid-cell search scanned all 1,905,141 HRRR
+  cells once per point per cube (~62 h projected for R06). Replaced with a cropped batch
+  search: verified identical indices for 400 query points on a synthetic rotated HRRR-sized
+  grid, 233× faster. R06 now runs in 133 min.
+- **`M04_sourceprob_map.R`** — `apply()` is masked by the `raster`/`terra` S4 generic, which
+  has no method for a plain matrix, whenever the methane chain runs inside `MAKE_FIGURES`
+  group U. The script loads only data.table and ggplot2, so it passed standalone and failed
+  only in that calling context. Now `base::apply`.
+- **`23_tri.R`** — `TRI.csv` holds 752 facility-*year* rows for the whole state, i.e. 284
+  unique locations, of which 67 lie in the route bounding box. De-duplicate on coordinates
+  before counting. `shiny_app/prep_app_data.R` had the same bug and plotted all 752.
+- **Runner pass/fail checks** read `figures.log` rather than the per-group console logs (see
+  "One command"); a run with failed groups previously reported success.
+- **`06_merge_with_wind.R`** now reports how often the nearest met station had no wind in the
+  sampling hour and a farther one was used: 218,527 of 2,555,285 rows (8.6%).
+
+### Earlier
 - **Time convention** made explicit and asserted in 02, 06, P04 and H04; `36_hysplit` corrected
   from `America/Denver` to `MST` (35 of 60 HYSPLIT receptors had been launched an hour early);
   H04's `tz_local` argument removed entirely in favour of the constant `H04_TZ_LOCAL`.

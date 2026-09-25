@@ -40,6 +40,43 @@ haz     <- if (file.exists(file.path(DATA, "hazard.rds")))
              readRDS(file.path(DATA, "hazard.rds")) else NULL
 udays   <- if (!is.null(tracks)) sort(unique(tracks$day)) else NULL
 
+# ---- S7.4 temporal-scaling scenarios --------------------------------------
+# Mobile sampling is weekday-daytime, so a campaign mean is not a 24-h mean.
+# The La Casa stationary monitor measures that gap directly - but only for
+# benzene, toluene and the C8 aromatics. 1,2,4-TMB, H2S and HCN have no La
+# Casa channel, and H2S and HCN are exactly the two species that drive every
+# number on page 7. The toggle exposes that, rather than leaving the reader to
+# find it in the SI. Labels here; every value comes from hazard.rds.
+SCEN_LAB <- c(
+  A_none      = "A - no scaling (the basis used in the paper)",
+  B_aromatics = "B - measured aromatics scaled; H2S and HCN unscaled",
+  C_borrowed  = "C - B, plus H2S/HCN at the mean aromatic factor",
+  D_upper     = "D - B, plus H2S/HCN at the largest aromatic factor")
+SCEN_CHOICES <- if (!is.null(haz) && !is.null(haz$scen)) {
+  .u <- unique(as.character(haz$scen$scenario))
+  stats::setNames(.u, ifelse(.u %in% names(SCEN_LAB), SCEN_LAB[.u], .u))
+} else stats::setNames("A_none", SCEN_LAB[["A_none"]])
+
+# The measured-factor range and the break-even factors are quoted in the
+# sidebar text. Both are read from the written SI tables at load, so the
+# sentence follows a re-run instead of going stale.
+.meas <- if (!is.null(haz) && !is.null(haz$scen_poll))
+           haz$scen_poll[grepl("^La Casa", factor_source), unique(factor)] else numeric(0)
+.be   <- if (!is.null(haz) && !is.null(haz$breakeven)) haz$breakeven else NULL
+.bget <- function(org, col) {
+  if (is.null(.be) || !org %in% .be$organ) return(NA_real_)
+  as.numeric(.be[[col]][match(org, .be$organ)])
+}
+SCALE_WINDOW_TXT <- if (length(.meas) && !is.null(.be)) sprintf(paste0(
+  "How wrong would a borrowed factor have to be to matter? H2S would need a ",
+  "24-h factor of %.2f before the community-average respiratory hazard index ",
+  "reached 1, and HCN a factor below %.2f before the endocrine index fell to ",
+  "1. The measured aromatic factors span %.2f to %.2f, comfortably inside ",
+  "that window - which is why no conclusion on this page moves between ",
+  "scenarios A and D."),
+  .bget("Respiratory", "f_breakeven_pwmean"), .bget("Endocrine", "f_breakeven_pwmean"),
+  min(.meas), max(.meas)) else NULL
+
 POLLS <- sort(unique(cells$pollutant))
 unit_of <- function(p) if (p == "Methane") "ppm" else "ppb"
 WWTP_LL <- c(39.81000447, -104.95562510)
@@ -103,7 +140,14 @@ CTX_COLS <- c("Covered facilities" = "red", "Wastewater treatment" = "green",
               "Woodshop" = "purple", "Refueling stations" = "dodgerblue",
               "TRI facilities" = "white", "Wind sites" = "orange",
               "La Casa" = "gold")
-base_map <- function() leaflet() |> addProviderTiles(providers$CartoDB.Positron) |>
+# CARTO began watermarking its keyless raster basemap tiles with "API KEY
+# REQUIRED", which printed diagonally across every map in the deployed app.
+# Esri's light grey canvas needs no key, is equally recessive under a
+# sequential ramp, and keeps the data the darkest thing on the page. The
+# fallback keeps the app running on any leaflet build that lacks the entry.
+BASE_PROVIDER <- if ("Esri.WorldGrayCanvas" %in% names(providers))
+                   "Esri.WorldGrayCanvas" else "CartoDB.Positron"
+base_map <- function() leaflet() |> addProviderTiles(BASE_PROVIDER) |>
   setView(-104.95, 39.82, zoom = 11)
 
 # ================= UI =================
@@ -218,8 +262,8 @@ ui <- navbarPage(
                  "medians, it deliberately suppresses episodic plumes; ",
                  "metrics weighted toward the upper tail would place ",
                  "mobile-derived exposure above AirToxScreen overall.")),
-      mainPanel(width = 9, leafletOutput("p2_map", height = 420),
-                plotOutput("p2_scatter", height = 240)))),
+      mainPanel(width = 9, leafletOutput("p2_map", height = 380),
+                plotOutput("p2_scatter", height = 420)))),
 
   tabPanel("3. H2S plumes",
     sidebarLayout(
@@ -310,16 +354,38 @@ ui <- navbarPage(
       sidebarPanel(width = 3,
         checkboxGroupInput("p6_ctx", "Layers", CTX_CHOICES, selected = CTX_CHOICES),
         helpText("All contextual features used in the study: the three ",
-                 "covered facilities (HB21-1189), two wastewater treatment ",
-                 "facilities, refueling stations and a woodshop identified ",
-                 "during the campaign, all TRI facilities in the domain, the ",
+                 "covered facilities in the Denver metro area (HB21-1189) - ",
+                 "the covered facility in Pueblo is outside this study - two ",
+                 "wastewater treatment facilities, refueling stations and a ",
+                 "woodshop identified during the campaign, the Toxics Release ",
+                 "Inventory (TRI) facilities inside the route domain, the ",
                  "four EPA AQS meteorological stations, and the La Casa ",
-                 "stationary monitoring site.")),
+                 "stationary monitoring site. TRI is the US EPA's annual ",
+                 "public inventory of industrial chemical releases.")),
       mainPanel(width = 9, leafletOutput("p6_map", height = 640)))),
 
   tabPanel("7. Health screening",
     sidebarLayout(
       sidebarPanel(width = 3,
+        radioButtons("p7_scen", "Temporal scaling of concentrations",
+                     choices = SCEN_CHOICES, selected = SCEN_CHOICES[[1]]),
+        helpText("Sampling ran on weekday daytimes, so a campaign mean is not ",
+                 "a 24-hour mean. The La Casa stationary monitor measures that ",
+                 "gap directly - but only for benzene, toluene and the C8 ",
+                 "aromatics. There is no La Casa channel for ",
+                 "1,2,4-trimethylbenzene, and ", tags$b("none for H2S or HCN"),
+                 " - the two species that set every hazard index on this page. ",
+                 "Scenario A scales nothing and is what the paper reports. B ",
+                 "applies each measured aromatic's own factor and gives ",
+                 "1,2,4-TMB the mean of the three. C and D additionally ",
+                 tags$i("borrow"), " a factor for H2S and HCN."),
+        helpText(tags$b("C and D are bounds, not estimates. "),
+                 "Borrowing assumes the unmeasured species share the aromatics' ",
+                 "diurnal shape. Within 500 m cells they do not: the aromatics ",
+                 "fall across the sampling window while H2S and HCN rise. Read ",
+                 "C and D as an upper envelope on what scaling could do, not as ",
+                 "a better estimate than A."),
+        if (!is.null(SCALE_WINDOW_TXT)) helpText(SCALE_WINDOW_TXT),
         radioButtons("p7_organ", "Organ-system hazard index",
                      choices = if (!is.null(haz) && !is.null(haz$cells))
                                  sort(unique(haz$cells$organ)) else "none"),
@@ -351,14 +417,28 @@ ui <- navbarPage(
       mainPanel(width = 9,
                 leafletOutput("p7_map", height = 420),
                 h4("Chronic hazard quotients by pollutant"),
+                helpText("The factor column is the multiplier the selected ",
+                         "scenario applies to each species, and its basis says ",
+                         "whether that multiplier was measured at La Casa or ",
+                         "borrowed from the aromatics."),
                 tableOutput("p7_chronic"),
+                h4("How much scaling would it take to change a conclusion?"),
+                helpText("For each organ system: the hazard index with nothing ",
+                         "scaled, with only the measured aromatics scaled, and ",
+                         "the factor that would have to apply to the species ",
+                         "with no La Casa channel for that index to reach 1. A ",
+                         "blank means no unscalable species contributes, so no ",
+                         "borrowed factor can move that row."),
+                tableOutput("p7_breakeven"),
                 h4("Acute screen: short-term peaks vs 1-hour reference exposure levels"),
                 helpText("Campaign 99th-percentile and maximum short-term ",
                          "concentrations against the California OEHHA 1-hour ",
                          "acute RELs. The maximum column compares a sub-minute ",
                          "peak with a one-hour guideline, so it is a ",
                          "conservative upper bound rather than an estimate of a ",
-                         "realized one-hour exposure."),
+                         "realized one-hour exposure. The scaling toggle does ",
+                         "not apply here: a 24-h-equivalence factor adjusts a ",
+                         "long-term mean, not a short-term peak."),
                 tableOutput("p7_acute")))),
 
   tabPanel("8. Contact",
@@ -385,6 +465,82 @@ ui <- navbarPage(
                "QA/QC'd public repository and is interpreted in relative terms only."))))
 )
 
+# ---- concentration colour scale -------------------------------------------
+# Sequential, light -> dark, so higher concentration reads as darker and more
+# visually dominant. The previous viridis ramp ran dark (low) -> pale yellow
+# (high), which inverted that: the lowest cells dominated the map and the
+# highest receded, and the legend consequently read upside-down (CDPHE review,
+# 2026-09-15). Binned rather than continuous so the legend can be drawn in
+# explicit order - leaflet renders a continuous legend minimum-first and gives
+# no supported way to flip it without decoupling the labels from the gradient.
+#
+# Deliberately NOT the US AQI green/yellow/orange/red/purple scheme: these are
+# raw pollutant mixing ratios, not AQI categories, and no AQI breakpoints exist
+# for most of these species at these levels. Borrowing those colours would imply
+# a regulatory category the data does not carry.
+CONC_RAMP <- c("#FDD0A2", "#FDAE6B", "#FD8D3C", "#F16913",
+               "#D94801", "#A63603", "#7F2704")
+
+conc_scale <- function(v, n = length(CONC_RAMP)) {
+  v <- v[is.finite(v)]
+  if (!length(v) || diff(range(v)) == 0)
+    return(list(pal = function(x) CONC_RAMP[1], cols = CONC_RAMP[1], labs = "n/a"))
+  brk <- unique(stats::quantile(v, probs = seq(0, 1, length.out = n + 1),
+                                na.rm = TRUE, type = 7))
+  if (length(brk) < 3) brk <- unique(pretty(v, n))
+  if (length(brk) < 3) brk <- range(v)
+  k <- length(brk) - 1
+  cols <- grDevices::colorRampPalette(CONC_RAMP)(k)
+  pal <- leaflet::colorBin(cols, domain = v, bins = brk, na.color = "transparent")
+  fmt <- function(x) formatC(signif(x, 3), format = "fg", big.mark = ",")
+  labs <- sprintf("%s - %s", fmt(brk[-length(brk)]), fmt(brk[-1]))
+  list(pal = pal, cols = cols, labs = labs, brk = brk)
+}
+
+# Legend with the LARGEST value at the top, which is how a vertical colour key
+# is normally read. addLegend(colors=, labels=) renders in the order supplied.
+add_conc_legend <- function(map, sc, title, position = "bottomright")
+  leaflet::addLegend(map, position = position, colors = rev(sc$cols),
+                     labels = rev(sc$labs), title = title, opacity = 0.9)
+
+# Fixed-domain version, for layers whose scale is pinned rather than data-driven.
+conc_scale_fixed <- function(dom, n = 6, digits = 3) {
+  brk <- seq(dom[1], dom[2], length.out = n + 1)
+  cols <- grDevices::colorRampPalette(CONC_RAMP)(n)
+  fmt <- function(x) formatC(signif(x, digits), format = "fg")
+  list(pal = leaflet::colorBin(cols, domain = dom, bins = brk,
+                               na.color = "transparent"),
+       cols = cols,
+       labs = sprintf("%s - %s", fmt(brk[-length(brk)]), fmt(brk[-1])),
+       brk = brk)
+}
+
+# The mobile : AirToxScreen ratio is a POLARITY, not a magnitude: 1 means the
+# two agree, and the question is which side a block falls on. That is a
+# diverging scale - two hues with a neutral midpoint - not a sequential one.
+# Breaks are symmetric in log space about 1 so no bin straddles agreement.
+# The IRIS reference concentration for trimethylbenzene applies to ANY TMB
+# isomer or mixture (IRIS 2016), and the instruments do not resolve a single
+# isomer, so the health tables name the species "Trimethylbenzenes" rather than
+# implying the 1,2,4- isomer specifically (CDPHE review, 2026-09-15). The
+# pipeline CSVs keep their own column names untouched.
+tidy_pollutant <- function(x)
+  sub("^1,2,4-Trimethylbenzene$", "Trimethylbenzenes",
+      sub("^Trimethylbenzene$", "Trimethylbenzenes", as.character(x)))
+
+RATIO_BRK  <- c(0, 1/3, 1/2, 2/3, 1, 1.5, 2, 3)
+RATIO_COLS <- c("#2166AC", "#4393C3", "#92C5DE", "#D1E5F0",
+                "#FDDBC7", "#EF8A62", "#B2182B")
+ratio_scale <- function() {
+  fmt <- function(x) formatC(signif(x, 2), format = "fg")
+  list(pal = leaflet::colorBin(RATIO_COLS, domain = c(0, 3), bins = RATIO_BRK,
+                               na.color = "transparent"),
+       cols = RATIO_COLS,
+       labs = c(sprintf("%s - %s", fmt(RATIO_BRK[-length(RATIO_BRK)]),
+                        fmt(RATIO_BRK[-1]))),
+       brk = RATIO_BRK)
+}
+
 # ================= SERVER =================
 server <- function(input, output, session) {
 
@@ -392,8 +548,9 @@ server <- function(input, output, session) {
   output$p1_map <- renderLeaflet({
     d <- cells[pollutant == input$p1_poll]
     v <- d[[input$p1_stat]]
-    pal <- colorNumeric("viridis", domain = if (input$p1_stat == "n") log10(v) else v)
-    col <- if (input$p1_stat == "n") pal(log10(v)) else pal(v)
+    .vv <- if (input$p1_stat == "n") log10(v) else v
+    sc  <- conc_scale(.vv)
+    col <- sc$pal(.vv)
     m <- base_map() |>
       addRectangles(d$lon - 0.00292, d$lat - 0.00226, d$lon + 0.00292,
                     d$lat + 0.00226, fillColor = col, fillOpacity = 0.65,
@@ -403,11 +560,13 @@ server <- function(input, output, session) {
                       unit_of(input$p1_poll), d$p95, d$max))
     m <- add_context(m, input$p1_ctx)
     if (input$p1_stat == "n") {
-      addLegend(m, pal = pal, values = log10(v),
-                title = "1-s measurements<br>per 500 m cell",
-                labFormat = labelFormat(transform = function(x) signif(10^x, 2)))
+      .sc2 <- sc
+      .sc2$labs <- sprintf("%s - %s",
+                           formatC(signif(10^sc$brk[-length(sc$brk)], 2), format = "d", big.mark = ","),
+                           formatC(signif(10^sc$brk[-1], 2), format = "d", big.mark = ","))
+      add_conc_legend(m, .sc2, "1-s measurements<br>per 500 m cell")
     } else {
-      addLegend(m, pal = pal, values = v,
+      add_conc_legend(m, sc,
                 title = sprintf("%s %s (%s)", input$p1_poll, input$p1_stat,
                                 unit_of(input$p1_poll)))
     }
@@ -470,17 +629,18 @@ server <- function(input, output, session) {
                   mob = b$sBenzene_med_of_daily_med_scaled, ratio = b$ratio)
     dom <- switch(input$p2_layer,
                   ats = c(0.1, 0.35), mob = c(0, 1), ratio = c(0, 3))
-    pal <- colorNumeric("viridis", domain = dom)
+    sc <- if (input$p2_layer == "ratio") ratio_scale() else conc_scale_fixed(dom)
     leaflet(b) |> addProviderTiles(providers$CartoDB.Positron) |>
       setView(-104.93, 39.82, zoom = 11) |>
-      addPolygons(fillColor = ~pal(pmin(pmax(val, dom[1]), dom[2])),
+      addPolygons(fillColor = sc$pal(pmin(pmax(val, dom[1]), dom[2])),
                   fillOpacity = 0.75, weight = 0.3, color = "grey40",
                   popup = ~sprintf(
                     "AirToxScreen: %.3f ppb<br>Mobile (scaled): %.3f ppb<br>Ratio: %.2f<br>Population: %s",
                     benzene_ppb_airtox, sBenzene_med_of_daily_med_scaled,
                     ratio, format(Population_airtox, big.mark = ","))) |>
-      addLegend(pal = pal, values = dom, title = switch(input$p2_layer,
-                ats = "AirToxScreen (ppb)", mob = "Mobile (ppb)", ratio = "Ratio"))
+      add_conc_legend(sc, switch(input$p2_layer,
+                ats = "AirToxScreen (ppb)", mob = "Mobile (ppb)",
+                ratio = "Mobile : AirToxScreen<br>(1 = agreement)"))
   })
   output$p2_stats <- renderTable({
     b <- st_drop_geometry(blocks)
@@ -561,6 +721,11 @@ server <- function(input, output, session) {
       m <- addCircleMarkers(m, data = g, ~Longitude, ~Latitude,
         radius = ~pmax(6, sqrt(persistence_index_weighted) / 3),
         color = "black", weight = 1.5, fillColor = colv, fillOpacity = 0.85,
+        label = ~sprintf("Group %s", group_id),
+        labelOptions = labelOptions(direction = "top", textsize = "13px",
+                                    style = list("font-weight" = "bold")),
+        # addCircleMarkers takes no highlight argument (that is polygons and
+        # polylines only); the hover label is what identifies the group.
         popup = ~sprintf(
           "<b>Group %s</b><br>Pollutants: %s<br>Total exceedance-days: %s (max %s)<br>Nearest TRI: %s (%.1f km)%s",
           group_id, gsub("\\+", " + ", pollutants), total_n_days, max_n_days,
@@ -725,30 +890,77 @@ server <- function(input, output, session) {
   output$p6_map <- renderLeaflet(add_context(base_map(), input$p6_ctx))
 
   # ---- page 7: screening health hazard (SI S7) ----
+  # Which scenario is live. Falls back to the unscaled baseline whenever
+  # hazard.rds predates 77_health_scaling_sensitivity.R, so an app deployed
+  # against older data still runs - it just shows scenario A with no toggle.
+  p7_scen <- reactive(if (is.null(input$p7_scen)) "A_none" else input$p7_scen)
+
   output$p7_hi <- renderTable({
     req(haz)
-    data.frame(`Organ system` = haz$hi$target_organ,
-               `Community avg` = sprintf("%.3g", haz$hi$HI_pwmean),
-               `Most-exposed block` = sprintf("%.3g", haz$hi$HI_maxblock),
-               check.names = FALSE)
+    if (!is.null(haz$scen)) {
+      d <- haz$scen[scenario == p7_scen()]
+      req(nrow(d) > 0)
+      d <- d[order(-HI_pwmean)]
+      data.frame(`Organ system` = d$organ,
+                 `Community avg` = sprintf("%.3g", d$HI_pwmean),
+                 `Most-exposed block` = sprintf("%.3g", d$HI_maxblock),
+                 check.names = FALSE)
+    } else {
+      data.frame(`Organ system` = haz$hi$target_organ,
+                 `Community avg` = sprintf("%.3g", haz$hi$HI_pwmean),
+                 `Most-exposed block` = sprintf("%.3g", haz$hi$HI_maxblock),
+                 check.names = FALSE)
+    }
   })
 
   output$p7_chronic <- renderTable({
     req(haz)
-    d <- haz$chronic
-    data.frame(Pollutant = d$pollutant,
-               `Target organ` = d$target_organ,
-               `IRIS RfC (ug/m3)` = format(d$RfC_ugm3, big.mark = ","),
-               `Community avg (ug/m3)` = sprintf("%.3g", d$pwmean_ugm3),
-               `HQ (community avg)` = sprintf("%.3g", d$HQ_pwmean),
-               `HQ (most-exposed block)` = sprintf("%.3g", d$HQ_maxblock),
+    if (!is.null(haz$scen_poll)) {
+      d <- haz$scen_poll[scenario == p7_scen()]
+      req(nrow(d) > 0)
+      data.frame(Pollutant = tidy_pollutant(d$pollutant),
+                 `Target organ` = d$organ,
+                 `IRIS RfC (ug/m3)` = format(d$RfC_ugm3, big.mark = ","),
+                 `Scaling factor` = sprintf("%.3f", d$factor),
+                 `Basis of factor` = d$factor_source,
+                 `Community avg (ug/m3)` = sprintf("%.3g", d$pwmean_ugm3),
+                 `HQ (community avg)` = sprintf("%.3g", d$HQ_pwmean),
+                 `HQ (most-exposed block)` = sprintf("%.3g", d$HQ_maxblock),
+                 check.names = FALSE)
+    } else {
+      d <- haz$chronic
+      data.frame(Pollutant = tidy_pollutant(d$pollutant),
+                 `Target organ` = d$target_organ,
+                 `IRIS RfC (ug/m3)` = format(d$RfC_ugm3, big.mark = ","),
+                 `Community avg (ug/m3)` = sprintf("%.3g", d$pwmean_ugm3),
+                 `HQ (community avg)` = sprintf("%.3g", d$HQ_pwmean),
+                 `HQ (most-exposed block)` = sprintf("%.3g", d$HQ_maxblock),
+                 check.names = FALSE)
+    }
+  })
+
+  output$p7_breakeven <- renderTable({
+    req(haz, haz$breakeven)
+    d <- haz$breakeven
+    fmt <- function(x) ifelse(is.finite(x), sprintf("%.3g", x), "")
+    # these two columns hold "A + B + C" lists, so the anchored tidy_pollutant()
+    # would not touch them - substitute the token wherever it appears instead
+    tidy_list <- function(x) gsub("1,2,4-Trimethylbenzene", "Trimethylbenzenes",
+                                  as.character(x), fixed = TRUE)
+    data.frame(`Organ system` = d$organ,
+               `Driven by` = tidy_list(d$driven_by),
+               `No La Casa factor` = tidy_list(d$no_lacasa_factor),
+               `HI unscaled` = fmt(d$HI_pwmean_unscaled),
+               `HI aromatics scaled` = fmt(d$HI_pwmean_aromscaled),
+               `Break-even factor (community avg)` = fmt(d$f_breakeven_pwmean),
+               `Break-even factor (most-exposed block)` = fmt(d$f_breakeven_maxblock),
                check.names = FALSE)
   })
 
   output$p7_acute <- renderTable({
     req(haz)
     d <- haz$acute
-    data.frame(Pollutant = d$pollutant,
+    data.frame(Pollutant = tidy_pollutant(d$pollutant),
                `OEHHA 1-h REL (ug/m3)` = format(d$acuteREL_ugm3, big.mark = ","),
                `p99 (ug/m3)` = sprintf("%.3g", d$p99_ugm3),
                `HQ at p99` = sprintf("%.3g", d$HQ_p99),
@@ -757,25 +969,43 @@ server <- function(input, output, session) {
                check.names = FALSE)
   })
 
+  # Fixed HI bins with a break exactly at the screening benchmark. The old
+  # scale was continuous log10(HI) on reversed magma, which put the darkest
+  # colour on the LOWEST cells and made the legend read upside down, and asked
+  # the reader to convert a log axis back to a hazard index in their head. The
+  # bins are pinned rather than data-driven so that switching scenario or organ
+  # moves the map, not the meaning of a colour.
+  HI_BRK  <- c(-Inf, 0.1, 0.25, 0.5, 1, 2.5, 5, Inf)
+  HI_LABS <- c("under 0.1", "0.1 - 0.25", "0.25 - 0.5", "0.5 - 1",
+               "1 - 2.5  (at or above benchmark)",
+               "2.5 - 5  (at or above benchmark)",
+               "over 5  (at or above benchmark)")
+
   output$p7_map <- renderLeaflet({
     req(haz, haz$cells)
-    d <- haz$cells[organ == input$p7_organ]
+    d <- haz$cells
+    if ("scenario" %in% names(d)) d <- d[scenario == p7_scen()]
+    d <- d[organ == input$p7_organ]
     req(nrow(d) > 0)
-    # colour on log10(HI) so the sub-1 range stays legible; HI = 1 is the
-    # screening benchmark, marked in the legend
-    lv <- log10(pmax(d$HI, 1e-4))
-    pal <- colorNumeric("magma", domain = lv, reverse = TRUE)
+    hi_col <- function(v) {
+      # right = FALSE so an HI of exactly 1 lands in the "at or above the
+      # benchmark" bin, which is what "at or above 1" means in S7.
+      i <- cut(v, HI_BRK, labels = FALSE, include.lowest = TRUE, right = FALSE)
+      out <- CONC_RAMP[i]; out[is.na(i)] <- "#BDBDBD"; out
+    }
     base_map() |>
       addRectangles(d$lon - 0.00292, d$lat - 0.00226,
                     d$lon + 0.00292, d$lat + 0.00226,
-                    fillColor = pal(lv), fillOpacity = 0.7, weight = 0,
+                    fillColor = hi_col(d$HI), fillOpacity = 0.75, weight = 0,
                     popup = sprintf(
-                      "<b>%s hazard index: %.3g</b><br>%s<br>%s sampling days",
-                      d$organ, d$HI, d$pollutants, d$n_days)) |>
+                      "<b>%s hazard index: %.3g</b><br>%s<br>%s sampling days<br><i>%s</i>",
+                      d$organ, d$HI, d$pollutants, d$n_days,
+                      names(SCEN_CHOICES)[match(p7_scen(), SCEN_CHOICES)])) |>
       add_context(c("Covered facilities", "Wastewater treatment")) |>
-      addLegend("bottomright", pal = pal, values = lv,
-                title = sprintf("%s HI<br>(log10; 0 = HI of 1)", input$p7_organ),
-                labFormat = labelFormat(transform = function(x) round(x, 1)))
+      addLegend("bottomright", colors = rev(CONC_RAMP), labels = rev(HI_LABS),
+                opacity = 0.9,
+                title = sprintf("%s hazard index<br><span style='font-weight:normal'>scenario %s</span>",
+                                input$p7_organ, sub("_.*$", "", p7_scen())))
   })
 }
 

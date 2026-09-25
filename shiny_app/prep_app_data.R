@@ -261,10 +261,18 @@ msg("context.rds: ", nrow(key), " key facilities + ", nrow(tri), " TRI + ",
 # Chronic hazard quotients / organ-system hazard indices on the census-block
 # basis (74_health_hazard_screening.R) and the companion acute screen, plus the
 # 500 m cell-resolved hazard indices used as the S7.3 sensitivity check
-# (73_cumulative_risk.R). Every value is read from the written tables - nothing
-# is recomputed here - so the app cannot drift from the SI.
-f71 <- file.path(BASE, "TABLE_S7.1_chronic_hazard.csv")
-f72 <- file.path(BASE, "TABLE_S7.2_acute_screen.csv")
+# (73_cumulative_risk.R) and the four temporal-scaling scenarios of S7.4
+# (77_health_scaling_sensitivity.R). Every block-level value is read from the
+# written tables - nothing is recomputed here - so the app cannot drift from
+# the SI. The one place this block does arithmetic is the 500 m cell surface,
+# which S7.4 never tabulates per cell: there it applies the factors that 77
+# WROTE to the ppb means that 73 WROTE, which is exact because HQ is linear in
+# concentration, and checks itself against 73's own scaled column below.
+f71   <- file.path(BASE, "TABLE_S7.1_chronic_hazard.csv")
+f72   <- file.path(BASE, "TABLE_S7.2_acute_screen.csv")
+f73   <- file.path(BASE, "TABLE_S7.3_scaling_scenarios.csv")
+f73b  <- file.path(BASE, "TABLE_S7.3b_scaling_by_pollutant.csv")
+f74b  <- file.path(BASE, "TABLE_S7.4_breakeven_factors.csv")
 fcell <- file.path(BASE, "TABLE_cumulative_HQ_by_cell.csv")
 if (file.exists(f71) && file.exists(f72)) {
   chronic <- fread(f71)
@@ -276,26 +284,90 @@ if (file.exists(f71) && file.exists(f72)) {
                     HI_maxblock = sum(HQ_maxblock)), by = target_organ]
   setorder(hi, -HI_pwmean)
 
-  # per-cell hazard indices by organ system (mean-concentration basis, the
-  # analogue of the block mean-of-daily-means used for the chronic table)
+  # ---- S7.4 scaling scenarios (organ level, per-pollutant level, break-even)
+  scen      <- if (file.exists(f73))  fread(f73)  else NULL
+  scen_poll <- if (file.exists(f73b)) fread(f73b) else NULL
+  brk       <- if (file.exists(f74b)) fread(f74b) else NULL
+  if (is.null(scen_poll))
+    warning("TABLE_S7.3b_scaling_by_pollutant.csv not found - run ",
+            "77_health_scaling_sensitivity.R; the app's scaling toggle will ",
+            "fall back to the unscaled baseline only")
+
+  # ---- per-cell hazard indices by organ system ------------------------------
+  # NOTE ON THE BASELINE. 73 writes EC/HQ columns that ALREADY carry the La
+  # Casa factor for the three measured aromatics (scale_factor in that file),
+  # so its HQ_mean is a scenario-B-like surface, not the unscaled baseline the
+  # block tables use. Reading it straight was how the map and the sidebar came
+  # to sit on two different bases with nothing in the app saying so. The
+  # unscaled HQ is recovered from the written ppb mean and RfC, and every
+  # scenario is then built from that one baseline.
   hcells <- NULL
   if (file.exists(fcell) && exists("cells")) {
     hq <- fread(fcell)
-    if (all(c("cell", "tos", "HQ_mean") %in% names(hq))) {
-      hcells <- hq[is.finite(HQ_mean), .(HI = round(sum(HQ_mean), 3),
-                                         pollutants = paste(sort(unique(pollutant)),
-                                                            collapse = ", "),
-                                         n_days = max(n_days, na.rm = TRUE)),
-                   by = .(cell, organ = tos)]
-      hcells <- merge(hcells, cells, by = "cell")
+    if (all(c("cell", "tos", "HQ_mean", "mean_ppb", "rfc", "pollutant",
+              "scale_factor", "n_days") %in% names(hq))) {
+      hq[, HQ_unscaled := mean_ppb / rfc]
+
+      # CHECK: factor x unscaled must reproduce 73's own scaled HQ column
+      .chk <- hq[is.finite(scale_factor) & is.finite(HQ_mean) & is.finite(HQ_unscaled),
+                 .(rel = max(abs(HQ_unscaled * scale_factor - HQ_mean) /
+                             pmax(abs(HQ_mean), .Machine$double.eps))), by = pollutant]
+      for (i in seq_len(nrow(.chk)))
+        msg("  cell baseline check ", .chk$pollutant[i], ": rel.diff ",
+            sprintf("%.2e", .chk$rel[i]), if (.chk$rel[i] < 1e-8) "  OK" else "  MISMATCH")
+      if (nrow(.chk) && max(.chk$rel) >= 1e-8)
+        warning("recovered unscaled cell HQ disagrees with 73's scaled column")
+
+      if (!is.null(scen_poll)) {
+        # 73 and 77 name two species differently; map explicitly so a renamed
+        # species fails loudly here rather than silently dropping out of a
+        # hazard index.
+        NAMEMAP <- c(Benzene = "Benzene", Toluene = "Toluene",
+                     Xylene = "Xylenes",
+                     Trimethylbenzene = "1,2,4-Trimethylbenzene",
+                     H2S = "H2S", HCN = "HCN")
+        ORGANMAP <- c(`Hematological/Immunological` = "Hematological",
+                      Neurological = "Neurological",
+                      Respiratory = "Respiratory", Endocrine = "Endocrine")
+        .miss <- setdiff(unique(hq$pollutant), names(NAMEMAP))
+        if (length(.miss)) stop("unmapped pollutant in the cell table: ",
+                                paste(.miss, collapse = ", "))
+        .miss <- setdiff(unique(hq$tos), names(ORGANMAP))
+        if (length(.miss)) stop("unmapped target organ in the cell table: ",
+                                paste(.miss, collapse = ", "))
+        hq[, `:=`(pname = NAMEMAP[pollutant], oname = ORGANMAP[tos])]
+        .miss <- setdiff(unique(hq$pname), unique(scen_poll$pollutant))
+        if (length(.miss)) stop("cell species absent from S7.3b: ",
+                                paste(.miss, collapse = ", "))
+
+        fac <- unique(scen_poll[, .(scenario, pollutant, factor)])
+        hcells <- merge(
+          hq[is.finite(HQ_unscaled), .(cell, pname, oname, n_days, HQ_unscaled)],
+          fac, by.x = "pname", by.y = "pollutant", allow.cartesian = TRUE)
+        hcells <- hcells[, .(HI = round(sum(HQ_unscaled * factor), 4),
+                             pollutants = paste(sort(unique(pname)), collapse = ", "),
+                             n_days = max(n_days, na.rm = TRUE)),
+                         by = .(scenario, cell, organ = oname)]
+        hcells <- merge(hcells, cells, by = "cell")
+      } else {
+        hcells <- hq[is.finite(HQ_unscaled),
+                     .(HI = round(sum(HQ_unscaled), 4),
+                       pollutants = paste(sort(unique(pollutant)), collapse = ", "),
+                       n_days = max(n_days, na.rm = TRUE)),
+                     by = .(cell, organ = tos)]
+        hcells <- merge(hcells, cells, by = "cell")
+      }
     }
   }
-  saveRDS(list(chronic = chronic, acute = acute, hi = hi, cells = hcells),
+  saveRDS(list(chronic = chronic, acute = acute, hi = hi, cells = hcells,
+               scen = scen, scen_poll = scen_poll, breakeven = brk),
           file.path(OUT, "hazard.rds"))
   msg("hazard.rds: ", nrow(chronic), " pollutants, ", nrow(hi),
       " organ systems, ",
-      if (is.null(hcells)) 0 else nrow(hcells), " cell-organ rows")
+      if (is.null(hcells)) 0 else nrow(hcells), " cell-organ rows, ",
+      if (is.null(scen)) 0 else uniqueN(scen$scenario), " scaling scenarios")
   print(hi)
+  if (!is.null(scen)) print(dcast(scen, organ ~ scenario, value.var = "HI_pwmean"))
 } else {
   warning("S7 hazard tables not found - hazard.rds not written, ",
           "app page 7 will be hidden")
