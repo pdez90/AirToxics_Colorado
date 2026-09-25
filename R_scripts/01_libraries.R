@@ -44,7 +44,13 @@ library(RAQSAPI)
 library("keyring")
 require(naniar)
 require(ggridges)
-require(hclust)
+# DEAD LINES, commented out 2026-09-25. All four were require() calls, so they
+# only ever emitted a warning and returned FALSE - nothing in the codebase uses
+# any of them. They blocked renv::snapshot(), which is how they surfaced.
+#   hclust  is not a package at all - it is stats::hclust, a function.
+#   plyrs   is a typo; the real package plyr is required separately below.
+#   zipcode and ropenaq were archived from CRAN and are referenced nowhere.
+# require(hclust)   # not a package: stats::hclust is a function
 require(dplyr)
 require(geosphere)
 require(sf)
@@ -77,7 +83,7 @@ require(acs)
 require(choroplethr)
 require(choroplethrMaps)
 require(tidycensus)
-require(zipcode)
+# require(zipcode)  # archived from CRAN; unused
 require(dplyr)
 require(RCurl)
 require(jsonlite)
@@ -85,7 +91,7 @@ require(FNN)
 require(sp)
 require(rgdal)
 require(readr)
-require(ropenaq)
+# require(ropenaq)  # archived from CRAN; unused
 require(arsenal)
 require(data.table)
 require(revgeo)
@@ -168,7 +174,7 @@ require(topicmodels)
 require(textmineR)
 require(tidytext)
 require(lubridate)
-require(plyrs)
+# require(plyrs)    # typo for plyr, which is required separately
 require(stringi)
 require(stringr)
 require(SnowballC)

@@ -46,6 +46,30 @@ near the top, and every path is built from it. The analysis root holds the prima
 receives all intermediates and outputs; it is a separate folder from this repository, which
 holds only code.
 
+### Package environment
+
+`renv.lock` records the 485 packages this analysis ran against, under R 4.3.3. It is provenance,
+not an enforced environment: there is deliberately no `.Rprofile`, so opening R in this folder
+does not switch libraries on you. To recreate the environment explicitly:
+
+```r
+renv::restore(lockfile = "renv.lock")
+```
+
+Three caveats, none of which affects the analysis:
+
+- **Three Bioconductor packages** (`BiocGenerics`, `BiocVersion`, `EBImage`) need `BiocManager`
+  installed first.
+- **Three GitHub remotes**: `ggrepel` (slowkow), `nmea` (paleolimbot), `splitr` (rich-iannone).
+- **Five packages have since been archived from CRAN** — `rgdal`, `rgeos`, `maptools`, `acs`,
+  `choroplethr` — so `restore()` will fail on them. All five are loaded with `require()` in
+  `R_scripts/01_libraries.R`, which warns and continues rather than stopping, and nothing in the
+  analysis calls them. Skip them.
+
+Note that `shiny_app/manifest.json` pins a *different* terra version (1.8-42) from `renv.lock`
+(1.8-60). That is intentional: the manifest targets Posit Connect Cloud's GDAL, and the two
+files describe different environments. Do not "fix" one to match the other.
+
 Until 2026-09-25 the paths were hard-coded to the authors' machine in 103 scripts, so a clone
 would not run anywhere else even after editing a `BASE` constant. The replacement was verified
 by evaluating all 252 substituted path expressions in R and confirming each resolves to the

@@ -19,3 +19,5 @@ old_outputs_predelayfix/
 
 # exception: Shiny app data (small derived files needed for deploy)
 !shiny_app/data/*.rds
+renv/
+.Rprofile
