@@ -697,6 +697,48 @@ Re-run order after touching any of this: `77_health_scaling_sensitivity.R`, then
 `shiny_app/prep_app_data.R` (which syncs `.rds` into the repo copy), then push — Posit
 Connect Cloud redeploys on push. Do **not** run `writeManifest()`.
 
+**Added 2026-09-26: S4.6 "Sensitivity to the background definition"**, carrying Table S4.1
+and Figure S4.12. The local background of S4.1.1 rests on two constants taken from the
+literature rather than estimated from these data: the percentile (20th) and the rolling
+window (20 minutes). `79_background_sensitivity.R` re-runs the whole background chain of
+scripts 10-11 under a 3x3 grid - 10th/20th/30th percentile x 10/20/30-minute window - and
+propagates all nine arms to the 500 m cell surface, the census-block surface, the benzene
+risk comparison (script 20) and the S7 block-resolved hazard indices (script 74). Nothing
+is rescaled after the fact: each arm recomputes the rolling percentile, the run median and
+both correction branches from `mobile_wswd.RData`.
+
+Two things make this trustworthy rather than merely plausible:
+
+- **The engine is gated against the pipeline itself.** Before any sensitivity arm is
+  reported the script re-runs the published setting and requires it to reproduce every
+  `baseline_*`, `median_bg*` and `s*` column of `mobile_corrected.RData` **exactly** -
+  2,555,285 rows x 6 pollutants, maximum absolute difference 0, zero NA-pattern
+  mismatches. It `stop()`s otherwise. (The reimplementation exists because the pipeline's
+  `slider::slide_index_dbl` path costs ~19 min per arm; the Rcpp Fenwick-tree engine in
+  the script costs ~3 s and is bit-identical, including R's type-7 quantile interpolation
+  `(1-h)*x[lo] + h*x[hi]` - writing it as `x[lo] + h*(x[hi]-x[lo])` differs at 1e-16 and
+  fails the gate. A pure-R `slider` fallback runs automatically if Rcpp cannot compile.)
+- **The point-in-block join is done once and reused by all nine arms.** It reproduces the
+  published block surface to 0.0012% of observations (23 of 1,891,525 boundary
+  assignments differ, because script 18 joined against the full Colorado block layer in
+  geographic coordinates while this script joins against the saved overlap layer); the
+  published population-weighted block benzene concentration is reproduced to 0.006%.
+  Because the same assignment is used in every arm, this residual cancels in every
+  arm-to-arm comparison reported in S4.6.
+
+Not re-run, by design: the hotspot chain (its detector thresholds the RAW `*_ppb` columns
+against a campaign 99th percentile and never reads a background-corrected column, so it is
+algebraically independent of this grid) and the Gaussian plume inversion (frozen for this
+revision).
+
+Outputs: `TABLE_S4.1_background_sensitivity.csv`,
+`TABLE_S4.1b_background_sensitivity_cells.csv`,
+`FinalFig/FIG_S4.12_background_sensitivity.png`. Registered in `MAKE_FIGURES.R` group X,
+last in the list - it must run after the main pipeline has written
+`mobile_corrected.RData`, since the gate reads it. ~6 min with Rcpp. The script self-checks
+all 24 numbers quoted in SI S4.6 with `[OK]`/`[EDIT]` lines, like 72 and 74 do for their
+sections.
+
 ## Manuscript and SI figure provenance (2026-09-25)
 
 Every numbered figure in both documents is the file the 2026-09-23/25 run wrote; none is

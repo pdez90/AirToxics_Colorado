@@ -166,7 +166,7 @@ GROUPS <- list(
   # S4.4 (La Casa day/night), S4.5 (day-resampling bootstrap) and S5.4
   # (La Casa CPF). These scripts were in no group, so the 2026-08-21/22 rerun
   # never refreshed their figures; this group keeps them current.
-  X = list(desc = "SI S4.3-S4.5 + S5.4: scaling sens, day/night, bootstrap, CPF",
+  X = list(desc = "SI S4.3-S4.6 + S5.4: scaling sens, day/night, bootstrap, CPF, background sens",
            pre = character(0),
            scripts = c("48_scaling_sensitivity.R", "49_lacasa_daynight_ratios.R",
                        # ADDED 2026-09-25: evidence behind S7.4 - within-500 m-cell
@@ -174,7 +174,19 @@ GROUPS <- list(
                        # (S7.5-S7.7, Figures S7.1-S7.2). MUST follow 49: it reads
                        # TABLE_lacasa_daynight_ratios.csv, which 49 writes. ~90 s.
                        "78_diurnal_scaling_evidence.R",
-                       "58_bootstrap_blocks.R", "61_lacasa_cpf.R")),
+                       "58_bootstrap_blocks.R", "61_lacasa_cpf.R",
+                       # ADDED 2026-09-26: SI S4.6 background-definition
+                       # sensitivity (Table S4.1, Figure S4.12). Re-runs the
+                       # whole background chain of scripts 10-11 under a 3x3
+                       # grid of percentile x window and propagates each arm to
+                       # the 500 m cells, the census blocks, the benzene risk
+                       # comparison and the S7 hazard indices. It STOPS unless
+                       # the published arm reproduces mobile_corrected.RData
+                       # exactly, so it must run AFTER the main pipeline has
+                       # written that file. Self-checks every number quoted in
+                       # SI S4.6 ([OK]/[EDIT] lines). ~6 min with Rcpp; hours
+                       # without a compiler (slider fallback).
+                       "79_background_sensitivity.R")),
   R = list(desc = "MDL / smoke / stability / seasonal / CAT-EMU (S1.2, S3.11-S3.14)",
            pre = character(0),
            scripts = c("45_mdl_sensitivity.R", "50_below_mdl_maps.R",
