@@ -739,6 +739,27 @@ last in the list - it must run after the main pipeline has written
 all 24 numbers quoted in SI S4.6 with `[OK]`/`[EDIT]` lines, like 72 and 74 do for their
 sections.
 
+**Added 2026-09-26: `tests/audit_si_prose.R`.** Every other harness here checks the RUN against
+a hardcoded claim string. Nothing checked the DOCUMENT against the run, and that gap let two
+rounding slips reach the SI: section S4.6 read "0.154" where the source is 0.1534957 (rounds to
+0.153) and "0.107" where the source is 0.1064980 (rounds to 0.106) - the second contradicting
+Table S4.1 in the same section. Script 79's own `[OK]` lines passed throughout, because its claims
+carry the source values at four decimals and the slip was made transcribing them to three.
+
+The new test reads the `.docx` directly, re-derives each quoted number from the CSV the pipeline
+wrote, rounds HALF-UP to the precision the prose uses (R's `round()` is banker's rounding, which is
+not how a person rounds), and requires the sentence fragment to appear verbatim. It covers section
+S4.6, section S6.5.2 and the two manuscript passages that quote them - 20 checks. Because the
+`.docx` files are deliberately outside the repository, a missing document is a SKIP rather than a
+failure; override the locations with `SI_DOCX` / `MS_DOCX`.
+
+    SUNCOR_BASE=~/Downloads/Suncor Rscript tests/audit_si_prose.R
+
+Also on 2026-09-26: `74_health_hazard_screening.R` carried `0.374` as the respiratory
+population-weighted HI "that S7 says", while the SI has said `0.371` since the HQ300 re-run. The
+run gives 0.371, so the check passed only on its 1% tolerance. Corrected to 0.371, so the claim is
+again a faithful record of the document.
+
 ## Manuscript and SI figure provenance (2026-09-25)
 
 Every numbered figure in both documents is the file the 2026-09-23/25 run wrote; none is

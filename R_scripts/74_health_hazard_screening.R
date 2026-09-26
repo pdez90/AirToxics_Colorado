@@ -189,7 +189,7 @@ ck <- function(lab, got, claim, tol = 0.01) {
 gHI <- function(org, which) HI[target_organ == org][[which]]
 ck("endocrine HI, pop-weighted mean (HCN)",  gHI("Endocrine","HI_pwmean"),   1.60)
 ck("endocrine HI, most-exposed block",       gHI("Endocrine","HI_maxblock"), 8.71)
-ck("respiratory HI, pop-weighted mean (H2S)",gHI("Respiratory","HI_pwmean"), 0.374)
+ck("respiratory HI, pop-weighted mean (H2S)",gHI("Respiratory","HI_pwmean"), 0.371)
 ck("respiratory HI, most-exposed block",     gHI("Respiratory","HI_maxblock"),4.97)
 ck("neurological HI, pop-weighted mean",     gHI("Neurological","HI_pwmean"), 0.031)
 ck("neurological HI, most-exposed block",    gHI("Neurological","HI_maxblock"),0.555)
