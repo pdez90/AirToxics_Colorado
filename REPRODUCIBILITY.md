@@ -588,8 +588,7 @@ generator and listed in the table caption:
 | 2025-01-02, 2025-01-03, and everything on or before 2025-01-22 | HCN |
 
 **Sourced (2026-09-17/22).** All four exclusion windows are now attributed to CDPHE
-and documented in the source; see `claude/exclusion_windows_sourced.md` and the
-comments in `03_checks_flags.R`. The earlier note here - that none of them carried a
+and documented in the source; see the comments in `03_checks_flags.R`. The earlier note here - that none of them carried a
 comment and the reasons still needed writing down - is superseded.
 
 The chain, per pollutant (benzene / toluene / xylene / TMB / H2S / HCN):

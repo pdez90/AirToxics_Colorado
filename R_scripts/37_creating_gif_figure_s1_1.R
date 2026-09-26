@@ -1,9 +1,9 @@
 # ==============================================================
-# 37  Creating GIF Claude Figure S1.1
+# 37  Creating GIF Figure S1.1
 # Auto-split from Suncor.Rmd  (section 37 of 40)
 # ==============================================================
 
-#Creating GIF Claude Figure S1.1
+#Creating GIF Figure S1.1
 
 # ============================================================
 # ggspatial UPDATED (fixed bbox for ALL runs + cleaner basemap + less blur)

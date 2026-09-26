@@ -2,7 +2,7 @@
 
 No Figure S1.1 exists: section S1 is 'Mobile Instruments' and contains only
 Tables S1.1/S1.2. The routes figure is Figure S3.1. The stale label traces to
-the generating script's own name (37_creating_gif_claude_figure_s1_1.R) -- the
+the generating script's own name (37_creating_gif_figure_s1_1.R) -- the
 figure was S1.1 before the SI was renumbered, and this cross-reference was never
 updated. Corrected in red.
 """

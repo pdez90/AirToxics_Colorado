@@ -40,7 +40,7 @@ scripts <- c(
   "34_fancy_plots_of_hotspots.R",
   "35_hotspot_figure_2.R",
   "36_hysplit_of_lowest_trimethylbenzene_benzene_ratios.R",
-  "37_creating_gif_claude_figure_s1_1.R",
+  "37_creating_gif_figure_s1_1.R",
   "38_download_roads.R",
   "39_la_casa.R",
   "40_alert.R"

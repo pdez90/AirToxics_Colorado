@@ -67,7 +67,7 @@ GROUPS <- list(
            scripts = "36_hysplit_of_lowest_trimethylbenzene_benzene_ratios.R"),
   J = list(desc = "FIGURE S3.1: daily-route GIF + per-run summary + segment speeds",
            pre = character(0),
-           scripts = c("37_creating_gif_claude_figure_s1_1.R",
+           scripts = c("37_creating_gif_figure_s1_1.R",
                        "43_figure_s31_routes.R")),
   # ADDED 2026-08-22. Script 42 rebuilds FIGURE 1 (redesigned per Reviewer 1:
   # side-by-side 500 m sampling-density panels) and was in no group at all, so
