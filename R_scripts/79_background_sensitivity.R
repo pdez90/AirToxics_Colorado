@@ -500,15 +500,22 @@ pC <- ggplot(cc, aes(y = win_lab, colour = pct_lab)) +
   thm + theme(plot.subtitle = element_text(size = 8.5, colour = "grey30"))
 
 out_png <- file.path(BASE, "FinalFig", "FIG_S4.12_background_sensitivity.png")
+# NOTE (2026-09-26): the legend is carried by panel C rather than extracted with
+# cowplot::get_legend(). Under ggplot2 >= 3.5 the guide box was renamed and split
+# per position ("guide-box-bottom", "guide-box-left", ...), so get_legend() warns
+# "Multiple components found; returning the first one" and returns the EMPTY one -
+# silently producing a figure with no legend at all, which is what the first Mac
+# run of this script did. Attaching the legend to a panel needs no extraction and
+# behaves the same on every ggplot2 version.
 if (requireNamespace("cowplot", quietly = TRUE)) {
-  lg <- cowplot::get_legend(pA + theme(legend.margin = margin(0, 0, 0, 0)))
-  g  <- cowplot::plot_grid(pA + theme(legend.position = "none"),
-                           pB + theme(legend.position = "none"),
-                           pC + theme(legend.position = "none"),
-                           ncol = 1, rel_heights = c(1, 1.02, 1.02), align = "v", axis = "lr")
-  g  <- cowplot::plot_grid(g, lg, ncol = 1, rel_heights = c(1, 0.06))
+  g <- cowplot::plot_grid(pA + theme(legend.position = "none"),
+                          pB + theme(legend.position = "none"),
+                          pC,
+                          ncol = 1, rel_heights = c(1, 1.02, 1.16),
+                          align = "v", axis = "lr")
   ggsave(out_png, g, width = 7.3, height = 8.2, dpi = 400, bg = "white")
 } else ggsave(out_png, pA, width = 7.3, height = 3, dpi = 400, bg = "white")
+stopifnot(file.exists(out_png))
 message("-> ", out_png)
 
 # ---------------------------------------------------------------------------
