@@ -153,6 +153,101 @@ base_map <- function() leaflet() |> addProviderTiles(BASE_PROVIDER) |>
   setView(-104.95, 39.82, zoom = 11)
 
 
+# ---- plume emission-rate caveats ------------------------------------------
+# The plume page reports inverse Gaussian-plume emission rates. The H2S data
+# behind them ARE quality assured, so this is not a data caveat - it is an
+# interpretation caveat about the inversion, and it is deliberately styled
+# differently from the amber "not QA/QC'd" callout on the methane page so the
+# two are not conflated. Every number that can be derived from plumes.rds is
+# derived from it here rather than typed, so the text cannot drift from the
+# data the page is drawing. The four values that cannot be (the candidate
+# count, the traverse-mean re-inversion, the minimum detectable rate and the
+# scenario range) are quoted from the paper and SI, with the section given:
+#   37 candidates / 4 retained ....... paper section 3.6, SI S6.3 (Fig. S6.1)
+#   858 t/yr on traverse means ....... SI S6.5.2
+#   Qmin 358-701 t/yr, peak/MDL ...... SI S6.6
+#   scenario means 420-2,223 t/yr .... paper section 3.6, SI S6.5.2
+#   10-15 transects for a mean ....... SI S6.4
+#   HRRR vs station wind direction ... paper section 3.8 (median 21 deg, p95 102 deg)
+H2S_MDL_PPB <- 5   # SI Table S1.2: audited Picarro G2204 MDL used throughout S6.6
+EMIS_CAVEAT <- local({
+  r  <- sort(plumes$rate_tpy)
+  mn <- mean(plumes$rate_tpy)
+  dl <- range(plumes$dH2S_ppb / H2S_MDL_PPB)
+  li <- function(...) tags$li(style = "margin-bottom:6px", ...)
+  tags$div(
+    style = paste0("background:#EEF3F8;border-left:5px solid #2166AC;",
+                   "padding:10px 14px;margin:0 0 12px 0;border-radius:4px;",
+                   "font-size:13px;line-height:1.55"),
+    tags$b("How to read these emission rates."),
+    sprintf(" Each rate is an inverse Gaussian-plume estimate from a single
+             traverse. The %s retained intercepts give %s and %s metric tons/yr,
+             and their mean of %s metric tons/yr should not be read as the
+             facility's average emission rate. Six things limit it:",
+            if (nrow(plumes) <= 10)
+              c("one", "two", "three", "four", "five", "six", "seven", "eight",
+                "nine", "ten")[nrow(plumes)] else format(nrow(plumes)),
+            paste(format(r[-length(r)], big.mark = ","), collapse = ", "),
+            format(r[length(r)], big.mark = ","),
+            format(round(mn), big.mark = ",")),
+    tags$ul(style = "margin:8px 0 0 0;padding-left:20px",
+      li(tags$b("Four intercepts, not a sample. "),
+         "37 candidate events were segmented and 4 survived the minimum-observation,
+          shape, wind-consistency and stability filters (SI S6.3, Figure S6.1).
+          Controlled-release work indicates that of order ten
+          to fifteen transects are needed before the mean of transect-based
+          estimates approaches the true release rate (SI S6.4), so four
+          realizations cannot establish a long-run rate for any source."),
+      li(tags$b("Censored from below. "),
+         sprintf("At these distances, wind speeds and stability classes the
+                  minimum detectable rate was 358-701 metric tons/yr, and the
+                  observed peaks exceeded the %g ppb detection limit by only
+                  %.1f-%.1fx: three of the four were detected essentially at the
+                  threshold. Smaller continuous releases - including rates well
+                  above zero - would not have produced a detectable enhancement
+                  at all. These are therefore the largest releases the campaign
+                  was able to resolve, not typical operation (SI S6.6).",
+                 H2S_MDL_PPB, dl[1], dl[2])),
+      li(tags$b("Peak versus within-plume mean: 17%. "),
+         sprintf("Re-inverting on the mean of each traverse's in-plume points
+                  instead of its peak moves the four-intercept mean from %s to
+                  858 metric tons/yr. Those points are flagged as in-plume and so
+                  lie near the peak by construction, which makes this a bound on
+                  the choice of statistic rather than on averaging time.",
+                 format(round(mn), big.mark = ","))),
+      li(tags$b("The averaging-time mismatch is unresolved. "),
+         "The traverses last 30-172 s, while the Pasquill-Gifford dispersion
+          coefficients describe a plume averaged over of order ten minutes. This
+          is potentially the leading uncertainty, but it cannot be varied on its
+          own: Q is divided by ",
+         # One HTML() node per formula: htmltools puts each child of a tag on its
+         # own line, and the browser collapses that newline to a space, so a
+         # formula assembled from separate tags$sup()/tags$sub() children renders
+         # as "exp(-y 2 /2 sigma y 2 )".
+         HTML("exp(&minus;<i>y</i><sup>2</sup>/2&sigma;<sub>y</sub><sup>2</sup>),"),
+         " and at the measured angular offsets the receptor already sits off the
+          plume axis, so narrowing ", HTML("&sigma;<sub>y</sub>"),
+         " toward an instantaneous width drives that divisor toward zero and
+          inflates the estimate rather than reducing it. A crosswind-integrated
+          or instantaneous-width treatment should not be assumed to collapse
+          these numbers to tens of metric tons/yr (SI S6.5.2)."),
+      li(tags$b("Continuous operation is assumed. "),
+         "Each value is the constant release rate that would have produced the
+          observed peak enhancement, annualized. It is not a measured emission
+          total and carries no information about duty cycle or duration."),
+      li(tags$b("Attribution is not unique. "),
+         "Several potential emitters lie close together in this area, and the
+          HRRR and nearest-station wind directions disagree by a median of 21
+          degrees over the record (95th percentile 102 degrees), so the crosswind
+          geometry of any single intercept is uncertain (paper section 3.8). The
+          plumes cannot be attributed unambiguously to one facility (SI S6.8).")),
+    tags$div(style = "margin-top:8px",
+      "Structured sensitivity scenarios place the four-intercept mean anywhere
+       between 420 and 2,223 metric tons/yr (paper section 3.6, SI S6.5.2). The
+       estimates are best read as motivating targeted follow-up measurement
+       nearer the fence line, not as a compliance or regulatory quantification."))
+})
+
 # ---- methane caveat -------------------------------------------------------
 # The methane channel is NOT in CDPHE's QA/QC'd public repository and was not
 # routinely calibrated. The paper confines methane to secondary analyses for
@@ -306,8 +401,15 @@ ui <- navbarPage(
                  "and Pasquill-Gifford stability, assuming continuous ",
                  "operation. Winds and boundary-layer depth come from NOAA's ",
                  "3-km hourly HRRR model at the measurement times."),
-        tableOutput("p3_table")),
-      mainPanel(width = 9, leafletOutput("p3_map", height = 640)))),
+        tableOutput("p3_table"),
+        helpText(sprintf(paste0("Peak/MDL is the observed peak enhancement ",
+                                "divided by the %g ppb H2S detection limit; a ",
+                                "value near 1 means the plume was detected ",
+                                "essentially at the threshold."),
+                         H2S_MDL_PPB))),
+      mainPanel(width = 9,
+        EMIS_CAVEAT,
+        leafletOutput("p3_map", height = 640)))),
 
   tabPanel("4. Hotspots",
     sidebarLayout(
@@ -743,7 +845,7 @@ server <- function(input, output, session) {
     has_loc <- all(c("lat", "lon") %in% names(plumes))
     for (i in seq_len(nrow(plumes))) {
       pop <- sprintf(
-        "<b>Plume %s</b><br>%s<br>ΔH2S: %s ppb<br>Wind: %s m/s | Stability %s<br>Distance from WWTF: %s km<br><b>Inverse estimate: %s t/yr</b>",
+        "<b>Plume %s</b><br>%s<br>ΔH2S: %s ppb<br>Wind: %s m/s | Stability %s<br>Distance from WWTF: %s km<br><b>Inverse estimate: %s t/yr</b><br><span style=\"font-size:11px;color:#555\">Peak-based; assumes continuous operation. See the caveats above this map.</span>",
         plumes$plume_id[i], plumes$datetime[i], plumes$dH2S_ppb[i],
         plumes$wind_ms[i], plumes$stability[i], plumes$dist_km[i],
         format(plumes$rate_tpy[i], big.mark = ","))
@@ -769,6 +871,7 @@ server <- function(input, output, session) {
     data.frame(Plume = plumes$plume_id,
                `Date/time` = as.character(plumes$datetime),
                `Rate (t/yr)` = format(plumes$rate_tpy, big.mark = ","),
+               `Peak/MDL` = sprintf("%.1f", plumes$dH2S_ppb / H2S_MDL_PPB),
                check.names = FALSE)
   })
 
