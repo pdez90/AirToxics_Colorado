@@ -213,6 +213,27 @@ saveRDS(list(groups = groups, clusters = percl, methane = ch4cl),
         file.path(OUT, "hotspots.rds"))
 msg("hotspots.rds: ", nrow(groups), " groups, ", nrow(percl), " pollutant clusters")
 
+# ---------- 4b) methane ----------
+# Methane is a SECONDARY analysis. The Picarro methane channel is not part of
+# CDPHE's QA/QC'd public air-toxics repository and was not routinely calibrated
+# over the campaign, so every methane number in the app is relative: where
+# methane is elevated against its own local background, and which toxics
+# hotspots it coincides with. Page 6 states that at the top of the page rather
+# than in a footnote. This block only assembles what that page needs; each
+# piece is optional, so a tree without the methane outputs still builds a
+# working app.
+ch4_sum  <- tryCatch(fread(file.path(BASE, "methane_hotspot_summary.csv")),
+                     error = function(e) NULL)
+ch4_pers <- tryCatch(fread(file.path(BASE, "cent_out_methane_persistent.csv")),
+                     error = function(e) NULL)
+if (!is.null(ch4_sum) || !is.null(ch4_pers) || !is.null(ch4res)) {
+  saveRDS(list(summary = ch4_sum, persistent = ch4_pers, at_hotspots = ch4res),
+          file.path(OUT, "methane.rds"))
+  msg("methane.rds: ", if (is.null(ch4_sum)) 0L else nrow(ch4_sum), " summary row(s), ",
+      if (is.null(ch4_pers)) 0L else nrow(ch4_pers), " persistent cluster(s), ",
+      if (is.null(ch4res)) 0L else nrow(ch4res), " toxics groups carrying a CH4 class")
+} else msg("methane.rds: skipped (no methane outputs found)")
+
 # ---------- 5) context layers ----------
 key <- data.frame(
   name = c("Suncor Energy refinery", "Sinclair Denver Products Terminal",

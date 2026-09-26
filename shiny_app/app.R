@@ -1,8 +1,8 @@
 # ==============================================================
 # CDPHE Mobile Air Toxics Explorer — Shiny app
 # Pages: 1 Raw data | 2 AirToxScreen vs Mobile | 3 Plumes |
-#        4 Hotspots | 5 Source probability | 6 Study context |
-#        7 Health screening | 8 Contact
+#        4 Hotspots | 5 Source probability | 6 Methane |
+#        7 Study context | 8 Health screening | 9 Contact
 # Run prep_app_data.R first, then:  shiny::runApp("shiny_app")
 # ==============================================================
 
@@ -38,6 +38,8 @@ tracks  <- if (file.exists(file.path(DATA, "daily_tracks.rds")))
              readRDS(file.path(DATA, "daily_tracks.rds")) else NULL
 haz     <- if (file.exists(file.path(DATA, "hazard.rds")))
              readRDS(file.path(DATA, "hazard.rds")) else NULL
+ch4     <- if (file.exists(file.path(DATA, "methane.rds")))
+             readRDS(file.path(DATA, "methane.rds")) else NULL
 udays   <- if (!is.null(tracks)) sort(unique(tracks$day)) else NULL
 
 # ---- S7.4 temporal-scaling scenarios --------------------------------------
@@ -149,6 +151,27 @@ BASE_PROVIDER <- if ("Esri.WorldGrayCanvas" %in% names(providers))
                    "Esri.WorldGrayCanvas" else "CartoDB.Positron"
 base_map <- function() leaflet() |> addProviderTiles(BASE_PROVIDER) |>
   setView(-104.95, 39.82, zoom = 11)
+
+
+# ---- methane caveat -------------------------------------------------------
+# The methane channel is NOT in CDPHE's QA/QC'd public repository and was not
+# routinely calibrated. The paper confines methane to secondary analyses for
+# exactly that reason. A caveat that only appears on the Contact page is a
+# caveat nobody reads, so it is rendered at the top of the methane page itself.
+CH4_CAVEAT <- tags$div(
+  style = paste0("background:#FFF4E5;border-left:5px solid #D94801;",
+                 "padding:10px 14px;margin:0 0 12px 0;border-radius:4px;",
+                 "font-size:13px;line-height:1.55"),
+  tags$b("These methane data are not QA/QC'd."),
+  " The Picarro methane channel is not part of CDPHE's quality-assured public ",
+  "air-toxics repository and was not routinely calibrated over the campaign. ",
+  "Methane is therefore used here only in ", tags$b("relative"), " terms: where it ",
+  "is elevated against its own local background, and which toxics hotspots it ",
+  "coincides with. The absolute mixing ratios shown should not be read as ",
+  "calibrated concentrations, compared against other studies, or used for any ",
+  "regulatory purpose. Everything on this page is a secondary analysis ",
+  "(paper section 3.7, SI section S8), processed with the same delay, cadence, ",
+  "background and hotspot procedures as the quality-assured species.")
 
 # ================= UI =================
 ui <- navbarPage(
@@ -349,7 +372,47 @@ ui <- navbarPage(
         textOutput("p5_info")),
       mainPanel(width = 9, leafletOutput("p5_map", height = 640)))),
 
-  tabPanel("6. Study context",
+  tabPanel("6. Methane",
+    sidebarLayout(
+      sidebarPanel(width = 3,
+        radioButtons("pch4_stat", "Cell statistic",
+                     c("Median" = "median", "95th percentile" = "p95",
+                       "Maximum" = "max", "Number of measurements" = "n")),
+        checkboxGroupInput("pch4_layers", "Methane hotspot overlays",
+                           c("Methane clusters (all)", "Persistent methane clusters"),
+                           selected = "Persistent methane clusters"),
+        checkboxGroupInput("pch4_ctx", "Show context layers", CTX_CHOICES,
+                           selected = c("Covered facilities", "Wastewater treatment")),
+        h4("Methane hotspot screen"), htmlOutput("pch4_summary"),
+        helpText("Methane was recorded by the same Picarro G2204 that measures ",
+                 "H2S, at a 5 s acquisition cadence, and is processed through ",
+                 "the identical chain: inlet-delay correction, native-cadence ",
+                 "averaging, the rolling local background of SI section S4.1, ",
+                 "and the same high-event and clustering rules used for the ",
+                 "quality-assured species on page 4."),
+        helpText("Clusters are built from observations at or above the ",
+                 "campaign 99th percentile, grouped spatially; a cluster is ",
+                 "persistent when it carries more than 10% of all ",
+                 "high-methane events and recurs on more than 10% of the days ",
+                 "carrying them. The hotspot table below uses a separate, ",
+                 "lower reference - the share of observations at or above the ",
+                 "95th percentile - because it measures co-elevation at a ",
+                 "toxics hotspot rather than isolating a methane source. ",
+                 "Because the channel is uncalibrated, read the enhancement ",
+                 "above local background rather than the absolute value."),
+        helpText("The table shows, for each multi-pollutant toxics hotspot on ",
+                 "page 4, whether methane is co-elevated there. That contrast ",
+                 "is the reason methane is carried at all: it separates ",
+                 "gas-associated hotspots from combustion- and ",
+                 "evaporative-type ones, which the toxics alone do not.")),
+      mainPanel(width = 9,
+        CH4_CAVEAT,
+        leafletOutput("pch4_map", height = 560),
+        h4("Methane at the multi-pollutant toxics hotspots"),
+        DT::DTOutput("pch4_table"),
+        htmlOutput("pch4_legend")))),
+
+  tabPanel("7. Study context",
     sidebarLayout(
       sidebarPanel(width = 3,
         checkboxGroupInput("p6_ctx", "Layers", CTX_CHOICES, selected = CTX_CHOICES),
@@ -364,7 +427,7 @@ ui <- navbarPage(
                  "public inventory of industrial chemical releases.")),
       mainPanel(width = 9, leafletOutput("p6_map", height = 640)))),
 
-  tabPanel("7. Health screening",
+  tabPanel("8. Health screening",
     sidebarLayout(
       sidebarPanel(width = 3,
         radioButtons("p7_scen", "Temporal scaling of concentrations",
@@ -441,7 +504,7 @@ ui <- navbarPage(
                          "long-term mean, not a short-term peak."),
                 tableOutput("p7_acute")))),
 
-  tabPanel("8. Contact",
+  tabPanel("9. Contact",
     fluidRow(column(width = 8, offset = 2,
       h3("Contact"),
       p("Questions about the data, the analysis, or how to use this application:"),
@@ -1006,6 +1069,114 @@ server <- function(input, output, session) {
                 opacity = 0.9,
                 title = sprintf("%s hazard index<br><span style='font-weight:normal'>scenario %s</span>",
                                 input$p7_organ, sub("_.*$", "", p7_scen())))
+  })
+
+  # ---- page 6: methane ----
+  # Every value here is relative; see CH4_CAVEAT at the top of the page.
+  output$pch4_map <- renderLeaflet({
+    d <- cells[pollutant == "Methane"]
+    validate(need(nrow(d) > 0,
+                  "No methane cell summary in this build - re-run prep_app_data.R."))
+    v   <- d[[input$pch4_stat]]
+    .vv <- if (input$pch4_stat == "n") log10(v) else v
+    sc  <- conc_scale(.vv)
+    m <- base_map() |>
+      addRectangles(d$lon - 0.00292, d$lat - 0.00226, d$lon + 0.00292,
+                    d$lat + 0.00226, fillColor = sc$pal(.vv), fillOpacity = 0.65,
+                    weight = 0, popup = sprintf(
+                      "n = %s<br>median = %s ppm<br>p95 = %s<br>max = %s",
+                      format(d$n, big.mark = ","), d$median, d$p95, d$max))
+    m <- add_context(m, input$pch4_ctx)
+    if ("Methane clusters (all)" %in% input$pch4_layers && !is.null(hs$methane)) {
+      cl <- hs$methane
+      m <- addCircleMarkers(m, cl$lon, cl$lat, radius = 4, color = "#7F2704",
+             weight = 1, fillColor = "#FD8D3C", fillOpacity = 0.30,
+             popup = sprintf("Methane cluster %s<br>%s high-CH4 events on %s days",
+                             cl$cluster, format(cl$n_events, big.mark = ","), cl$n_days))
+    }
+    if ("Persistent methane clusters" %in% input$pch4_layers &&
+        !is.null(ch4) && !is.null(ch4$persistent) && nrow(ch4$persistent)) {
+      p <- ch4$persistent
+      m <- addCircleMarkers(m, p$lon, p$lat, radius = 11, color = "black",
+             weight = 2, fillColor = "#D94801", fillOpacity = 0.85,
+             popup = sprintf(paste0("<b>Persistent methane cluster %s</b><br>",
+               "%s high-CH4 events on %s days<br>",
+               "median %.2f ppm, max %.2f ppm (uncalibrated)<br>",
+               "median enhancement %.2f ppm above local background<br>%s to %s"),
+               p$cluster, format(p$n_events, big.mark = ","), p$n_days,
+               p$ch4_med, p$ch4_max, p$enh_med, p$first, p$last))
+    }
+    if (input$pch4_stat == "n") {
+      .sc2 <- sc
+      .sc2$labs <- sprintf("%s - %s",
+        formatC(signif(10^sc$brk[-length(sc$brk)], 2), format = "d", big.mark = ","),
+        formatC(signif(10^sc$brk[-1], 2), format = "d", big.mark = ","))
+      add_conc_legend(m, .sc2, "Methane measurements<br>per 500 m cell")
+    } else {
+      add_conc_legend(m, sc, sprintf("Methane %s (ppm,<br>uncalibrated)",
+                                     input$pch4_stat))
+    }
+  })
+
+  output$pch4_summary <- renderUI({
+    if (is.null(ch4) || is.null(ch4$summary) || !nrow(ch4$summary))
+      return(helpText("Methane summary not available in this build."))
+    s <- ch4$summary[1]
+    np <- if (!is.null(ch4$persistent)) nrow(ch4$persistent) else NA_integer_
+    HTML(sprintf(paste0(
+      "Clustering threshold (campaign 99th percentile): <b>%.3f ppm</b><br>",
+      "High-methane observations at that threshold: <b>%s</b> on %s sampling days<br>",
+      "Spatial clusters: <b>%s</b>, of which <b>%s persistent</b><br>",
+      "Co-elevation reference (95th percentile): %.3f ppm"),
+      s$p99, format(s$n_high_events, big.mark = ","), s$n_days_high,
+      s$n_clusters, if (is.na(np)) s$n_persistent else np, s$p95))
+  })
+
+
+  # The class thresholds live in M06_methane_at_toxics_hotspots.R; the sentence
+  # is built from the data so it cannot claim a category the run does not
+  # contain. No group reaches CH4-enriched in the current run, and a legend
+  # entry for a class that never appears would mislead.
+  output$pch4_legend <- renderUI({
+    if (is.null(ch4) || is.null(ch4$at_hotspots) || !nrow(ch4$at_hotspots))
+      return(NULL)
+    a <- as.data.table(ch4$at_hotspots)
+    top <- a[order(-pct_ge_p95)][1:2]
+    nlo <- sum(a$pct_ge_p95 < 5)
+    none_enriched <- if (!any(a$ch4_class == "CH4-enriched"))
+      sprintf(paste0("No group reaches CH4-enriched in this run: co-elevation is ",
+                     "strongest at Group %s (%.1f%%) and Group %s (%.1f%%), while ",
+                     "%d of the %d groups fall below 5%%, consistent with traffic- ",
+                     "or solvent-driven aromatics. "),
+              top$group_id[1], top$pct_ge_p95[1], top$group_id[2], top$pct_ge_p95[2],
+              nlo, nrow(a)) else ""
+    helpText(HTML(paste0(
+      "Classes follow the pipeline rule: <b>CH4-enriched</b> needs at least 15% of ",
+      "observations at or above the campaign 95th percentile on five or more days ",
+      "carrying a 99th-percentile event; <b>CH4-intermediate</b> at least 5%; ",
+      "<b>CH4-quiet</b> below that. ", none_enriched,
+      "'% obs &ge; p95' is the share of methane observations within 100 m of the ",
+      "group centroid at or above the campaign 95th percentile; 'Days with high ",
+      "CH4' counts days carrying a 99th-percentile methane event.")))
+  })
+
+  output$pch4_table <- DT::renderDT({
+    if (is.null(ch4) || is.null(ch4$at_hotspots) || !nrow(ch4$at_hotspots))
+      return(DT::datatable(data.frame(
+        Note = "Methane-at-hotspots table not available in this build."),
+        options = list(dom = "t"), rownames = FALSE))
+    a <- as.data.table(ch4$at_hotspots)
+    out <- data.frame(
+      Group          = a$group_id,
+      Pollutants     = gsub("\\+", " + ", a$pollutants),
+      `Methane class`= a$ch4_class,
+      `Median CH4 (ppm)` = round(a$ch4_med, 2),
+      `% obs >= p95` = round(a$pct_ge_p95, 1),
+      `Days with high CH4` = a$days_with_high,
+      `Nearest persistent CH4 cluster (km)` = round(a$dist_nearest_persistent_ch4_km, 2),
+      check.names = FALSE)
+    DT::datatable(out, rownames = FALSE,
+      options = list(pageLength = 15, dom = "tip", order = list(list(4, "desc"))))
   })
 }
 
