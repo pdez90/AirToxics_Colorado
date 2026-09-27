@@ -3,7 +3,13 @@
 # --------------------------------------------------------------
 # Two-tier chemical fingerprint applied to the H2S plumes that
 # already passed the wind-direction + stability funnel in P07
-# (the 4 retained plumes in the current run: ids 6, 9, 15, 28).
+# (the 4 retained plumes in the current run: ids 2, 10, 13, 32).
+#
+#     AVAILABILITY IS PART OF THE TEST. A co-species that was never
+#     measured inside a plume window cannot support either verdict, so
+#     the gate is three-valued: co-enhancement seen / looked and saw
+#     none / not evaluable. HCN is the binding case - the HCN record
+#     begins 2025-01-22 and every retained plume predates it.
 #
 #   TIER 1 - FINGERPRINT GATE
 #     Rationale: wastewater H2S (anaerobic digester / sewer gas) is
@@ -114,11 +120,14 @@ base_col <- function(sp) { vc <- sp_col(sp)
   pick(c(paste0("baseline_", sp), if (!is.na(vc)) paste0("baseline_", vc))) }
 plume_col <- function(sp) { vc <- sp_col(sp)
   pick(c(paste0("plume_", sp), if (!is.na(vc)) paste0("plume_", vc))) }
+sd_col <- function(sp) { vc <- sp_col(sp)
+  pick(c(paste0("sd_", sp), if (!is.na(vc)) paste0("sd_", vc))) }
 
 cat("\nCo-pollutant column availability:\n")
 for (sp in c(AROMATICS, "HCN"))
-  cat(sprintf("  %-18s value=%-22s baseline=%-26s plumeflag=%s\n",
-              sp, sp_col(sp) %||% "-", base_col(sp) %||% "-", plume_col(sp) %||% "-"))
+  cat(sprintf("  %-18s value=%-22s baseline=%-26s sd=%-22s plumeflag=%s\n",
+              sp, sp_col(sp) %||% "-", base_col(sp) %||% "-", sd_col(sp) %||% "-",
+              plume_col(sp) %||% "-"))
 
 # ==============================================================
 # 1) REPRODUCE the retained H2S plumes (P07 logic, verbatim params)
@@ -150,6 +159,7 @@ evt <- pts %>% arrange(plume_id, date) %>% group_by(plume_id) %>%
             peak_dH2S = max(.dH2S), time_at_peak = date[which.max(.dH2S)][1],
             dist_at_peak_km = .dist[which.max(.dH2S)][1],
             wind_sd_deg = circ_sd_deg(.wind),
+            n_wind_vals = dplyr::n_distinct(.wind[is.finite(.wind)]),
             edge_left  = if (n() >= edge_k) median(head(.dH2S[is.finite(.dH2S)], edge_k)) else NA_real_,
             edge_right = if (n() >= edge_k) median(tail(.dH2S[is.finite(.dH2S)], edge_k)) else NA_real_,
             prom_dH2S = peak_dH2S - median(.dH2S),
@@ -167,13 +177,55 @@ evt <- pts %>% arrange(plume_id, date) %>% group_by(plume_id) %>%
          pass_rise = ifelse(n_pts >= enforce_shape_n, is.finite(rise_dH2S) & rise_dH2S >= min_rise_dh2s, TRUE),
          pass_fall = ifelse(n_pts >= enforce_shape_n, is.finite(fall_dH2S) & fall_dH2S >= min_fall_dh2s, TRUE),
          pass_prom = is.finite(prom_dH2S) & prom_dH2S >= min_prom_dh2s,
-         pass_dur  = (is.finite(duration_s) & duration_s >= dur_min_s & duration_s <= dur_max_s) | (n_unique_t >= min_pts),
-         pass_wind = is.na(wind_sd_deg) | wind_sd_deg <= max_wind_sd_deg,
-         pass_stab = ifelse(is.na(stability), TRUE, stability %in% keep_stab_levels),
+         # SYNCED WITH P07 (2026-09-27). These three clauses had drifted from
+         # P07_identify_and_plot_plumes_for_h2s.R, which is the funnel the paper
+         # reports and the one P08 inverts:
+         #   pass_dur  was OR-ed with (n_unique_t >= min_pts), a condition every
+         #             surviving event satisfies, so the 10-180 s window could
+         #             not reject anything (P07 fixed this 2026-08-20).
+         #   pass_wind passed an event whose wind SD was NA; P07 now records
+         #             whether the criterion was evaluable at all.
+         #   pass_stab passed an event with no stability class; P07 drops it
+         #             (2026-08-21), because the Briggs sigmas are indexed by
+         #             class and P08 cannot invert it.
+         # The consequence was 6 retained events here against P07's 4 - and the
+         # two extra, plumes 3 and 19, are 4 s spikes. This script is no longer
+         # the authority on that set: it re-derives it only to CHECK the file
+         # P07 writes, and stops if they disagree.
+         pass_dur  = is.finite(duration_s) & duration_s >= dur_min_s & duration_s <= dur_max_s,
+         wind_evaluable = is.finite(n_wind_vals) & n_wind_vals >= 2,
+         pass_wind = ifelse(wind_evaluable,
+                            is.finite(wind_sd_deg) & wind_sd_deg <= max_wind_sd_deg, TRUE),
+         pass_stab = !is.na(stability) & stability %in% keep_stab_levels,
          pass_all  = pass_peak & pass_rise & pass_fall & pass_prom & pass_dur & pass_wind & pass_stab)
 keep_ids <- evt %>% filter(pass_all) %>% pull(plume_id)
 cat(sprintf("plume-flagged=%d  >=min_pts=%d  RETAINED=%d  ids: %s\n",
             n_flag, length(keep_n), length(keep_ids), paste(keep_ids, collapse = ", ")))
+
+# ---- AUTHORITATIVE RETAINED SET: P07's file, not this reimplementation ------
+RETAINED_FN <- file.path(BASE, "WWTP_H2S_retained_plumes.csv")
+if (!file.exists(RETAINED_FN))
+  stop("WWTP_H2S_retained_plumes.csv not found. Run plume_scripts/",
+       "P07_identify_and_plot_plumes_for_h2s.R first - this script must not be the\n",
+       "  authority on which plumes were retained.")
+p07 <- readr::read_csv(RETAINED_FN, show_col_types = FALSE)
+.fmt <- function(x) format(as.POSIXct(x, tz = "UTC"), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+.mine <- evt %>% filter(plume_id %in% keep_ids) %>%
+  transmute(plume_id, start_time = .fmt(start_time), end_time = .fmt(end_time)) %>%
+  arrange(plume_id)
+.theirs <- p07 %>% transmute(plume_id, start_time = .fmt(start_time),
+                             end_time = .fmt(end_time)) %>% arrange(plume_id)
+hr("CROSS-CHECK against P07's retained set")
+cat(sprintf("  P07 retained %d: %s\n", nrow(.theirs), paste(.theirs$plume_id, collapse = ", ")))
+cat(sprintf("  this script   %d: %s\n", nrow(.mine),   paste(.mine$plume_id,   collapse = ", ")))
+if (!isTRUE(all.equal(as.data.frame(.mine), as.data.frame(.theirs), check.attributes = FALSE))) {
+  cat("\n  P07 only:\n"); print(as.data.frame(dplyr::anti_join(.theirs, .mine, by = names(.theirs))), row.names = FALSE)
+  cat("  this script only:\n"); print(as.data.frame(dplyr::anti_join(.mine, .theirs, by = names(.mine))), row.names = FALSE)
+  stop("The retained plume set here does not match P07's, on identifier or timestamp. ",
+       "Do not interpret the attribution until the two funnels agree.")
+}
+cat("  MATCH: identifiers and timestamps agree exactly.\n")
+keep_ids <- .theirs$plume_id
 pts_keep <- pts %>% filter(plume_id %in% keep_ids)
 
 # ==============================================================
@@ -182,28 +234,71 @@ pts_keep <- pts %>% filter(plume_id %in% keep_ids)
 hr("TIER 1: aromatic / HCN fingerprint at each retained H2S plume")
 co_species <- c(AROMATICS, "HCN")
 per_pt <- pts_keep %>% select(plume_id, date, dplyr::any_of(col_asset), .dH2S)
+# BUGFIX (2026-09-27) - ABSENCE OF DATA WAS BEING REPORTED AS ABSENCE OF SIGNAL.
+# `any(x == TRUE, na.rm = TRUE)` returns FALSE when x is entirely NA, so a plume
+# window in which a co-species was never measured came out as "no co-enhancement"
+# and was written into the table as a hard FALSE. Every one of the four retained
+# plumes predates 2025-01-22, so NO HCN measurement can exist for any of them,
+# and their aromatic channels are NA as well; the fingerprint "WWTP-consistent
+# (H2S-only)" and Table S6.2's "None" column were therefore produced entirely by
+# missing data. Channel availability is now counted per species and per plume,
+# an unmeasured channel yields NA rather than FALSE, and the classification
+# distinguishes "evaluated, no co-enhancement" from "not evaluable".
 finger <- lapply(keep_ids, function(id) {
   sub <- pts_keep %>% filter(plume_id == id)
   row <- tibble(plume_id = id)
-  arom_flag <- FALSE; hcn_flag <- FALSE
+  arom_any <- FALSE; arom_eval <- FALSE
+  hcn_any  <- FALSE; hcn_eval  <- FALSE
   for (sp in co_species) {
-    vc <- sp_col(sp); bc <- base_col(sp); pc <- plume_col(sp)
-    dmax <- NA_real_; coflag <- NA
+    vc <- sp_col(sp); bc <- base_col(sp); pc <- plume_col(sp); sc <- sd_col(sp)
+    dmax <- NA_real_; coflag <- NA; n_obs <- 0L
     if (!is.na(vc)) {
       v <- suppressWarnings(as.numeric(sub[[vc]]))
       b <- if (!is.na(bc)) suppressWarnings(as.numeric(sub[[bc]])) else NA_real_
       d <- if (!is.na(bc)) v - b else v
-      dmax <- suppressWarnings(max(d, na.rm = TRUE)); if (!is.finite(dmax)) dmax <- NA_real_
-      if (!is.na(pc)) coflag <- any(sub[[pc]] == TRUE, na.rm = TRUE)          # 3-sigma flag (primary)
-      else coflag <- is.finite(dmax) && dmax >= (delta_thresh[[sp]] %||% Inf) # fallback
+      # AVAILABILITY MUST NOT BE READ OFF THE FLAG COLUMN (2026-09-27, second
+      # pass). 10_calculating_background_air_pollution_concentrations_rolling_.R
+      # preallocates every plume_* column as FALSE and then assigns
+      #     !is.na(x) & !is.na(b) & !is.na(s) & (x >= b + 3*s)
+      # so the flag is FALSE both where the species was measured and stayed
+      # below the threshold AND where it was never measured at all. It is never
+      # NA, and counting its non-NA entries just returns the window length -
+      # which is what the first version of this fix did, and why it reported
+      # every channel as evaluable. A point is testable only where the value,
+      # its rolling baseline and its rolling sd are all finite, because that is
+      # exactly the condition under which the 3-sigma comparison can fire.
+      sdv <- if (!is.na(sc)) suppressWarnings(as.numeric(sub[[sc]])) else rep(NA_real_, nrow(sub))
+      testable <- if (!is.na(pc)) is.finite(v) & is.finite(b) & is.finite(sdv)
+                  else is.finite(d)
+      n_obs <- sum(testable)
+      dmax  <- suppressWarnings(max(d, na.rm = TRUE)); if (!is.finite(dmax)) dmax <- NA_real_
+      if (n_obs > 0L) {
+        if (!is.na(pc)) coflag <- any(sub[[pc]][testable] == TRUE, na.rm = TRUE) # 3-sigma flag (primary)
+        else coflag <- is.finite(dmax) && dmax >= (delta_thresh[[sp]] %||% Inf)  # fallback
+      }
     }
     row[[paste0("d", sp)]]    <- round(dmax, 3)
     row[[paste0("co_", sp)]]  <- coflag
-    if (sp %in% AROMATICS && isTRUE(coflag)) arom_flag <- TRUE
-    if (sp == "HCN" && isTRUE(coflag)) hcn_flag <- TRUE
+    row[[paste0("n_", sp)]]   <- n_obs
+    # Coverage, not just presence. A channel with one testable point inside a
+    # 172 s traverse has not been shown to be free of a co-plume; it has been
+    # sampled once. Report the share of the H2S plume's own points at which the
+    # co-species could be tested, so "evaluable" can be read with its weight.
+    row[[paste0("cov_", sp)]] <- round(n_obs / nrow(sub), 3)
+    if (sp %in% AROMATICS) {
+      if (n_obs > 0L) arom_eval <- TRUE
+      if (isTRUE(coflag)) arom_any <- TRUE
+    } else if (sp == "HCN") {
+      if (n_obs > 0L) hcn_eval <- TRUE
+      if (isTRUE(coflag)) hcn_any <- TRUE
+    }
   }
-  row$aromatic_coenhanced <- arom_flag
-  row$hcn_coenhanced      <- hcn_flag
+  # three-valued: TRUE = co-enhancement seen; FALSE = looked and saw none;
+  # NA = the channel carried no data in this window, so nothing was tested.
+  row$aromatic_evaluable  <- arom_eval
+  row$hcn_evaluable       <- hcn_eval
+  row$aromatic_coenhanced <- if (arom_any) TRUE else if (arom_eval) FALSE else NA
+  row$hcn_coenhanced      <- if (hcn_any)  TRUE else if (hcn_eval)  FALSE else NA
   row
 }) %>% bind_rows()
 
@@ -296,14 +391,27 @@ out <- evt %>% filter(plume_id %in% keep_ids) %>%
   left_join(finger, by = "plume_id") %>%
   left_join(ch4_sum, by = "plume_id") %>%
   mutate(
-    fingerprint = ifelse(aromatic_coenhanced | hcn_coenhanced,
-                         "refinery-influenced (H2S + aromatic/HCN)",
-                         "WWTP-consistent (H2S-only)"),
+    # co_any: TRUE if either channel saw a co-plume; FALSE if at least one
+    # channel was evaluable and none did; NA if neither channel was evaluable.
+    co_any = dplyr::case_when(
+      aromatic_coenhanced %in% TRUE | hcn_coenhanced %in% TRUE ~ TRUE,
+      aromatic_evaluable | hcn_evaluable                       ~ FALSE,
+      TRUE                                                     ~ NA),
+    channels_tested = dplyr::case_when(
+      aromatic_evaluable &  hcn_evaluable ~ "aromatics + HCN",
+      aromatic_evaluable & !hcn_evaluable ~ "aromatics only",
+      !aromatic_evaluable &  hcn_evaluable ~ "HCN only",
+      TRUE                                 ~ "none"),
+    fingerprint = dplyr::case_when(
+      co_any %in% TRUE  ~ "refinery-influenced (H2S + aromatic/HCN)",
+      co_any %in% FALSE ~ "no co-enhancement in the channels tested",
+      TRUE              ~ "not evaluable (no aromatic or HCN data in window)"),
     attribution = dplyr::case_when(
-      !(aromatic_coenhanced | hcn_coenhanced) &  ch4_corroborates %in% TRUE ~ "WWTP (fingerprint + CH4)",
-      !(aromatic_coenhanced | hcn_coenhanced) & !(ch4_corroborates %in% TRUE) ~ "WWTP-consistent (fingerprint only)",
-      (aromatic_coenhanced | hcn_coenhanced) ~ "refinery / mixed",
-      TRUE ~ "unclassified"))
+      co_any %in% TRUE                                      ~ "refinery / mixed",
+      co_any %in% FALSE &  ch4_corroborates %in% TRUE       ~ "WWTP-consistent (fingerprint + CH4)",
+      co_any %in% FALSE & !(ch4_corroborates %in% TRUE)     ~ "WWTP-consistent (fingerprint only)",
+      is.na(co_any)     &  ch4_corroborates %in% TRUE       ~ "unattributed by fingerprint; CH4 co-enhancement only",
+      TRUE                                                  ~ "unattributed (fingerprint not evaluable)"))
 
 readr::write_csv(out, file.path(BASE, "WWTP_H2S_source_attribution.csv"))
 readr::write_csv(per_pt, file.path(BASE, "WWTP_H2S_source_attribution_points.csv"))
@@ -311,8 +419,28 @@ readr::write_csv(per_pt, file.path(BASE, "WWTP_H2S_source_attribution_points.csv
 hr("SUMMARY")
 print(as.data.frame(out), row.names = FALSE)
 cat(sprintf("\nRetained H2S plumes: %d\n", nrow(out)))
-cat(sprintf("  WWTP-consistent (no aromatic/HCN co-plume): %d\n", sum(!(out$aromatic_coenhanced | out$hcn_coenhanced))))
-cat(sprintf("  refinery-influenced (aromatic/HCN co-plume): %d\n", sum(out$aromatic_coenhanced | out$hcn_coenhanced, na.rm = TRUE)))
-if (ch4_ok) cat(sprintf("  of WWTP-consistent, CH4-corroborated: %d\n",
-                        sum(!(out$aromatic_coenhanced | out$hcn_coenhanced) & out$ch4_corroborates %in% TRUE)))
+cat(sprintf("  no co-enhancement in the channels tested:    %d\n", sum(out$co_any %in% FALSE)))
+cat(sprintf("  refinery-influenced (aromatic/HCN co-plume): %d\n", sum(out$co_any %in% TRUE)))
+cat(sprintf("  NOT EVALUABLE (no aromatic or HCN data):     %d\n", sum(is.na(out$co_any))))
+if (ch4_ok) cat(sprintf("  of those with no co-enhancement, CH4-corroborated: %d\n",
+                        sum(out$co_any %in% FALSE & out$ch4_corroborates %in% TRUE)))
+cat("\nChannel availability per plume. n_<species> = points at which the 3-sigma test\n")
+cat("could fire (value, rolling baseline and rolling sd all finite); cov_<species> = that\n")
+cat("count as a fraction of the H2S plume's own points.\n")
+print(as.data.frame(out[, c("plume_id", "start_time", "n_pts",
+                            grep("^n_[A-Z]|^n_HCN", names(out), value = TRUE),
+                            grep("^cov_", names(out), value = TRUE),
+                            "channels_tested", "fingerprint")]), row.names = FALSE)
+.low <- out[out$co_any %in% FALSE &
+              pmin(out$cov_Benzene, out$cov_Toluene, out$cov_Xylene,
+                   out$cov_Trimethylbenzene, out$cov_HCN, na.rm = TRUE) < 0.5, ]
+if (nrow(.low))
+  cat("\nNOTE: plume(s) ", paste(.low$plume_id, collapse = ", "),
+      " are classified from co-species data covering less than half of the\n",
+      "      H2S plume's points. Report the coverage alongside the verdict.\n", sep = "")
+if (any(is.na(out$co_any)))
+  cat("\n*** WARNING: one or more retained plumes have NO aromatic or HCN data in\n",
+      "    the plume window. For those plumes the chemical fingerprint is UNTESTED.\n",
+      "    Absence of a co-plume flag is absence of measurement, not absence of signal;\n",
+      "    do not report them as aromatic- or HCN-free.\n", sep = "")
 cat("\n[Saved] WWTP_H2S_source_attribution.csv  and  _points.csv\n")

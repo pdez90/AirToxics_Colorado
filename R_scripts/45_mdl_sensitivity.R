@@ -51,68 +51,67 @@ POLLS <- c(Benzene = "Benzene_ppb", Toluene = "Toluene_ppb",
            H2S = "Hydrogen_Sulfide_ppb", HCN = "Hydrogen_Cyanide_ppb")
 stopifnot(all(unlist(POLLS) %in% names(df)))
 
-# ---- MDL lookup (CDPHE quarterly README audit values) ---------
-# columns: van, pollutant, start, end, mdl (ppbV)
-L <- function(van, poll, start, end, mdl)
-  data.table(van = van, pollutant = poll,
-             start = as.Date(start), end = as.Date(end), mdl = mdl)
-mdl_tab <- rbindlist(list(
-  # Benzene
-  L("CAT", "Benzene", "2023-01-01", "2024-09-30", 0.5),
-  L("CAT", "Benzene", "2024-10-01", "2025-06-30", 1.0),
-  L("EMU", "Benzene", "2023-10-01", "2024-03-31", 1.2),
-  L("EMU", "Benzene", "2024-04-01", "2024-06-30", 3.2),
-  L("EMU", "Benzene", "2024-07-01", "2024-09-30", 1.2),
-  L("EMU", "Benzene", "2024-10-01", "2024-12-31", 0.7),
-  L("EMU", "Benzene", "2025-01-01", "2025-06-30", 1.5),
-  # Toluene
-  L("CAT", "Toluene", "2023-01-01", "2025-06-30", 0.18),
-  L("EMU", "Toluene", "2023-10-01", "2024-12-31", 0.27),
-  L("EMU", "Toluene", "2025-01-01", "2025-06-30", 0.21),
-  # Xylene
-  L("CAT", "Xylene", "2023-01-01", "2025-06-30", 0.19),
-  L("EMU", "Xylene", "2023-10-01", "2024-12-31", 0.24),
-  L("EMU", "Xylene", "2025-01-01", "2025-06-30", 0.29),
-  # Trimethylbenzene
-  L("CAT", "Trimethylbenzene", "2023-01-01", "2025-06-30", 0.22),
-  L("EMU", "Trimethylbenzene", "2023-10-01", "2024-12-31", 0.44),  # 0.44 carried Oct-Dec 24
-  L("EMU", "Trimethylbenzene", "2025-01-01", "2025-06-30", 0.45),
-  # H2S
-  L("CAT", "H2S", "2023-01-01", "2024-09-30", 5),
-  L("CAT", "H2S", "2024-10-01", "2025-06-30", 6),
-  L("EMU", "H2S", "2023-10-01", "2024-03-31", 4),
-  L("EMU", "H2S", "2024-04-01", "2024-06-30", 2),
-  L("EMU", "H2S", "2024-07-01", "2024-09-30", 4),
-  L("EMU", "H2S", "2024-10-01", "2024-12-31", 5),
-  L("EMU", "H2S", "2025-01-01", "2025-06-30", 4),
-  # HCN
-  L("CAT", "HCN", "2023-01-01", "2024-09-30", 13),
-  L("CAT", "HCN", "2024-10-01", "2025-06-30", 5),
-  L("EMU", "HCN", "2025-01-01", "2025-06-30", 0.18)
-))
-message("MDL lookup: ", nrow(mdl_tab), " van x pollutant x period rows")
+# ---- MDL lookup -----------------------------------------------
+# BUGFIX (2026-09-27): this section previously carried its OWN hand-typed
+# ladder of van x pollutant x period MDLs, transcribed from the quarterly
+# READ-ME files. Five entries did not match CDPHE_audit_MDLs.csv - the file
+# 69_cdphe_audit_mdls.R writes straight from those same packets and that
+# 70_table_s31.R (Table S3.1) reads:
+#
+#   EMU HCN 2025 Q1-Q2 ....... typed 0.18, audited 18 (Q1) and 2 (Q2).
+#                              0.18 is the CAT *Toluene* MDL from the line
+#                              20 rows above it; the whole S3.1 explanation
+#                              of the HCN below-MDL fraction rested on it.
+#   EMU HCN 2023 Q4-2024 Q4 .. audited 5, absent from the typed ladder.
+#   CAT Benzene 2025 Q2 ...... typed 1.0, audited 0.3.
+#   EMU Benzene 2025 Q2 ...... typed 1.5, audited 0.5.
+#   CAT HCN 2025 Q2 .......... typed 5,   audited 10.
+#
+# Two independent transcriptions of one source is the defect, not the typos,
+# so the ladder is deleted and the audited file is read here as well. The
+# lookup is a per-quarter step function with carry-forward, identical to
+# get_mdl() in 70_table_s31.R, so this script and Table S3.1 can no longer
+# disagree about what the MDL was on a given day for a given van.
+MDLF <- file.path(BASE, "CDPHE_audit_MDLs.csv")
+if (!file.exists(MDLF))
+  stop("CDPHE_audit_MDLs.csv not found. Run R_scripts/69_cdphe_audit_mdls.R first.")
+.mdlraw <- fread(MDLF)
+CMAP <- c(Benzene = "Benzene", Toluene = "Toluene",
+          Trimethylbenzene = "Trimethylbenzene", Xylene = "Xylene",
+          H2S = "Hydrogen sulfide (H2S)", HCN = "Hydrogen cyanide (HCN)")
+stopifnot(all(CMAP %in% unique(.mdlraw$compound)))
+mdl_tab <- rbindlist(lapply(names(CMAP), function(nm) {
+  d <- .mdlraw[compound == CMAP[[nm]]][order(from_ym)]
+  rbindlist(list(
+    data.table(van = "CAT", pollutant = nm, from_ym = d$from_ym, mdl = as.numeric(d$cat_mdl)),
+    data.table(van = "EMU", pollutant = nm, from_ym = d$from_ym, mdl = as.numeric(d$emu_mdl))))
+}))[!is.na(mdl)]
+message("MDL lookup read from CDPHE_audit_MDLs.csv: ", nrow(mdl_tab),
+        " van x pollutant x quarter rows, ", min(mdl_tab$from_ym), " to ",
+        max(mdl_tab$from_ym))
 
 df[, day := as.Date(date)]
+df[, ym := as.integer(format(day, "%Y%m"))]
+
+# per-row MDL. Carry the last audited quarter forward; a row earlier than the
+# first audited quarter for that van gets NA (it is not silently given the
+# other van's value). If the van is unknown, take the larger of the two vans'
+# values for that quarter, which is the conservative choice.
+.mdl_step <- function(poll, .van, ym) {
+  s <- mdl_tab[pollutant == poll & van == .van][order(from_ym)]
+  if (!nrow(s)) return(rep(NA_real_, length(ym)))
+  i <- findInterval(ym, s$from_ym)
+  out <- rep(NA_real_, length(ym))
+  out[i >= 1L] <- s$mdl[i[i >= 1L]]
+  out
+}
 mdl_for <- function(poll) {
-  # per-row MDL; if van unknown, use the max (conservative) across vans
-  out <- rep(NA_real_, nrow(df))
-  for (v in c("CAT", "EMU")) {
-    tab <- mdl_tab[van == v & pollutant == poll]
-    for (r in seq_len(nrow(tab))) {
-      sel <- df$day >= tab$start[r] & df$day <= tab$end[r] &
-             (is.na(df$van) | df$van == v)
-      out[sel] <- ifelse(is.na(out[sel]), tab$mdl[r],
-                         pmax(out[sel], tab$mdl[r]))
-    }
-    if (!all(is.na(df$van))) {  # van known: overwrite exactly for this van
-      tabv <- mdl_tab[van == v & pollutant == poll]
-      for (r in seq_len(nrow(tabv))) {
-        sel <- !is.na(df$van) & df$van == v &
-               df$day >= tabv$start[r] & df$day <= tabv$end[r]
-        out[sel] <- tabv$mdl[r]
-      }
-    }
-  }
+  cat_v <- .mdl_step(poll, "CAT", df$ym)
+  emu_v <- .mdl_step(poll, "EMU", df$ym)
+  out <- pmax(cat_v, emu_v, na.rm = TRUE)          # van unknown -> conservative
+  out[!is.finite(out)] <- NA_real_
+  k <- !is.na(df$van) & df$van == "CAT"; out[k] <- cat_v[k]
+  k <- !is.na(df$van) & df$van == "EMU"; out[k] <- emu_v[k]
   out
 }
 

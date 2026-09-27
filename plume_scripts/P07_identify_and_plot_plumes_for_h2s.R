@@ -316,6 +316,32 @@ h2s_evt_keep <- h2s_evt_flags %>%
   dplyr::filter(plume_id %in% keep_ids)
 
 # ----------------------------
+# 3b) PERSIST THE RETAINED EVENT SET (2026-09-27)
+# ----------------------------
+# The retained set was previously an in-session object only, so every downstream
+# analysis that needed it re-derived the funnel from the same inputs. Two such
+# reimplementations existed, and at least one had drifted: script 70's copy still
+# carried the pre-2026-08-20 non-binding duration clause
+#   (duration in window) | (n_unique_t >= min_pts)
+# and the pre-2026-08-21 rule that a missing stability class PASSES - so it
+# retained 6 events where this script retains 4. A count is not a contract;
+# writing the identifiers, vehicle and timestamps here lets a consumer assert an
+# exact match instead of hoping that two funnels agree.
+retained_out <- h2s_evt_keep %>%
+  dplyr::transmute(
+    plume_id, Asset,
+    start_time = format(start_time, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    end_time   = format(end_time,   "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    time_at_peak = format(time_at_peak, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    duration_s, n_pts, n_unique_t, peak_dH2S, dist_at_peak_km,
+    windspd_at_peak, wind_sd_deg, wind_evaluable, stability) %>%
+  dplyr::arrange(plume_id)
+out_retained_csv <- file.path(out_dir, "WWTP_H2S_retained_plumes.csv")
+readr::write_csv(retained_out, out_retained_csv)
+message("[Saved] ", out_retained_csv, " (", nrow(retained_out),
+        " retained plumes: ", paste(retained_out$plume_id, collapse = ", "), ")")
+
+# ----------------------------
 # 4) Centerline surrogate points
 # ----------------------------
 centerline_keep <- h2s_pts_keep %>%
