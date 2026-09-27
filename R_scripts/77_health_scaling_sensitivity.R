@@ -148,13 +148,31 @@ SCEN_DESC <- c(
   C_borrowed  = "B, plus H2S/HCN at the mean aromatic factor",
   D_upper     = "B, plus H2S/HCN at the largest aromatic factor (upper bound)")
 
+# WITHIN-BLOCK MAXIMUM (2026-09-27), matching script 74. HI_maxblock was
+# sum(HQ_maxblock * f): each pollutant's own most-exposed block, scaled and
+# summed. For the neurological system those blocks differ (toluene and xylenes
+# peak in 080310036011000, trimethylbenzene in 080310041032013), so the sum was
+# an index no block experiences. The scaled index is now formed block by block
+# - HI_b = sum_i f_i * HQ_i,b over blocks where every organ pollutant is finite
+# - and its maximum taken. Population-weighted means are unaffected (they are
+# linear), and so are the three single-pollutant organs.
+.hq_block <- lapply(seq_len(nrow(POLL)), function(i)
+  suppressWarnings(as.numeric(d[[POLL$block_col[i]]])) * POLL$cf[i] / POLL$RfC_ugm3[i])
+.hi_maxblock_within <- function(f, og) {
+  idx <- which(POLL$organ == og)
+  M <- sweep(do.call(cbind, .hq_block[idx]), 2, f[idx], `*`)
+  ok <- is.finite(pop) & rowSums(!is.finite(M)) == 0L
+  max(rowSums(M[ok, , drop = FALSE]))
+}
 scen <- rbindlist(lapply(names(SCEN), function(s) {
   f <- SCEN[[s]]
   hq <- copy(base_hq)[, `:=`(HQ_pwmean = HQ_pwmean * f, HQ_maxblock = HQ_maxblock * f)]
-  hq[, .(scenario = s, description = SCEN_DESC[[s]],
-         pollutants = paste(pollutant, collapse = " + "),
-         HI_pwmean = round(sum(HQ_pwmean), 4),
-         HI_maxblock = round(sum(HQ_maxblock), 3)), by = organ]
+  o <- hq[, .(scenario = s, description = SCEN_DESC[[s]],
+              pollutants = paste(pollutant, collapse = " + "),
+              HI_pwmean = round(sum(HQ_pwmean), 4),
+              HI_maxblock_sum_of_maxima = round(sum(HQ_maxblock), 3)), by = organ]
+  o[, HI_maxblock := round(vapply(organ, function(og) .hi_maxblock_within(f, og), numeric(1)), 3)]
+  o[]
 }))
 setcolorder(scen, c("scenario","description","organ"))
 setorder(scen, scenario, -HI_pwmean)
@@ -201,9 +219,11 @@ fwrite(scen_poll, OUT1b); message("-> ", OUT1b)
 # CROSS-CHECK. Summing the per-pollutant table by organ must return the organ
 # table written above, or the two files disagree and the explorer's toggle
 # would show numbers the SI does not.
+# The per-pollutant table can only be summed to the SUM-OF-MAXIMA column; the
+# within-block HI_maxblock is not a sum of per-pollutant maxima by construction.
 .rs <- scen_poll[, .(HI_pwmean = sum(HQ_pwmean), HI_maxblock = sum(HQ_maxblock)),
                  by = .(scenario, organ)]
-.cm <- merge(.rs, scen[, .(scenario, organ, HI_pwmean, HI_maxblock)],
+.cm <- merge(.rs, scen[, .(scenario, organ, HI_pwmean, HI_maxblock = HI_maxblock_sum_of_maxima)],
              by = c("scenario", "organ"), suffixes = c("_poll", "_organ"))
 .d1 <- max(abs(.cm$HI_pwmean_poll   - .cm$HI_pwmean_organ))
 .d2 <- max(abs(.cm$HI_maxblock_poll - .cm$HI_maxblock_organ))
@@ -216,7 +236,7 @@ cat(sprintf("\n== S7.3b sums to S7.3: max abs diff pw %.2e, maxblock %.2e  [%s] 
 if (max(.d1, .d2) >= 2e-3)
   warning("TABLE_S7.3b does not sum to TABLE_S7.3 - do not publish the app toggle")
 cat("\n== SI Table S7.3  organ hazard index under four scaling scenarios ==\n")
-print(scen[, .(scenario, organ, pollutants, HI_pwmean, HI_maxblock)], row.names = FALSE)
+print(scen[, .(scenario, organ, pollutants, HI_pwmean, HI_maxblock, HI_maxblock_sum_of_maxima)], row.names = FALSE)
 
 cat("\n== does any conclusion move? (HI crossing 1) ==\n")
 flip <- scen[, .(any_cross = uniqueN(HI_pwmean >= 1) > 1L ||
@@ -233,9 +253,19 @@ for (i in seq_len(nrow(flip)))
 S71 <- file.path(BASE, "TABLE_S7.1_chronic_hazard.csv")
 if (file.exists(S71)) {
   s71 <- fread(S71)
-  h71 <- s71[, .(HI_pwmean_74 = sum(HQ_pwmean), HI_maxblock_74 = sum(HQ_maxblock)),
-             by = .(organ = target_organ)]
-  cmp <- merge(scen[scenario == "A_none", .(organ, HI_pwmean, HI_maxblock)], h71, by = "organ")
+  # Compare against 74's organ table (within-block maxima) when it exists;
+  # otherwise fall back to summing 74's per-pollutant maxima, which is only
+  # comparable to this script's sum-of-maxima column.
+  S71b <- file.path(BASE, "TABLE_S7.1b_hazard_index_by_organ.csv")
+  if (file.exists(S71b)) {
+    h71 <- fread(S71b)[, .(organ = target_organ, HI_pwmean_74 = HI_pwmean, HI_maxblock_74 = HI_maxblock)]
+    cmp <- merge(scen[scenario == "A_none", .(organ, HI_pwmean, HI_maxblock)], h71, by = "organ")
+  } else {
+    h71 <- s71[, .(HI_pwmean_74 = sum(HQ_pwmean), HI_maxblock_74 = sum(HQ_maxblock)),
+               by = .(organ = target_organ)]
+    cmp <- merge(scen[scenario == "A_none", .(organ, HI_pwmean, HI_maxblock = HI_maxblock_sum_of_maxima)],
+                 h71, by = "organ")
+  }
   cat("\n== scenario A vs 74's Table S7.1 (rounding difference only) ==\n")
   for (i in seq_len(nrow(cmp))) {
     r1 <- abs(cmp$HI_pwmean[i]   - cmp$HI_pwmean_74[i])   / max(cmp$HI_pwmean_74[i], 1e-12)
@@ -262,6 +292,25 @@ if (file.exists(S71)) {
 # Hematological has no unscalable species, so no f can move it: f* is NA.
 FAC <- c(Benzene = f_benz, Toluene = f_tol, Xylenes = f_xyl,
          `1,2,4-Trimethylbenzene` = NA, H2S = NA, HCN = NA)   # NA = no La Casa channel
+# block-level helpers for the most-exposed-block metric (see note below)
+.mb_within <- function(org, fvec) {
+  idx <- which(POLL$organ == org)
+  M <- sweep(do.call(cbind, .hq_block[idx]), 2, fvec, `*`)
+  ok <- is.finite(pop) & rowSums(!is.finite(M)) == 0L
+  max(rowSums(M[ok, , drop = FALSE]))
+}
+.fstar_within <- function(org, uns, fvec) {
+  idx <- which(POLL$organ == org)
+  M <- do.call(cbind, .hq_block[idx])
+  ok <- is.finite(pop) & rowSums(!is.finite(M)) == 0L
+  M <- M[ok, , drop = FALSE]
+  if (!any(uns)) return(NA_real_)
+  meas <- if (any(!uns)) rowSums(sweep(M[, !uns, drop = FALSE], 2, fvec[!uns], `*`)) else 0
+  unsc <- rowSums(M[, uns, drop = FALSE])
+  cand <- (1 - meas) / unsc
+  cand <- cand[is.finite(cand) & unsc > 0]
+  if (!length(cand)) NA_real_ else min(cand)
+}
 be <- rbindlist(lapply(unique(base_hq$organ), function(org) {
   s   <- base_hq[organ == org]
   uns <- is.na(FAC[s$pollutant])
@@ -277,9 +326,15 @@ be <- rbindlist(lapply(unique(base_hq$organ), function(org) {
     HI_pwmean_unscaled = round(sum(s$HQ_pwmean), 4),
     HI_pwmean_aromscaled = round(sum(fifelse(uns, s$HQ_pwmean, s$HQ_pwmean * FAC[s$pollutant])), 4),
     f_breakeven_pwmean = round(fstar("HQ_pwmean"), 3),
-    HI_maxblock_unscaled = round(sum(s$HQ_maxblock), 3),
-    HI_maxblock_aromscaled = round(sum(fifelse(uns, s$HQ_maxblock, s$HQ_maxblock * FAC[s$pollutant])), 3),
-    f_breakeven_maxblock = round(fstar("HQ_maxblock"), 3))
+    # MOST-EXPOSED BLOCK, WITHIN BLOCK (2026-09-27). The block-level HI is
+    # HI_b(f) = sum_meas HQ_i,b * FAC_i + f * sum_uns HQ_i,b, so the first block
+    # to reach 1 as f rises sets the break-even: f* = min_b over blocks with a
+    # positive unscalable part of (1 - meas_b) / uns_b. For a single unscalable
+    # pollutant this reduces to 1 / max_b HQ_b, as before; for the neurological
+    # system it no longer mixes maxima from different blocks.
+    HI_maxblock_unscaled = round(.mb_within(org, rep(1, nrow(s))), 3),
+    HI_maxblock_aromscaled = round(.mb_within(org, fifelse(uns, 1, FAC[s$pollutant])), 3),
+    f_breakeven_maxblock = round(.fstar_within(org, uns, FAC[s$pollutant]), 3))
 }))
 setorder(be, -HI_pwmean_unscaled)
 fwrite(be, OUT2); message("-> ", OUT2)

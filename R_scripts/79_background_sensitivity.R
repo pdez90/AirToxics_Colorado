@@ -299,7 +299,18 @@ run_arm <- function(p, half, keep_rows = FALSE) {
                HQ_pwmean   = sum(x[ok] * pop[ok]) / sum(pop[ok]) * HP$cf[i] / HP$RfC[i],
                HQ_maxblock = max(x[ok]) * HP$cf[i] / HP$RfC[i])
   }))
-  HI <- chronic[, .(HI_pwmean = sum(HQ_pwmean), HI_maxblock = sum(HQ_maxblock)), by = target_organ]
+  # HI_maxblock as the within-block maximum (2026-09-27), matching script 74;
+  # sum(HQ_maxblock) added maxima from different blocks for the neurological
+  # system. Single-pollutant organs are unchanged.
+  .hqb <- lapply(seq_len(nrow(HP)), function(i)
+    suppressWarnings(as.numeric(bdt[[paste0("s", HP$poll[i], "_mean_of_daily_mean")]])) * HP$cf[i] / HP$RfC[i])
+  HI <- rbindlist(lapply(unique(HP$organ), function(og) {
+    idx <- which(HP$organ == og); M <- do.call(cbind, .hqb[idx])
+    ok <- is.finite(pop) & rowSums(!is.finite(M)) == 0L
+    data.table(target_organ = og,
+               HI_pwmean = sum(chronic[target_organ == og, HQ_pwmean]),
+               HI_maxblock = max(rowSums(M[ok, , drop = FALSE])))
+  }))
 
   # ---- 500 m cell surface (script 73 / SI S4.1.2) ----
   cells <- rbindlist(lapply(POLL, function(pn) {

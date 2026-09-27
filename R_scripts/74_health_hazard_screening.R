@@ -140,13 +140,39 @@ chronic <- rbindlist(lapply(seq_len(nrow(POLL)), function(i) {
     HQ_maxblock     = signif(max_ppb * cf / POLL$RfC_ugm3[i], 3))
 }))
 
-HI <- chronic[, .(pollutants = paste(pollutant, collapse = " + "),
-                  HI_pwmean   = round(sum(HQ_pwmean), 3),
-                  HI_maxblock = round(sum(HQ_maxblock), 3)),
-              by = target_organ][order(-HI_pwmean)]
+# WITHIN-BLOCK MAXIMUM (2026-09-27). HI_maxblock was sum(HQ_maxblock): the sum
+# of each pollutant's own most-exposed block. For the three single-pollutant
+# organ systems that is the same thing, but the neurological index combines
+# toluene, xylenes and 1,2,4-trimethylbenzene, and their maxima do not fall in
+# one block (toluene and xylenes peak in 080310036011000, trimethylbenzene in
+# 080310041032013). Summing them gave 0.555, an index no block experiences. The
+# index is now computed block by block, over blocks where every organ pollutant
+# is finite, and its maximum taken. The old sum is kept in a separate column so
+# the two can be told apart; it is an upper bound, not an exposure.
+.hq_block <- lapply(seq_len(nrow(POLL)), function(i) {
+  x <- suppressWarnings(as.numeric(d[[POLL$block_col[i]]]))
+  x * POLL$cf[i] / POLL$RfC_ugm3[i] })
+HI <- rbindlist(lapply(unique(POLL$organ), function(og) {
+  idx <- which(POLL$organ == og)
+  M <- do.call(cbind, .hq_block[idx])
+  ok <- is.finite(pop) & rowSums(!is.finite(M)) == 0L
+  hi_b <- rowSums(M[ok, , drop = FALSE])
+  j <- which.max(hi_b)
+  data.table(target_organ = og,
+             pollutants = paste(POLL$name[idx], collapse = " + "),
+             HI_pwmean = round(sum(chronic[target_organ == og, HQ_pwmean]), 4),   # 4 dp: 77 cross-checks this file
+             HI_maxblock = round(max(hi_b), 3),
+             HI_maxblock_block = as.character(d[["GEOID20"]][ok][j]),
+             n_blocks_all_pollutants = sum(ok),
+             HI_maxblock_sum_of_maxima = round(sum(chronic[target_organ == og, HQ_maxblock]), 3))
+}))[order(-HI_pwmean)]
 
 fwrite(chronic, OUT1)
 message("-> ", OUT1)
+OUT1b <- file.path(BASE, "TABLE_S7.1b_hazard_index_by_organ.csv")
+fwrite(HI, OUT1b)
+message("-> ", OUT1b, "  (HI_maxblock is the within-block maximum; the sum of",
+        " separate maxima is kept alongside it)")
 cat("\n== SI Table S7.1  chronic hazard quotients (block-resolved) ==\n")
 print(chronic, row.names = FALSE)
 cat("\n== chronic hazard INDEX by target organ system ==\n")
@@ -192,7 +218,7 @@ ck("endocrine HI, most-exposed block",       gHI("Endocrine","HI_maxblock"), 8.7
 ck("respiratory HI, pop-weighted mean (H2S)",gHI("Respiratory","HI_pwmean"), 0.371)
 ck("respiratory HI, most-exposed block",     gHI("Respiratory","HI_maxblock"),4.97)
 ck("neurological HI, pop-weighted mean",     gHI("Neurological","HI_pwmean"), 0.031)
-ck("neurological HI, most-exposed block",    gHI("Neurological","HI_maxblock"),0.555)
+ck("neurological HI, most-exposed block",    gHI("Neurological","HI_maxblock"),0.509)  # within-block; the sum of separate maxima is 0.555
 ck("hematological HI, pop-weighted mean",    gHI("Hematological","HI_pwmean"),0.015)
 ck("hematological HI, most-exposed block",   gHI("Hematological","HI_maxblock"),0.237)
 ck("acute HQ, benzene at campaign max",      acute[pollutant=="Benzene", HQ_max], 55.0, 0.02)

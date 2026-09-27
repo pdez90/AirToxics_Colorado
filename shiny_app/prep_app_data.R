@@ -301,9 +301,21 @@ if (file.exists(f71) && file.exists(f72)) {
   acute   <- fread(f72)
 
   # organ-system hazard indices = sum of the HQs of pollutants sharing an organ
-  hi <- chronic[, .(pollutants = paste(pollutant, collapse = ", "),
-                    HI_pwmean  = sum(HQ_pwmean),
-                    HI_maxblock = sum(HQ_maxblock)), by = target_organ]
+  # Organ-system hazard indices. Read script 74's organ table when present: its
+  # HI_maxblock is the within-block maximum (2026-09-27). Summing the
+  # per-pollutant HQ_maxblock here reproduced the old defect - for the
+  # neurological system that added maxima from two different blocks.
+  f71b <- file.path(BASE, "TABLE_S7.1b_hazard_index_by_organ.csv")
+  if (file.exists(f71b)) {
+    hi <- fread(f71b)[, .(target_organ, pollutants = gsub(" \\+ ", ", ", pollutants),
+                          HI_pwmean, HI_maxblock)]
+  } else {
+    warning("TABLE_S7.1b_hazard_index_by_organ.csv not found - falling back to the ",
+            "sum of per-pollutant maxima, which overstates the neurological most-exposed-block index")
+    hi <- chronic[, .(pollutants = paste(pollutant, collapse = ", "),
+                      HI_pwmean  = sum(HQ_pwmean),
+                      HI_maxblock = sum(HQ_maxblock)), by = target_organ]
+  }
   setorder(hi, -HI_pwmean)
 
   # ---- S7.4 scaling scenarios (organ level, per-pollutant level, break-even)

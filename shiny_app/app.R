@@ -240,7 +240,11 @@ EMIS_CAVEAT <- local({
           HRRR and nearest-station wind directions disagree by a median of 21
           degrees over the record (95th percentile 102 degrees), so the crosswind
           geometry of any single intercept is uncertain (paper section 3.8). The
-          plumes cannot be attributed unambiguously to one facility (SI S6.8).")),
+          chemical fingerprint meant to separate wastewater from refinery sulfide
+          (no co-located aromatics or HCN) could not be evaluated: none of the four
+          plume windows holds a usable aromatic or HCN measurement, so the
+          attribution rests on wind geometry alone and is consistent with, not
+          demonstrated for, the wastewater facility (SI S6.8, Table S6.2).")),
     tags$div(style = "margin-top:8px",
       "Structured sensitivity scenarios place the four-intercept mean anywhere
        between 420 and 2,223 metric tons/yr (paper section 3.6, SI S6.5.2). The
