@@ -55,9 +55,6 @@ suppressPackageStartupMessages({ library(data.table) })
 BASE  <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))
 BLOCK <- file.path(BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.RData")
 SF    <- file.path(BASE, "lacasa_scaling_factors_option1_binweighted.RData")
-OUT1  <- file.path(BASE, "TABLE_S7.3_scaling_scenarios.csv")
-OUT1b <- file.path(BASE, "TABLE_S7.3b_scaling_by_pollutant.csv")
-OUT2  <- file.path(BASE, "TABLE_S7.4_breakeven_factors.csv")
 
 # Same unit convention as 73/74: ppb -> ug/m3 at 25 C and the 830 hPa site
 # pressure, NOT sea-level 24.45. See the UNIT FIX note in 73_cumulative_risk.R.
@@ -78,6 +75,14 @@ POLL[, cf := MW / MOLAR_VOL]
 HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "med_of_daily_med")
 stopifnot(HAZARD_BASIS %in% c("med_of_daily_med", "mean_of_daily_mean"))
 message("[BASIS] block statistic: ", HAZARD_BASIS)
+# Outputs (2026-09-27): the primary (median) basis writes the SI tables; the
+# secondary basis writes the same tables with a _meanbasis suffix so the Shiny
+# app can offer both statistics without either run overwriting the other.
+#   HAZARD_BASIS=mean_of_daily_mean Rscript R_scripts/77_health_scaling_sensitivity.R
+SUFFIX <- if (HAZARD_BASIS == "med_of_daily_med") "" else "_meanbasis"
+OUT1  <- file.path(BASE, paste0("TABLE_S7.3_scaling_scenarios", SUFFIX, ".csv"))
+OUT1b <- file.path(BASE, paste0("TABLE_S7.3b_scaling_by_pollutant", SUFFIX, ".csv"))
+OUT2  <- file.path(BASE, paste0("TABLE_S7.4_breakeven_factors", SUFFIX, ".csv"))
 POLL[, block_col := paste0("s", poll, "_", HAZARD_BASIS)]
 
 # ---- La Casa scaling factors, read from the file R04 writes ---------------
@@ -254,15 +259,22 @@ for (i in seq_len(nrow(flip)))
 # Scenario A must reproduce 74's Table S7.1. 74 rounds each HQ to 3 significant
 # figures before summing, so single-pollutant organs differ in the 4th figure;
 # anything larger means the two scripts are reading different block surfaces.
-S71 <- file.path(BASE, "TABLE_S7.1_chronic_hazard.csv")
+S71 <- file.path(BASE, paste0("TABLE_S7.1_chronic_hazard", SUFFIX, ".csv"))
 if (file.exists(S71)) {
   s71 <- fread(S71)
-  # Compare against 74's organ table (within-block maxima) when it exists;
-  # otherwise fall back to summing 74's per-pollutant maxima, which is only
-  # comparable to this script's sum-of-maxima column.
+  # Compare against 74's organ-level indices (within-block maxima): the primary
+  # basis is in TABLE_S7.1b, both bases are in TABLE_S7.1c. Fall back to summing
+  # 74's per-pollutant maxima, comparable only to the sum-of-maxima column.
   S71b <- file.path(BASE, "TABLE_S7.1b_hazard_index_by_organ.csv")
-  if (file.exists(S71b)) {
+  S71c <- file.path(BASE, "TABLE_S7.1c_basis_comparison.csv")
+  .btag <- if (HAZARD_BASIS == "med_of_daily_med") "median_of_daily_medians" else "mean_of_daily_means"
+  h71 <- NULL
+  if (file.exists(S71c)) {
+    h71 <- fread(S71c)[basis == .btag, .(organ = target_organ, HI_pwmean_74 = HI_pwmean, HI_maxblock_74 = HI_maxblock)]
+  } else if (SUFFIX == "" && file.exists(S71b)) {
     h71 <- fread(S71b)[, .(organ = target_organ, HI_pwmean_74 = HI_pwmean, HI_maxblock_74 = HI_maxblock)]
+  }
+  if (!is.null(h71) && nrow(h71)) {
     cmp <- merge(scen[scenario == "A_none", .(organ, HI_pwmean, HI_maxblock)], h71, by = "organ")
   } else {
     h71 <- s71[, .(HI_pwmean_74 = sum(HQ_pwmean), HI_maxblock_74 = sum(HQ_maxblock)),
