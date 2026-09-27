@@ -348,16 +348,23 @@ cat("    is already above HI = 1 on the measured species alone; NA means no\n")
 cat("    unscalable species, so no borrowed factor can move that organ)\n")
 print(be, row.names = FALSE)
 
+# Basis-aware (2026-09-27): on the median basis the community endocrine index
+# is BELOW 1 unscaled and its break-even (1.118) lies below the measured
+# aromatic span, so borrowing any measured factor carries it above 1. The
+# earlier text asserted that nothing moves, which was true only on the mean basis.
+.fe <- be[organ == "Endocrine", f_breakeven_pwmean]; .fr <- be[organ == "Respiratory", f_breakeven_pwmean]
+.he <- be[organ == "Endocrine", HI_pwmean_unscaled]; .hr <- be[organ == "Respiratory", HI_pwmean_unscaled]
+.cross <- function(h, f) if (h < 1) f_xyl >= f else f_benz <= f   # would some measured factor carry the index across 1?
 cat(sprintf(paste0(
   "\n== the window that matters ==\n",
   "  Measured La Casa factors span %.3f to %.3f (mean %.3f).\n",
-  "  Community-metric conclusions are unchanged for any factor between\n",
-  "  %.3f (endocrine HI would fall to 1) and %.3f (respiratory HI would\n",
-  "  rise to 1). The measured aromatic range sits inside that window, so a\n",
-  "  borrowed factor of any plausible size leaves every S7 statement standing.\n"),
+  "  Endocrine community HI %.3f unscaled: %s 1 at an HCN factor of %.3f -> %s\n",
+  "  Respiratory community HI %.3f unscaled: %s 1 at an H2S factor of %.3f -> %s\n"),
   f_benz, f_xyl, f_arom_mean,
-  be[organ == "Endocrine", f_breakeven_pwmean],
-  be[organ == "Respiratory", f_breakeven_pwmean]))
+  .he, if (.he < 1) "reaches" else "falls to", .fe,
+  if (.cross(.he, .fe)) "a measured factor WOULD carry it across 1; that conclusion depends on the borrowed-factor assumption" else "no measured factor carries it across 1",
+  .hr, if (.hr < 1) "reaches" else "falls to", .fr,
+  if (.cross(.hr, .fr)) "a measured factor WOULD carry it across 1" else "no measured factor carries it across 1"))
 
 cat(paste0(
   "\n== why we do not adopt a borrowed factor ==\n",
