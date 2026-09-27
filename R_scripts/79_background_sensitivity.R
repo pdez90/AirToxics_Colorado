@@ -234,6 +234,12 @@ HP <- data.table(
   organ = c("Hematological", "Neurological", "Neurological", "Neurological",
             "Respiratory", "Endocrine"))
 HP[, cf := MW / MOLAR_VOL]
+# EXPOSURE BASIS (2026-09-27): same switch as 74/77. The chronic screen's
+# primary block statistic is the median of daily medians (the section 3.3
+# statistic); HAZARD_BASIS=mean_of_daily_mean reproduces the former primary.
+HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "med_of_daily_med")
+stopifnot(HAZARD_BASIS %in% c("med_of_daily_med", "mean_of_daily_mean"))
+message("[BASIS] hazard block statistic: ", HAZARD_BASIS)
 rfc_ppb <- stats::setNames(
   c(0.03, 5, 0.06, 0.1, 0.002, 0.0008) * 1000 /
     c(78.11, 92.14, 120.19, 106.17, 34.08, 27.03) * MOLAR_VOL,
@@ -293,7 +299,7 @@ run_arm <- function(p, half, keep_rows = FALSE) {
 
   # ---- S7 block-resolved hazard (script 74) ----
   chronic <- rbindlist(lapply(seq_len(nrow(HP)), function(i) {
-    x  <- suppressWarnings(as.numeric(bdt[[paste0("s", HP$poll[i], "_mean_of_daily_mean")]]))
+    x  <- suppressWarnings(as.numeric(bdt[[paste0("s", HP$poll[i], "_", HAZARD_BASIS)]]))
     ok <- is.finite(x) & is.finite(pop)
     data.table(pollutant = HP$name[i], target_organ = HP$organ[i],
                HQ_pwmean   = sum(x[ok] * pop[ok]) / sum(pop[ok]) * HP$cf[i] / HP$RfC[i],
@@ -303,7 +309,7 @@ run_arm <- function(p, half, keep_rows = FALSE) {
   # sum(HQ_maxblock) added maxima from different blocks for the neurological
   # system. Single-pollutant organs are unchanged.
   .hqb <- lapply(seq_len(nrow(HP)), function(i)
-    suppressWarnings(as.numeric(bdt[[paste0("s", HP$poll[i], "_mean_of_daily_mean")]])) * HP$cf[i] / HP$RfC[i])
+    suppressWarnings(as.numeric(bdt[[paste0("s", HP$poll[i], "_", HAZARD_BASIS)]])) * HP$cf[i] / HP$RfC[i])
   HI <- rbindlist(lapply(unique(HP$organ), function(og) {
     idx <- which(HP$organ == og); M <- do.call(cbind, .hqb[idx])
     ok <- is.finite(pop) & rowSums(!is.finite(M)) == 0L
@@ -545,6 +551,9 @@ ck("lowest mobile/AirToxScreen ratio",          min(TS41$ratio_mobile_over_airto
 ck("highest mobile/AirToxScreen ratio",         max(TS41$ratio_mobile_over_airtox), 0.953, 0.005)
 ck("lowest mobile cases, IUR 5.75",             min(TS41$mobile_cases_low),  0.1065, 0.01)
 ck("highest mobile cases, IUR 20.40",           max(TS41$mobile_cases_high), 0.3962, 0.01)
+# NOTE (2026-09-27): the HI anchors below are the MEAN-basis values quoted in the
+# current SI S4.6; on the median basis (HAZARD_BASIS default) they will print EDIT
+# until the SI and these anchors are refreshed from the first median-basis run.
 ck("lowest endocrine HI, community metric",     min(TS41$HI_pwmean_Endocrine),   1.586, 0.005)
 ck("highest endocrine HI, community metric",    max(TS41$HI_pwmean_Endocrine),   1.612, 0.005)
 ck("lowest respiratory HI, community metric",   min(TS41$HI_pwmean_Respiratory), 0.361, 0.01)

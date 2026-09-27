@@ -8,17 +8,22 @@
 # all six pollutants.
 # MDLs: predominant CAT audit values (CDPHE repository READ-MEs /
 # Table S1.2): benzene 0.5, toluene 0.18, xylene 0.19, TMB 0.22,
-# H2S 5, HCN 13 ppb.
+# H2S 5 ppb. HCN (2026-09-27): 13 ppb was the CAT value BEFORE the
+# retained HCN record (22 Jan - 23 Jun 2025). Over that record the
+# audit values in force are CAT 5 (Q1) / 10 (Q2) and EMU 18 (Q1) /
+# 2 (Q2) ppb; weighted by retained HCN observations (25,205 / 75,253 /
+# 151,137 / 227,065 rows) the median MDL is 5 ppb, which is used here.
+# At the 2 ppb value that applied to 47% of HCN observations, 3 of the
+# 359 HCN cells would be colored; at 5, 10 or 18 ppb none are.
 # Output: FinalFig/FIG_belowMDL_maps.png (+ per-panel CSV summary)
 # ==============================================================
 
-SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(sf); library(ggplot2); library(ggspatial)
   library(scales); library(patchwork)
 })
 
-BASE <- SUNCOR_BASE
+BASE <- "/Users/priyanka/Downloads/Suncor"
 message("Loading mobile data + grid...")
 load(file.path(BASE, "mobile_wswd.RData"))   # out
 df <- as.data.table(out); rm(out); gc()
@@ -45,7 +50,7 @@ POLLS <- list(
   list(name = "Trimethylbenzene", col = "Trimethylbenzene_ppb", mdl = 0.22),
   list(name = "Xylene",           col = "Xylene_ppb",           mdl = 0.19),
   list(name = "H2S",              col = "Hydrogen_Sulfide_ppb", mdl = 5),
-  list(name = "HCN",              col = "Hydrogen_Cyanide_ppb", mdl = 13))
+  list(name = "HCN",              col = "Hydrogen_Cyanide_ppb", mdl = 5))   # see header
 
 padx <- 0.012; pady <- 0.012
 xlim <- unname(range(cells[cell %in% df$cell, lon])) + c(-padx, padx)
@@ -118,7 +123,8 @@ fig <- (panels[[1]] | panels[[2]] | panels[[3]]) /
     caption = paste("Cell values are medians of daily medians of raw reported",
                     "concentrations on the 500 m grid. Gray cells fall below the",
                     "predominant audited MDL (CAT lab; CDPHE repository READ-ME",
-                    "files). Basemap: CARTO Positron."),
+                    "files; HCN: observation-weighted median over its 2025 record,",
+                    "5 ppb). Basemap: CARTO Positron."),
     theme = theme(plot.caption = element_text(size = 8, hjust = 0)))
 out_png <- file.path(BASE, "FinalFig", "FIG_belowMDL_maps.png")
 ggsave(out_png, fig, width = 13.5, height = 8.6, dpi = 400, bg = "white")

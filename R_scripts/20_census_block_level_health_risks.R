@@ -11,7 +11,6 @@
 # - Reports # common blocks explicitly
 # ============================================================
 
-SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(sf)
   library(dplyr)
@@ -92,15 +91,52 @@ results_risk_common <- data.frame(
 print(results_risk_common)
 
 # ---- save CSV
-out_dir_fig <- file.path(SUNCOR_BASE, "FinalFig")
+out_dir_fig <- "/Users/priyanka/Downloads/Suncor/FinalFig"
 out_csv_common <- file.path(out_dir_fig, "benzene_risk_summary_BINWEIGHTED_COMMONBLOCKS.csv")
 utils::write.csv(results_risk_common, out_csv_common, row.names = FALSE)
 message("Saved COMMON-BLOCKS risk summary CSV: ", out_csv_common)
 
+# ---- SECONDARY BASIS (2026-09-27): the same comparison on the block MEAN of
+# daily means, written to a separate file so the primary file keeps one mobile
+# row. The primary statistic is the median of daily medians (robust to the few
+# high days a block may have been sampled on); the mean is the exposure-
+# relevant statistic and AirToxScreen is itself an annual mean, so the SI
+# reports both and discusses the difference (section S4.7 / S7). On the mean
+# basis mobile benzene exceeds AirToxScreen (ratio ~1.26) rather than sitting
+# just below it (0.92); the difference is the skewed upper tail the median
+# discards. 74/77/79 carry the same primary/secondary pair for the hazard screen.
+mean_col <- sub("_med_of_daily_med_", "_mean_of_daily_mean_", mobile_benzene_col)
+if (mean_col %in% names(df_common)) {
+  ok2 <- is.finite(df_common[[mean_col]])
+  d2  <- df_common[ok2, ]
+  gt2 <- function(x) sum(x / d2$benzene_ppb_airtox > 2, na.rm = TRUE)
+  results_meanbasis <- data.frame(
+    metric = c("AirToxScreen benzene_ppb (COMMON blocks)",
+               paste0("Mobile ", mobile_benzene_col, " (COMMON blocks) [primary basis]"),
+               paste0("Mobile ", mean_col, " (COMMON blocks) [secondary basis]")),
+    n_blocks = nrow(d2),
+    total_population_used = sum(d2$Population_airtox, na.rm = TRUE),
+    pop_weighted_mean_ppb = c(pw_mean(d2$benzene_ppb_airtox, d2$Population_airtox),
+                              pw_mean(d2[[mobile_benzene_col]], d2$Population_airtox),
+                              pw_mean(d2[[mean_col]], d2$Population_airtox)),
+    risk_5_75  = c(risk_calc(d2$benzene_ppb_airtox, d2$Population_airtox, 5.75),
+                   risk_calc(d2[[mobile_benzene_col]], d2$Population_airtox, 5.75),
+                   risk_calc(d2[[mean_col]], d2$Population_airtox, 5.75)),
+    risk_20_40 = c(risk_calc(d2$benzene_ppb_airtox, d2$Population_airtox, 20.40),
+                   risk_calc(d2[[mobile_benzene_col]], d2$Population_airtox, 20.40),
+                   risk_calc(d2[[mean_col]], d2$Population_airtox, 20.40)),
+    blocks_gt2x_airtox = c(NA, gt2(d2[[mobile_benzene_col]]), gt2(d2[[mean_col]])))
+  results_meanbasis$ratio_vs_airtox <- results_meanbasis$pop_weighted_mean_ppb / results_meanbasis$pop_weighted_mean_ppb[1]
+  print(results_meanbasis)
+  out_csv_basis <- file.path(out_dir_fig, "benzene_risk_summary_BINWEIGHTED_COMMONBLOCKS_basis_comparison.csv")
+  utils::write.csv(results_meanbasis, out_csv_basis, row.names = FALSE)
+  message("Saved basis-comparison CSV: ", out_csv_basis)
+} else message("[BASIS] ", mean_col, " not in block_sf_risk - secondary-basis comparison skipped")
+
 # ---- OPTIONAL: write the common-block subset as a GPKG for mapping
 # (does not overwrite anything)
 block_sf_common <- block_sf_risk %>% filter(GEOID20 %in% common_geoid)
-out_gpkg_common <- file.path(SUNCOR_BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONBLOCKS.gpkg")
+out_gpkg_common <- "/Users/priyanka/Downloads/Suncor/censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONBLOCKS.gpkg"
 sf::st_write(block_sf_common, out_gpkg_common, append = FALSE, quiet = TRUE)
 message("Wrote COMMON-BLOCKS gpkg: ", out_gpkg_common)
 

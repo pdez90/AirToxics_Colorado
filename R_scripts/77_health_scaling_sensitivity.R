@@ -65,14 +65,20 @@ MOLAR_VOL <- 8.314 * 298.15 / 83000 * 1000   # 29.8653 L/mol
 
 POLL <- data.table(
   name      = c("Benzene","Toluene","Xylenes","1,2,4-Trimethylbenzene","H2S","HCN"),
-  block_col = c("sBenzene_mean_of_daily_mean","sToluene_mean_of_daily_mean",
-                "sXylene_mean_of_daily_mean","sTrimethylbenzene_mean_of_daily_mean",
-                "sH2S_mean_of_daily_mean","sHCN_mean_of_daily_mean"),
+  poll      = c("Benzene","Toluene","Xylene","Trimethylbenzene","H2S","HCN"),
   MW        = c(78.11, 92.14, 106.16, 120.19, 34.08, 27.03),
   RfC_ugm3  = c(30, 5000, 100, 60, 2, 0.8),
   organ     = c("Hematological","Neurological","Neurological","Neurological",
                 "Respiratory","Endocrine"))
 POLL[, cf := MW / MOLAR_VOL]
+# EXPOSURE BASIS (2026-09-27): same switch as 74_health_hazard_screening.R. The
+# primary chronic screen now uses the block median of daily medians, the
+# statistic of the section 3.3 cancer comparison; HAZARD_BASIS=mean_of_daily_mean
+# reproduces the former primary.
+HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "med_of_daily_med")
+stopifnot(HAZARD_BASIS %in% c("med_of_daily_med", "mean_of_daily_mean"))
+message("[BASIS] block statistic: ", HAZARD_BASIS)
+POLL[, block_col := paste0("s", poll, "_", HAZARD_BASIS)]
 
 # ---- La Casa scaling factors, read from the file R04 writes ---------------
 # Hard-coding these is how the 300 m exclusion silently left two SI tables on
@@ -117,9 +123,7 @@ base_hq <- rbindlist(lapply(seq_len(nrow(POLL)), function(i) {
 # reproduce the HQ computed from those columns, or the factor file and the
 # block surface disagree and every scenario below is built on sand.
 chk <- data.table(pollutant = c("Benzene","Toluene","Xylenes"),
-                  col = c("sBenzene_mean_of_daily_mean_scaled",
-                          "sToluene_mean_of_daily_mean_scaled",
-                          "sXylene_mean_of_daily_mean_scaled"),
+                  col = paste0(c("sBenzene_", "sToluene_", "sXylene_"), HAZARD_BASIS, "_scaled"),
                   f = c(f_benz, f_tol, f_xyl))
 cat("\n== cross-check: factor x unscaled column vs the pipeline's scaled column ==\n")
 for (i in seq_len(nrow(chk))) {

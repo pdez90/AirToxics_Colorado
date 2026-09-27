@@ -18,8 +18,8 @@
 # (rt() below), because code-generated tables use round(); (ii) table cells
 # are compared after collapsing whitespace, so an empty cell reads "| |".
 #
-# Status 2026-09-27 (evening): 186 checks against the review-round-2 documents; the S4.5
-# bootstrap check FAILS by design until 58_bootstrap_blocks.R is re-run with the exact join. Claims whose source is a document rather than code (permit records,
+# Status 2026-09-27 (night): primary exposure basis for the hazard screen is now the block
+# median of daily medians (74/77/79 HAZARD_BASIS); the mean basis is checked as secondary. Claims whose source is a document rather than code (permit records,
 # literature values, instrument specifications) are listed at the end so the
 # reader can see what this script does NOT vouch for.
 #
@@ -113,15 +113,26 @@ if (file.exists(BLK)) {
   ar <- d$area_km2[k]
   say("2.5.1: block area", sprintf("median of %s km2 (IQR: %s-%s km2), a mean of %s km2, and a range from %s to %s km2",
       rh(median(ar), 4), rh(quantile(ar, .25), 4), rh(quantile(ar, .75), 4), rh(mean(ar), 4), rh(min(ar), 4), rh(max(ar), 2)), MS)
-  # neurological most-exposed block (within block) - Table S7.1 / S7.1 prose
+  # neurological most-exposed block (within block) - Table S7.1 / S7.1 prose.
+  # PRIMARY BASIS (2026-09-27): median of daily medians, as in section 3.3; the
+  # mean of daily means is the secondary basis quoted alongside it.
   MV <- 8.314 * 298.15 / 83000 * 1000
-  hq <- cbind(d$sToluene_mean_of_daily_mean * 92.14 / MV / 5000, d$sXylene_mean_of_daily_mean * 106.16 / MV / 100,
-              d$sTrimethylbenzene_mean_of_daily_mean * 120.19 / MV / 60)
-  ok <- rowSums(!is.finite(hq)) == 0 & is.finite(d$POP20)
+  hqb <- function(b) cbind(d[[paste0("sToluene_", b)]] * 92.14 / MV / 5000, d[[paste0("sXylene_", b)]] * 106.16 / MV / 100,
+                           d[[paste0("sTrimethylbenzene_", b)]] * 120.19 / MV / 60)
+  hq <- hqb("med_of_daily_med"); ok <- rowSums(!is.finite(hq)) == 0 & is.finite(d$POP20)
+  hqm <- hqb("mean_of_daily_mean"); okm <- rowSums(!is.finite(hqm)) == 0 & is.finite(d$POP20)
   say("S7.1: neurological within-block maximum", sprintf("the largest index within any single block is %s (block %s)", rh(max(rowSums(hq[ok, ])), 3), d$GEOID20[ok][which.max(rowSums(hq[ok, ]))]), SI)
   say("S7.1: eligible blocks (neurological)", sprintf("(%s blocks for the neurological system)", cm(sum(ok))), SI)
-  say("S7.1: sum of separate maxima (not used)", sprintf("and gives %s, which is not an index any block experiences", rh(sum(apply(hq, 2, max, na.rm = TRUE)), 3)), SI)
+  say("S7.1: sum of separate maxima on the mean basis (not used)", sprintf("their sum, %s, exceeds the largest within-block index of %s", rh(sum(apply(hqm, 2, max, na.rm = TRUE)), 3), rh(max(rowSums(hqm[okm, ])), 3)), SI)
   say("S7.2: neurological most-exposed block", sprintf("and %s at the most-exposed block", rh(max(rowSums(hq[ok, ])), 2)), SI)
+  # both bases, benzene comparison (section 3.3 / S4.3) - from the block file itself
+  a <- d$benzene_ppb; pw <- function(x) { k <- is.finite(x) & is.finite(a) & is.finite(d$POP20) & d$POP20 > 0; sum(x[k] * d$POP20[k]) / sum(d$POP20[k]) }
+  mm <- d$sBenzene_mean_of_daily_mean_scaled; md <- d$sBenzene_med_of_daily_med_scaled; k2 <- is.finite(mm) & is.finite(md) & is.finite(a) & is.finite(d$POP20) & d$POP20 > 0
+  say("3.3 / S4.3: mean-basis benzene", sprintf("a population-weighted mobile benzene of %s ppb, %s-%s excess cases, a mobile-to-AirToxScreen ratio of %s and %d blocks above twice", rh(pw(mm), 3),
+      rh(5.75 * sum(mm[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(mm[k2] * d$POP20[k2]) / 1e6, 3), rh(pw(mm) / pw(a), 2), sum(mm[k2] / a[k2] > 2)), MS)
+  say("S4.3: mean-basis benzene", sprintf("the population-weighted mobile benzene is %s ppb (%s-%s excess cases), the ratio to AirToxScreen is %s, and %d rather than %d blocks exceed twice", rh(pw(mm), 3),
+      rh(5.75 * sum(mm[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(mm[k2] * d$POP20[k2]) / 1e6, 3), rh(pw(mm) / pw(a), 2), sum(mm[k2] / a[k2] > 2), sum(md[k2] / a[k2] > 2)), SI)
+  say("S7.3: mean > median share and factor", sprintf("The block means exceed the block medians in %s%% of blocks, by a median factor of %s for benzene", pc(100 * mean(mm[k2] > md[k2])), rh(median((mm / md)[k2 & md > 0]), 1)), SI)
 } else skip("block-file checks (3.3, 2.5.1, S7.1)", "censusblocks_..._overlap.RData not present")
 
 # ==========================================================================
@@ -248,7 +259,7 @@ say("3.4.2: per-pollutant day range", sprintf("(maximum per-pollutant counts ran
 say("3.4.2: composition counts", sprintf("Benzene was present in %d of the %d groups", sum(sapply(tok, function(t) "benzene" %in% t)), nrow(M)), MS)
 say("3.4.2: H2S / HCN membership", sprintf("with H2S in %s and HCN in %s", c("four","five","six")[sum(sapply(tok, function(t) "h2s" %in% t)) - 3], c("three","four","five")[sum(sapply(tok, function(t) "hcn" %in% t)) - 2]), MS)
 gm <- function(id) M[group_id == id]; g5 <- function(id) S5[group_id == id]
-say("3.4.2: group 4", sprintf("was above the campaign 99th percentile within 100 m on %d days, and the group registered exceedances on %d distinct days", g5(4)$toluene, gm(4)$max_n_days), MS)
+say("3.4.2: group 4", sprintf("was above the campaign 99th percentile within 100 m on %d days, and its toluene cluster registered exceedances on %d distinct days", g5(4)$toluene, gm(4)$max_n_days), MS)
 say("3.4.2: group 4 TRI distance", sprintf("It lies %s km from the Phillips 66 terminal", rh(gm(4)$tri_dist_km, 2)), MS)
 say("3.4.2: groups 40 and 43", sprintf("at %s km (Owens Corning Roofing and Asphalt) and %s km (KBP Coil Coaters)", rh(gm(40)$tri_dist_km, 2), rh(gm(43)$tri_dist_km, 2)), MS)
 say("3.4.2: groups 22 and 29", sprintf("with %d and %d measurements within 100 m", g5(22)$n_rows_100m, g5(29)$n_rows_100m), MS)
@@ -422,7 +433,7 @@ hdr("M. Hazard screen  <- TABLE_S7.1(b), S7.2, S7.3, S7.4")
 h1 <- need("TABLE_S7.1b_hazard_index_by_organ.csv"); h7 <- need("TABLE_S7.1_chronic_hazard.csv"); h3 <- need("TABLE_S7.3_scaling_scenarios.csv"); h4 <- need("TABLE_S7.4_breakeven_factors.csv"); h2 <- need("TABLE_S7.2_acute_screen.csv")
 SIrow <- rows(SI); ho <- function(o, c) h1[target_organ == o][[c]]
 say("Table S7.1: organ HI rows", sprintf("| Endocrine (HCN) | %s | | %s | Respiratory (H2S) | %s | | %s | Neurological (toluene + xylenes + 1,2,4-TMB) | %s | | %s | Hematological (benzene) | %s | | %s |",
-    rh(ho("Endocrine","HI_pwmean"), 2), rh(ho("Endocrine","HI_maxblock"), 2), rh(ho("Respiratory","HI_pwmean"), 3), rh(ho("Respiratory","HI_maxblock"), 2),
+    rh(ho("Endocrine","HI_pwmean"), 3), rh(ho("Endocrine","HI_maxblock"), 2), rh(ho("Respiratory","HI_pwmean"), 3), rh(ho("Respiratory","HI_maxblock"), 2),
     rh(ho("Neurological","HI_pwmean"), 3), rh(ho("Neurological","HI_maxblock"), 3), rh(ho("Hematological","HI_pwmean"), 3), rh(ho("Hematological","HI_maxblock"), 3)), SIrow)
 s3 <- function(sc, o, c) h3[scenario == sc & organ == o][[c]]
 sayx("Table S7.3: pop-weighted rows", sprintf(rxq("| Endocrine (HCN) | %s | %s | %s | %s | Respiratory (H2S) | %s | %s | %s | %s | Neurological (toluene + xylenes + TMB) | %s | %s | %s | %s | Hematological (benzene) | %s | %s | %s | %s |"),
@@ -438,9 +449,27 @@ sayx("Table S7.3: most-exposed-block rows", sprintf(rxq("| Endocrine | %s | %s |
 say("S7.1: aromatic scaling effect", sprintf("raises the population-weighted neurological index from %s to %s and the hematological index from %s to %s, raises the most-exposed-block neurological index from %s to %s",
     rh(s3("A_none","Neurological","HI_pwmean"),3), rh(s3("B_aromatics","Neurological","HI_pwmean"),3), rh(s3("A_none","Hematological","HI_pwmean"),3), rh(s3("B_aromatics","Hematological","HI_pwmean"),3),
     rh(s3("A_none","Neurological","HI_maxblock"),3), rh(s3("B_aromatics","Neurological","HI_maxblock"),3)), SI)
+# both bases side by side (TABLE_S7.1c) -> S7.2 / S7.3 / 3.3 prose
+if (have("TABLE_S7.1c_basis_comparison.csv")) {
+  hc <- need("TABLE_S7.1c_basis_comparison.csv"); g <- function(b, o, c) hc[basis == b & target_organ == o][[c]]
+  say("S7.2: mean basis stated", sprintf("the community endocrine index is %s and the respiratory index %s, with most-exposed-block values of %s and %s", rh(g("mean_of_daily_means","Endocrine","HI_pwmean"), 2), rh(g("mean_of_daily_means","Respiratory","HI_pwmean"), 2), rh(g("mean_of_daily_means","Endocrine","HI_maxblock"), 2), rh(g("mean_of_daily_means","Respiratory","HI_maxblock"), 2)), SI)
+  say("S7.3: community indices on both bases", sprintf("the community indices are %s (endocrine), %s (respiratory), %s (neurological) and %s (hematological), against %s, %s, %s and %s on the median basis", rh(g("mean_of_daily_means","Endocrine","HI_pwmean"), 2), rh(g("mean_of_daily_means","Respiratory","HI_pwmean"), 2), rh(g("mean_of_daily_means","Neurological","HI_pwmean"), 3), rh(g("mean_of_daily_means","Hematological","HI_pwmean"), 3), rh(g("median_of_daily_medians","Endocrine","HI_pwmean"), 2), rh(g("median_of_daily_medians","Respiratory","HI_pwmean"), 2), rh(g("median_of_daily_medians","Neurological","HI_pwmean"), 3), rh(g("median_of_daily_medians","Hematological","HI_pwmean"), 3)), SI)
+  say("S7.3: most-exposed-block indices on both bases", sprintf("the most-exposed-block values are %s, %s, %s and %s against %s, %s, %s and %s", rh(g("mean_of_daily_means","Endocrine","HI_maxblock"), 2), rh(g("mean_of_daily_means","Respiratory","HI_maxblock"), 2), rh(g("mean_of_daily_means","Neurological","HI_maxblock"), 2), rh(g("mean_of_daily_means","Hematological","HI_maxblock"), 2), rh(g("median_of_daily_medians","Endocrine","HI_maxblock"), 2), rh(g("median_of_daily_medians","Respiratory","HI_maxblock"), 2), rh(g("median_of_daily_medians","Neurological","HI_maxblock"), 2), rh(g("median_of_daily_medians","Hematological","HI_maxblock"), 2)), SI)
+  say("3.3: hazard indices, median basis", sprintf("population-weighted hazard indices of %s for endocrine effects (driven by HCN) and %s for respiratory effects", rh(g("median_of_daily_medians","Endocrine","HI_pwmean"), 2), rh(g("median_of_daily_medians","Respiratory","HI_pwmean"), 2)), MS)
+  say("3.3: hazard indices, mean basis", sprintf("On the block mean of daily means the community endocrine index is %s and the respiratory index %s, with most-exposed-block values of %s and %s", rh(g("mean_of_daily_means","Endocrine","HI_pwmean"), 2), rh(g("mean_of_daily_means","Respiratory","HI_pwmean"), 2), rh(g("mean_of_daily_means","Endocrine","HI_maxblock"), 2), rh(g("mean_of_daily_means","Respiratory","HI_maxblock"), 2)), MS)
+  say("4: hazard conclusion on both bases", sprintf("at the community average the endocrine index is %s on the median-of-daily-medians basis used for the benzene comparison and %s on the mean-of-daily-means basis", rh(g("median_of_daily_medians","Endocrine","HI_pwmean"), 2), rh(g("mean_of_daily_means","Endocrine","HI_pwmean"), 2)), MS)
+} else skip("S7 basis comparison", "TABLE_S7.1c_basis_comparison.csv not present (run 74)")
+if (have("TABLE_cumulative_HI_summary.csv")) {
+  cu <- need("TABLE_cumulative_HI_summary.csv"); cg <- function(t, m, c) cu[tos == t & metric == m][[c]]
+  say("S7.3: cell-level median metric", sprintf("on the cell median the endocrine index exceeds 1 in %s%% of cells (maximum %s) and the respiratory index in one cell (maximum %s)", pc(cg("Endocrine","median","pct_cells_HI_gt1")), rh(cg("Endocrine","median","HI_max"), 2), rh(cg("Respiratory","median","HI_max"), 2)), SI)
+  say("S7.3: cell-level mean metric", sprintf("on the cell mean the endocrine index exceeds 1 in %s%% of cells (maximum %s) and the respiratory index in the most-exposed cells (maximum %s)", pc(cg("Endocrine","mean","pct_cells_HI_gt1")), rh(cg("Endocrine","mean","HI_max"), 2), rh(cg("Respiratory","mean","HI_max"), 2)), SI)
+}
+say("S7.4: community endocrine under C and D", sprintf("from %s (A, B) to %s and %s (C, D)", rh(s3("A_none","Endocrine","HI_pwmean"), 2), rh(s3("C_borrowed","Endocrine","HI_pwmean"), 2), rh(s3("D_upper","Endocrine","HI_pwmean"), 2)), SI)
 b4 <- function(o, c) h4[organ == o][[c]]
-say("S7.4: break-even factors (pw)", sprintf("the endocrine index reaches 1 at an HCN factor of %s, and the respiratory index reaches 1 at an H", rh(b4("Endocrine","f_breakeven_pwmean"), 2)), SI)
+say("S7.4: break-even factors (pw)", sprintf("the endocrine index reaches 1 at an HCN factor of %s, and the respiratory index at an H", rh(b4("Endocrine","f_breakeven_pwmean"), 2)), SI)
 say("S7.4: break-even respiratory (pw)", sprintf("S factor of %s.", rh(b4("Respiratory","f_breakeven_pwmean"), 2)), SI)
+say("S7.4: neurological break-even (max block)", sprintf("for the neurological system this gives %s, and it need not be", rh(b4("Neurological","f_breakeven_maxblock"), 2)), SI)
+say("S7.3: OEHHA chronic re-anchoring", sprintf("raise the most-exposed-block hazard quotients to %s (benzene, hematological) and %s (1,2,4-trimethylbenzene, neurological)", rh(h7[pollutant == "Benzene", maxblock_ugm3] / 3, 2), rh(h7[pollutant == "1,2,4-Trimethylbenzene", maxblock_ugm3] / 4, 2)), SI)
 say("S7.4: break-even (max block)", sprintf("the corresponding thresholds are %s for HCN and %s for H", rh(b4("Endocrine","f_breakeven_maxblock"), 2), rh(b4("Respiratory","f_breakeven_maxblock"), 2)), SI)
 say("Table S7.4: neurological row", sprintf("| %s / %s | %s / %s |", rh(b4("Neurological","HI_pwmean_unscaled"), 3), rh(b4("Neurological","HI_maxblock_unscaled"), 2), rh(b4("Neurological","f_breakeven_pwmean"), 2), rh(b4("Neurological","f_breakeven_maxblock"), 2)), SIrow)
 say("Table S7.4: endocrine row", sprintf("| %s / %s | %s / %s |", rh(b4("Endocrine","HI_pwmean_unscaled"), 3), rh(b4("Endocrine","HI_maxblock_unscaled"), 2), rh(b4("Endocrine","f_breakeven_pwmean"), 2), rh(b4("Endocrine","f_breakeven_maxblock"), 2)), SIrow)

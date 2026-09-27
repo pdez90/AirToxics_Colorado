@@ -83,6 +83,21 @@ S31   <- file.path(BASE, "TABLE_S3.1.csv")
 OUT1  <- file.path(BASE, "TABLE_S7.1_chronic_hazard.csv")
 OUT2  <- file.path(BASE, "TABLE_S7.2_acute_screen.csv")
 
+# EXPOSURE BASIS (2026-09-27). The chronic screen used the block MEAN of daily
+# means while the benzene cancer comparison of section 3.3 used the block
+# MEDIAN of daily medians, and a reviewer pointed out that the two headline
+# conclusions were each conditional on the statistic chosen for them. The
+# primary basis for BOTH is now the median of daily medians (the section 3.3
+# statistic); the mean basis is computed alongside and written to *_meanbasis
+# files and to TABLE_S7.1c_basis_comparison.csv, and is discussed in SI S7 as
+# the exposure-relevant (but outlier-sensitive) alternative. On the mean basis
+# the community endocrine index is 1.61; on the median basis it is 0.90.
+# Override with HAZARD_BASIS=mean_of_daily_mean to reproduce the old primary.
+HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "med_of_daily_med")
+stopifnot(HAZARD_BASIS %in% c("med_of_daily_med", "mean_of_daily_mean"))
+OTHER_BASIS  <- setdiff(c("med_of_daily_med", "mean_of_daily_mean"), HAZARD_BASIS)
+message("[BASIS] primary block statistic: ", HAZARD_BASIS, "  (secondary: ", OTHER_BASIS, ")")
+
 # ppb -> ug/m3 at 25 C and the 830 hPa SITE pressure: ug/m3 = ppb * MW / 29.8653.
 # NOT the sea-level 24.45: every other ppb<->ug/m3 conversion in this paper is
 # at site pressure - the benzene IURs in Section 2.4 (5.75 and 20.40 per
@@ -95,9 +110,7 @@ MOLAR_VOL <- 8.314 * 298.15 / 83000 * 1000   # 29.8653 L/mol
 # ---- reference table -----------------------------------------------------
 POLL <- data.table(
   name       = c("Benzene","Toluene","Xylenes","1,2,4-Trimethylbenzene","H2S","HCN"),
-  block_col  = c("sBenzene_mean_of_daily_mean","sToluene_mean_of_daily_mean",
-                 "sXylene_mean_of_daily_mean","sTrimethylbenzene_mean_of_daily_mean",
-                 "sH2S_mean_of_daily_mean","sHCN_mean_of_daily_mean"),
+  poll       = c("Benzene","Toluene","Xylene","Trimethylbenzene","H2S","HCN"),
   s31_row    = c("Benzene","Toluene","Xylene","Trimethylbenzene","H2S","HCN"),
   MW         = c(78.11, 92.14, 106.16, 120.19, 34.08, 27.03),
   RfC_ugm3   = c(30, 5000, 100, 60, 2, 0.8),          # IRIS chronic RfC, mg/m3 -> ug/m3
@@ -106,6 +119,7 @@ POLL <- data.table(
   acuteREL   = c(27, 5000, 22000, 2400, 42, 340)      # OEHHA 1-h acute REL, ug/m3
 )
 POLL[, cf := MW / MOLAR_VOL]
+POLL[, block_col := paste0("s", poll, "_", HAZARD_BASIS)]
 
 # ==============================================================
 # chronic hazard: block-resolved exposure
@@ -119,58 +133,75 @@ pop <- suppressWarnings(as.numeric(d[["POP20"]]))
 message("block file: ", nrow(d), " blocks, total POP20 = ",
         format(sum(pop, na.rm = TRUE), big.mark = ","))
 
+hazard_on <- function(basis) {
+  cols <- paste0("s", POLL$poll, "_", basis)
 chronic <- rbindlist(lapply(seq_len(nrow(POLL)), function(i) {
-  x  <- suppressWarnings(as.numeric(d[[POLL$block_col[i]]]))     # ppb
-  ok <- is.finite(x) & is.finite(pop)
-  pop_cov  <- sum(pop[ok])
-  pw_ppb   <- sum(x[ok] * pop[ok]) / pop_cov                    # pop-weighted mean, ppb
-  max_ppb  <- max(x[ok])
-  cf       <- POLL$cf[i]
-  data.table(
-    pollutant       = POLL$name[i],
-    target_organ    = POLL$organ[i],
-    RfC_ugm3        = POLL$RfC_ugm3[i],
-    n_blocks        = sum(ok),
-    pop_covered     = round(pop_cov),
-    pwmean_ppb      = round(pw_ppb, 4),
-    pwmean_ugm3     = round(pw_ppb * cf, 4),
-    HQ_pwmean       = signif(pw_ppb  * cf / POLL$RfC_ugm3[i], 3),
-    maxblock_ppb    = round(max_ppb, 3),
-    maxblock_ugm3   = round(max_ppb * cf, 3),
-    HQ_maxblock     = signif(max_ppb * cf / POLL$RfC_ugm3[i], 3))
-}))
-
-# WITHIN-BLOCK MAXIMUM (2026-09-27). HI_maxblock was sum(HQ_maxblock): the sum
-# of each pollutant's own most-exposed block. For the three single-pollutant
-# organ systems that is the same thing, but the neurological index combines
-# toluene, xylenes and 1,2,4-trimethylbenzene, and their maxima do not fall in
-# one block (toluene and xylenes peak in 080310036011000, trimethylbenzene in
-# 080310041032013). Summing them gave 0.555, an index no block experiences. The
-# index is now computed block by block, over blocks where every organ pollutant
-# is finite, and its maximum taken. The old sum is kept in a separate column so
-# the two can be told apart; it is an upper bound, not an exposure.
-.hq_block <- lapply(seq_len(nrow(POLL)), function(i) {
-  x <- suppressWarnings(as.numeric(d[[POLL$block_col[i]]]))
-  x * POLL$cf[i] / POLL$RfC_ugm3[i] })
-HI <- rbindlist(lapply(unique(POLL$organ), function(og) {
-  idx <- which(POLL$organ == og)
-  M <- do.call(cbind, .hq_block[idx])
-  ok <- is.finite(pop) & rowSums(!is.finite(M)) == 0L
-  hi_b <- rowSums(M[ok, , drop = FALSE])
-  j <- which.max(hi_b)
-  data.table(target_organ = og,
-             pollutants = paste(POLL$name[idx], collapse = " + "),
-             HI_pwmean = round(sum(chronic[target_organ == og, HQ_pwmean]), 4),   # 4 dp: 77 cross-checks this file
-             HI_maxblock = round(max(hi_b), 3),
-             HI_maxblock_block = as.character(d[["GEOID20"]][ok][j]),
-             n_blocks_all_pollutants = sum(ok),
-             HI_maxblock_sum_of_maxima = round(sum(chronic[target_organ == og, HQ_maxblock]), 3))
-}))[order(-HI_pwmean)]
-
+    x  <- suppressWarnings(as.numeric(d[[cols[i]]]))     # ppb
+    ok <- is.finite(x) & is.finite(pop)
+    pop_cov  <- sum(pop[ok])
+    pw_ppb   <- sum(x[ok] * pop[ok]) / pop_cov                    # pop-weighted mean, ppb
+    max_ppb  <- max(x[ok])
+    cf       <- POLL$cf[i]
+    data.table(
+      pollutant       = POLL$name[i],
+      target_organ    = POLL$organ[i],
+      RfC_ugm3        = POLL$RfC_ugm3[i],
+      n_blocks        = sum(ok),
+      pop_covered     = round(pop_cov),
+      pwmean_ppb      = round(pw_ppb, 4),
+      pwmean_ugm3     = round(pw_ppb * cf, 4),
+      HQ_pwmean       = signif(pw_ppb  * cf / POLL$RfC_ugm3[i], 3),
+      maxblock_ppb    = round(max_ppb, 3),
+      maxblock_ugm3   = round(max_ppb * cf, 3),
+      HQ_maxblock     = signif(max_ppb * cf / POLL$RfC_ugm3[i], 3))
+  }))
+  
+  # WITHIN-BLOCK MAXIMUM (2026-09-27). HI_maxblock was sum(HQ_maxblock): the sum
+  # of each pollutant's own most-exposed block. For the three single-pollutant
+  # organ systems that is the same thing, but the neurological index combines
+  # toluene, xylenes and 1,2,4-trimethylbenzene, and their maxima do not fall in
+  # one block (toluene and xylenes peak in 080310036011000, trimethylbenzene in
+  # 080310041032013). Summing them gave 0.555, an index no block experiences. The
+  # index is now computed block by block, over blocks where every organ pollutant
+  # is finite, and its maximum taken. The old sum is kept in a separate column so
+  # the two can be told apart; it is an upper bound, not an exposure.
+  .hq_block <- lapply(seq_len(nrow(POLL)), function(i) {
+    x <- suppressWarnings(as.numeric(d[[cols[i]]]))
+    x * POLL$cf[i] / POLL$RfC_ugm3[i] })
+  HI <- rbindlist(lapply(unique(POLL$organ), function(og) {
+    idx <- which(POLL$organ == og)
+    M <- do.call(cbind, .hq_block[idx])
+    ok <- is.finite(pop) & rowSums(!is.finite(M)) == 0L
+    hi_b <- rowSums(M[ok, , drop = FALSE])
+    j <- which.max(hi_b)
+    data.table(target_organ = og,
+               pollutants = paste(POLL$name[idx], collapse = " + "),
+               HI_pwmean = round(sum(chronic[target_organ == og, HQ_pwmean]), 4),   # 4 dp: 77 cross-checks this file
+               HI_maxblock = round(max(hi_b), 3),
+               HI_maxblock_block = as.character(d[["GEOID20"]][ok][j]),
+               n_blocks_all_pollutants = sum(ok),
+               HI_maxblock_sum_of_maxima = round(sum(chronic[target_organ == og, HQ_maxblock]), 3))
+  }))[order(-HI_pwmean)]
+  
+  
+  list(chronic = chronic, HI = HI)
+}
+.pri <- hazard_on(HAZARD_BASIS); chronic <- .pri$chronic; HI <- .pri$HI
+.sec <- hazard_on(OTHER_BASIS)
+OUT1s <- sub("\\.csv$", if (OTHER_BASIS == "mean_of_daily_mean") "_meanbasis.csv" else "_medianbasis.csv", OUT1)
+fwrite(.sec$chronic, OUT1s); message("-> ", OUT1s, "  (secondary basis: ", OTHER_BASIS, ")")
 fwrite(chronic, OUT1)
-message("-> ", OUT1)
+message("-> ", OUT1, "  (basis: ", HAZARD_BASIS, ")")
 OUT1b <- file.path(BASE, "TABLE_S7.1b_hazard_index_by_organ.csv")
 fwrite(HI, OUT1b)
+# both bases side by side, for SI S7 and the basis discussion
+.tag <- function(b) if (b == "med_of_daily_med") "median_of_daily_medians" else "mean_of_daily_means"
+cmpb <- rbindlist(list(
+  cbind(basis = .tag(HAZARD_BASIS), role = "primary",   .pri$HI[, .(target_organ, pollutants, HI_pwmean, HI_maxblock, HI_maxblock_block, n_blocks_all_pollutants)]),
+  cbind(basis = .tag(OTHER_BASIS),  role = "secondary", .sec$HI[, .(target_organ, pollutants, HI_pwmean, HI_maxblock, HI_maxblock_block, n_blocks_all_pollutants)])))
+OUT1c <- file.path(BASE, "TABLE_S7.1c_basis_comparison.csv")
+fwrite(cmpb, OUT1c); message("-> ", OUT1c)
+cat("\n== hazard index by organ, both exposure bases ==\n"); print(cmpb, row.names = FALSE)
 message("-> ", OUT1b, "  (HI_maxblock is the within-block maximum; the sum of",
         " separate maxima is kept alongside it)")
 cat("\n== SI Table S7.1  chronic hazard quotients (block-resolved) ==\n")
@@ -205,7 +236,7 @@ print(acute, row.names = FALSE)
 # ==============================================================
 # claim-by-claim check of the numbers quoted in SI Section S7
 # ==============================================================
-cat("\n== SI S7, claim by claim ==\n")
+cat("\n== SI S7, claim by claim (median-of-daily-medians basis) ==\n")
 ck <- function(lab, got, claim, tol = 0.01) {
   agree <- is.finite(got) && is.finite(claim) && abs(got - claim) <= tol * max(1, abs(claim))
   cat(sprintf("  [%s] %-46s run %-10s S7 says %s\n",
@@ -213,14 +244,14 @@ ck <- function(lab, got, claim, tol = 0.01) {
               format(signif(got, 4)), format(claim)))
 }
 gHI <- function(org, which) HI[target_organ == org][[which]]
-ck("endocrine HI, pop-weighted mean (HCN)",  gHI("Endocrine","HI_pwmean"),   1.60)
-ck("endocrine HI, most-exposed block",       gHI("Endocrine","HI_maxblock"), 8.71)
-ck("respiratory HI, pop-weighted mean (H2S)",gHI("Respiratory","HI_pwmean"), 0.371)
-ck("respiratory HI, most-exposed block",     gHI("Respiratory","HI_maxblock"),4.97)
-ck("neurological HI, pop-weighted mean",     gHI("Neurological","HI_pwmean"), 0.031)
-ck("neurological HI, most-exposed block",    gHI("Neurological","HI_maxblock"),0.509)  # within-block; the sum of separate maxima is 0.555
-ck("hematological HI, pop-weighted mean",    gHI("Hematological","HI_pwmean"),0.015)
-ck("hematological HI, most-exposed block",   gHI("Hematological","HI_maxblock"),0.237)
+ck("endocrine HI, pop-weighted mean (HCN)",  gHI("Endocrine","HI_pwmean"),   0.895)
+ck("endocrine HI, most-exposed block",       gHI("Endocrine","HI_maxblock"), 9.62)
+ck("respiratory HI, pop-weighted mean (H2S)",gHI("Respiratory","HI_pwmean"), 0.363)
+ck("respiratory HI, most-exposed block",     gHI("Respiratory","HI_maxblock"),3.42)
+ck("neurological HI, pop-weighted mean",     gHI("Neurological","HI_pwmean"), 0.021)
+ck("neurological HI, most-exposed block",    gHI("Neurological","HI_maxblock"),0.282)  # within-block (median basis; 0.509 on the mean basis)
+ck("hematological HI, pop-weighted mean",    gHI("Hematological","HI_pwmean"),0.011)
+ck("hematological HI, most-exposed block",   gHI("Hematological","HI_maxblock"),0.174)
 ck("acute HQ, benzene at campaign max",      acute[pollutant=="Benzene", HQ_max], 55.0, 0.02)
 ck("acute HQ, H2S at campaign max",          acute[pollutant=="H2S",     HQ_max], 9.39, 0.02)
 ck("acute HQ, toluene at campaign max",      acute[pollutant=="Toluene", HQ_max], 1.77, 0.02)

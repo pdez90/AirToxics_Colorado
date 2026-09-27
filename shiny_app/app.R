@@ -69,15 +69,27 @@ SCEN_CHOICES <- if (!is.null(haz) && !is.null(haz$scen)) {
   if (is.null(.be) || !org %in% .be$organ) return(NA_real_)
   as.numeric(.be[[col]][match(org, .be$organ)])
 }
-SCALE_WINDOW_TXT <- if (length(.meas) && !is.null(.be)) sprintf(paste0(
-  "How wrong would a borrowed factor have to be to matter? H2S would need a ",
-  "24-h factor of %.2f before the community-average respiratory hazard index ",
-  "reached 1, and HCN a factor below %.2f before the endocrine index fell to ",
-  "1. The measured aromatic factors span %.2f to %.2f, comfortably inside ",
-  "that window - which is why no conclusion on this page moves between ",
-  "scenarios A and D."),
-  .bget("Respiratory", "f_breakeven_pwmean"), .bget("Endocrine", "f_breakeven_pwmean"),
-  min(.meas), max(.meas)) else NULL
+# (2026-09-27) Basis-aware: on the median-of-daily-medians basis the community
+# endocrine index sits BELOW 1 unscaled and reaches 1 at an HCN factor inside
+# the measured aromatic span, so the sentence must say which way each index
+# would have to move and whether the measured factors reach it.
+.hi0 <- function(org) if (is.null(.be) || !"HI_pwmean_unscaled" %in% names(.be)) NA_real_ else as.numeric(.be$HI_pwmean_unscaled[match(org, .be$organ)])
+.clause <- function(org, species) {
+  f <- .bget(org, "f_breakeven_pwmean"); h <- .hi0(org)
+  if (!is.finite(f) || !is.finite(h)) return(NULL)
+  if (h < 1) sprintf("%s would need a 24-h factor of %.2f or more before the community-average %s hazard index reached 1", species, f, tolower(org))
+  else       sprintf("%s would need a 24-h factor below %.2f before the community-average %s hazard index fell to 1", species, f, tolower(org))
+}
+SCALE_WINDOW_TXT <- if (length(.meas) && !is.null(.be)) {
+  cl <- c(.clause("Respiratory", "H2S"), .clause("Endocrine", "HCN"))
+  fs <- c(.bget("Respiratory", "f_breakeven_pwmean"), .bget("Endocrine", "f_breakeven_pwmean"))
+  inside <- is.finite(fs) & fs >= min(.meas) & fs <= max(.meas)
+  paste0("How wrong would a borrowed factor have to be to matter? ", paste(cl, collapse = ", and "),
+         sprintf(". The measured aromatic factors span %.2f to %.2f", min(.meas), max(.meas)),
+         if (any(inside)) paste0(", which reaches the ", paste(c("respiratory", "endocrine")[inside], collapse = " and "),
+                                 " break-even: that community-level conclusion depends on the scaling assumption for a species with no measured factor.")
+         else ", comfortably inside that window - which is why no conclusion on this page moves between scenarios A and D.")
+} else NULL
 
 POLLS <- sort(unique(cells$pollutant))
 unit_of <- function(p) if (p == "Methane") "ppm" else "ppb"
