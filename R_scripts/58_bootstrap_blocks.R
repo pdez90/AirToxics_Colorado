@@ -11,16 +11,15 @@
 #          FinalFig/FIG_bootstrap_blocks.png
 # Runtime ~10-20 min.
 # ==============================================================
-SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(data.table); library(sf); library(ggplot2); library(scales) })
 set.seed(42)
-BASE <- SUNCOR_BASE
+BASE <- "/Users/priyanka/Downloads/Suncor"
 
 # SCALING FACTORS (2026-09-23): read them from the file R04 writes instead of
 # hard-coding. The 300 m headquarters exclusion moved the factors from
 # 1.149/1.228/1.377 to 1.165/1.274/1.443, and a hard-coded constant would have
 # left this table on the old scaling while the block surface used the new one.
-.sf_file <- file.path(SUNCOR_BASE, "lacasa_scaling_factors_option1_binweighted.RData")
+.sf_file <- file.path("/Users/priyanka/Downloads/Suncor", "lacasa_scaling_factors_option1_binweighted.RData")
 .sf_get <- function(pol, fallback) {
   if (!file.exists(.sf_file)) { message("[SCALING] file absent - using documented value for ", pol); return(fallback) }
   e <- new.env(); load(.sf_file, envir = e); o <- get(ls(e)[1], envir = e)
@@ -45,13 +44,25 @@ df[, day := as.Date(date)]
 g <- st_read(file.path(BASE,"censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONBLOCKS.gpkg"), quiet=TRUE)
 gll <- st_transform(g, 4326)
 idcol <- grep("GEOID", names(gll), value=TRUE)[1]
-df[, `:=`(rlon=round(Longitude,5), rlat=round(Latitude,5))]
-ul <- unique(df[, .(rlon, rlat)])
-up <- st_as_sf(ul, coords=c("rlon","rlat"), crs=4326)
-w <- st_within(up, gll)
-ul[, block := st_drop_geometry(gll)[[idcol]][
-      vapply(w, function(z) if (length(z)) z[1] else NA_integer_, 1L)]]
-df <- merge(df, ul, by=c("rlon","rlat"))[!is.na(block)]
+# BUGFIX (2026-09-27): points were rounded to 5 decimal places (~1 m) and
+# assigned to blocks with st_within in EPSG:4326, taking the first block for a
+# point on a shared boundary. Script 18, whose block surface this bootstrap is
+# meant to put an interval on, joins the exact coordinates in the block CRS
+# with st_join(join = st_within), which also keeps a boundary point in every
+# block it touches. Because the van drives on roads, and roads ARE census-block
+# boundaries, the 1 m rounding moved 25,886 points (1.4%) into a different
+# block and changed the median-of-daily-medians in 139 of the 1,667 common
+# blocks - enough to turn the 100 blocks above 2x AirToxScreen (section 3.3)
+# into 95 here. Reproducing script 18's join exactly recovers all 100 (the
+# check is in tests/audit_all_claims.R, section L). Do the same join.
+gblk <- gll[, idcol]
+pts <- st_as_sf(df[, .(row_id = .I, Longitude, Latitude)], coords = c("Longitude", "Latitude"), crs = 4326)
+pts <- st_transform(pts, st_crs(g))
+j <- st_join(pts, st_transform(gblk, st_crs(g)), join = st_within, left = FALSE)
+j <- as.data.table(st_drop_geometry(j))[, .(row_id, block = get(idcol))]
+df[, row_id := .I]
+df <- merge(df, j, by = "row_id", allow.cartesian = TRUE)[!is.na(block)]
+rm(pts, j); gc()
 daily <- df[, .(dmed = median(sBenzene)), by=.(block, day)]
 days <- sort(unique(daily$day))
 message(uniqueN(daily$block), " blocks | ", length(days), " days | ",

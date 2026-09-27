@@ -18,7 +18,8 @@
 # (rt() below), because code-generated tables use round(); (ii) table cells
 # are compared after collapsing whitespace, so an empty cell reads "| |".
 #
-# Status 2026-09-27: 177 OK / 0 FAIL against the vet-27 documents. Claims whose source is a document rather than code (permit records,
+# Status 2026-09-27 (evening): 186 checks against the review-round-2 documents; the S4.5
+# bootstrap check FAILS by design until 58_bootstrap_blocks.R is re-run with the exact join. Claims whose source is a document rather than code (permit records,
 # literature values, instrument specifications) are listed at the end so the
 # reader can see what this script does NOT vouch for.
 #
@@ -117,8 +118,10 @@ if (file.exists(BLK)) {
   hq <- cbind(d$sToluene_mean_of_daily_mean * 92.14 / MV / 5000, d$sXylene_mean_of_daily_mean * 106.16 / MV / 100,
               d$sTrimethylbenzene_mean_of_daily_mean * 120.19 / MV / 60)
   ok <- rowSums(!is.finite(hq)) == 0 & is.finite(d$POP20)
-  say("S7.1: neurological within-block maximum", sprintf("within any single block is %s (block %s)", rh(max(rowSums(hq[ok, ])), 3), d$GEOID20[ok][which.max(rowSums(hq[ok, ]))]), SI)
-  say("S7.1: sum of separate maxima", sprintf("the sum of the three separate maxima, %s,", rh(sum(apply(hq, 2, max, na.rm = TRUE)), 3)), SI)
+  say("S7.1: neurological within-block maximum", sprintf("the largest index within any single block is %s (block %s)", rh(max(rowSums(hq[ok, ])), 3), d$GEOID20[ok][which.max(rowSums(hq[ok, ]))]), SI)
+  say("S7.1: eligible blocks (neurological)", sprintf("(%s blocks for the neurological system)", cm(sum(ok))), SI)
+  say("S7.1: sum of separate maxima (not used)", sprintf("and gives %s, which is not an index any block experiences", rh(sum(apply(hq, 2, max, na.rm = TRUE)), 3)), SI)
+  say("S7.2: neurological most-exposed block", sprintf("and %s at the most-exposed block", rh(max(rowSums(hq[ok, ])), 2)), SI)
 } else skip("block-file checks (3.3, 2.5.1, S7.1)", "censusblocks_..._overlap.RData not present")
 
 # ==========================================================================
@@ -319,6 +322,20 @@ say("S6.5.1: crosswind at 1 km", sprintf("from %s%% (25 m) to %s%% (50 m), %s%% 
 say("S6.5.1: crosswind at 2 km", sprintf("from %s%% for a 25 m offset to %s%% for 50 m, %s%% for 100 m, %s%% for 200 m, %s%% for 300 m and %s%% for 500 m", rh(ce_(2,25),1), rh(ce_(2,50),1), rh(ce_(2,100),1), rh(ce_(2,200),1), rh(ce_(2,300),1), rh(ce_(2,500),1)), SI)
 say("S6.5.1: crosswind at 5 km", sprintf("was %s%% for 25 m, %s%% for 50 m, %s%% for 100 m, %s%% for 200 m, %s%% for 300 m and %s%% for 500 m", rh(ce_(5,25),1), rh(ce_(5,50),1), rh(ce_(5,100),1), rh(ce_(5,200),1), rh(ce_(5,300),1), rh(ce_(5,500),1)), SI)
 qg <- need("TABLE_min_detectable_rate_grid.csv"); qq <- function(x, c, u, m = 5) qg[abs(x_km - x) < 1e-9 & CAT == c & abs(u_ms - u) < 1e-9 & abs(mdl_ppb - m) < 1e-9, qmin_tpy]
+if (have("WWTP_H2S_plume_bearing_check.csv")) {
+  pb <- need("WWTP_H2S_plume_bearing_check.csv")
+  say("S6.8 / 3.6: source separation", sprintf("bearing %s-%s degrees from the wastewater facility", rh(min(pb$source_separation_deg), 0), rh(max(pb$source_separation_deg), 0)), SI)
+  say("S6.8: off-axis to WWTP and refinery", sprintf("within %s-%s degrees of the wastewater-facility bearing and within %s-%s degrees of the refinery bearing", rh(min(pb$offaxis_WWTP_deg), 0), rh(max(pb$offaxis_WWTP_deg), 0), rh(min(pb$offaxis_refinery_deg), 0), rh(max(pb$offaxis_refinery_deg), 0)), SI)
+  p10 <- pb[which.min(pb$dist_refinery_km)]
+  say("S6.8: refinery between van and WWTP (plume 10)", sprintf("the refinery lies %s km along the same bearing, between the van and the wastewater facility at %s km", rh(p10$dist_refinery_km, 1), rh(p10$dist_WWTP_km, 2)), SI)
+  say("3.6: refinery between van and WWTP (plume 10)", sprintf("the refinery lies %s km along the same bearing, between the van and the wastewater facility %s km away", rh(p10$dist_refinery_km, 1), rh(p10$dist_WWTP_km, 2)), MS)
+  say("3.6: off-axis ranges in the manuscript", sprintf("within %s-%s degrees of the wastewater-facility bearing and within %s-%s degrees of the refinery bearing", rh(min(pb$offaxis_WWTP_deg), 0), rh(max(pb$offaxis_WWTP_deg), 0), rh(min(pb$offaxis_refinery_deg), 0), rh(max(pb$offaxis_refinery_deg), 0)), MS)
+} else skip("S6.8 bearing comparison", "WWTP_H2S_plume_bearing_check.csv not present (run plume_scripts/P11_plume_geometry_checks.R)")
+if (have("WWTP_H2S_receptor_height_check.csv")) {
+  rz <- need("WWTP_H2S_receptor_height_check.csv")
+  say("S6.4: receptor-height effect", sprintf("changes the inferred rates by at most %s%%", rh(max(abs(rz$pct_change_in_Q)), 3)), SI)
+  say("S6.4: sigma_z and mixing-depth ranges", sprintf("(σz of %s-%s m at %s-%s km; mixing depths of %s-%s m)", cm(min(rz$sigma_z_m)), cm(max(rz$sigma_z_m)), rh(min(rz$x_km), 2), rh(max(rz$x_km), 2), cm(min(rz$hpbl_m)), cm(max(rz$hpbl_m))), SI)
+} else skip("S6.4 receptor-height check", "WWTP_H2S_receptor_height_check.csv not present (run plume_scripts/P11_plume_geometry_checks.R)")
 say("S6.6: Qmin under D at 3.2 m/s", sprintf("is approximately %s t/yr at 0.5 km, %s t/yr at 1 km, and %s t/yr at 2 km", cm(qq(0.5,"D",3.2)), cm(qq(1,"D",3.2)), cm(qq(2,"D",3.2))), SI)
 say("S6.6: Qmin under B at 2 km", sprintf("to approximately %s t/yr at 2 km", cm(round(qq(2,"B",3.2), -1))), SI)
 say("S6.6: Qmin at 0.5 km across speeds", sprintf("roughly %s-%s t/yr at 0.5 km under D stability", cm(qq(0.5,"D",2)), cm(qq(0.5,"D",5))), SI)
@@ -385,6 +402,20 @@ br <- need("TABLE_bootstrap_ratio.csv"); bb <- need("TABLE_bootstrap_blocks.csv"
 say("S4.5: aggregate ratio and CI", sprintf("The aggregate ratio is %s with a 95%% bootstrap interval of %s-%s", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), SI)
 say("4: CI in the manuscript", sprintf("(risk ratio %s, 95%% CI: %s, %s)", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), MS)
 say("S4.5: block counts", sprintf("of the %d blocks whose point estimate exceeds twice the AirToxScreen value in this construction, %d remain above 2x in at least 80%% of bootstrap replicates and %d in at least 95%%", nrow(bb), sum(bb$pr_gt2 >= 0.8), sum(bb$pr_gt2 >= 0.95)), SI)
+
+# The bootstrap (58) must re-aggregate the SAME block surface as section 3.3 (18/20).
+# Until 2026-09-27 it rounded coordinates to 5 dp before the point-in-block join;
+# roads are block boundaries, so 1.4% of points moved block and 100 -> 95.
+if (exists("d") && "sBenzene_med_of_daily_med_scaled" %in% names(d) && have("TABLE_bootstrap_blocks.csv")) {
+  bb <- fread(file.path(BASE, "TABLE_bootstrap_blocks.csv"), colClasses = list(character = "block"))
+  m <- d$sBenzene_med_of_daily_med_scaled; a <- d$benzene_ppb; k <- is.finite(m) & is.finite(a)
+  gt2 <- as.character(d$GEOID20[k][m[k] / a[k] > 2])
+  same <- length(gt2) == nrow(bb) && setequal(gt2, bb$block)
+  if (same) n_ok <<- n_ok + 1L else n_fail <<- n_fail + 1L
+  cat(sprintf("  [%s] %-46s bootstrap >2x set (%d blocks) %s section 3.3's (%d)\n", if (same) "OK  " else "FAIL",
+              "S4.5: bootstrap reproduces the >2x block set", nrow(bb), if (same) "==" else "!=", length(gt2)))
+  if (!same) cat("         re-run R_scripts/58_bootstrap_blocks.R (exact st_join, 2026-09-27), then update S4.5 / section 4 CI text\n")
+}
 
 # ==========================================================================
 hdr("M. Hazard screen  <- TABLE_S7.1(b), S7.2, S7.3, S7.4")

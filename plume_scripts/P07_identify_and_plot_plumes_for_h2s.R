@@ -228,6 +228,17 @@ h2s_evt_all <- h2s_pts_all %>%
     } else {
       NA_character_
     },
+    # (2026-09-27) The stability filter above uses the MODAL class over the
+    # event window; P08 inverts with the class AT THE PEAK point, and script
+    # 70 / Table S6.2 report that one. Record it here too so the two can be
+    # compared in the retained-plume file. For the four retained plumes they
+    # differ only for plume 13 (11 Jan 2024: modal B, centreline D; both
+    # admissible).
+    stability_at_peak = if (!is.na(stab_col)) {
+      as.character(.data[[stab_col]][which.max(dH2S)][1])
+    } else {
+      NA_character_
+    },
 
     .groups = "drop"
   )
@@ -334,7 +345,7 @@ retained_out <- h2s_evt_keep %>%
     end_time   = format(end_time,   "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
     time_at_peak = format(time_at_peak, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
     duration_s, n_pts, n_unique_t, peak_dH2S, dist_at_peak_km,
-    windspd_at_peak, wind_sd_deg, wind_evaluable, stability) %>%
+    windspd_at_peak, wind_sd_deg, wind_evaluable, stability, stability_at_peak) %>%
   dplyr::arrange(plume_id)
 out_retained_csv <- file.path(out_dir, "WWTP_H2S_retained_plumes.csv")
 readr::write_csv(retained_out, out_retained_csv)
