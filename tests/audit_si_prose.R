@@ -25,9 +25,9 @@ suppressPackageStartupMessages(library(data.table))
 
 BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))
 SI_DOCX <- path.expand(Sys.getenv("SI_DOCX",
-             file.path(dirname(BASE), "Suncor_manuscript", "SI_MobileToxics_CDPHE.docx")))
+             file.path(dirname(BASE), "Suncor_v2", "SI_MobileToxics_CDPHE.docx")))
 MS_DOCX <- path.expand(Sys.getenv("MS_DOCX",
-             file.path(dirname(BASE), "Suncor_manuscript", "MobileToxics_CDPHE.docx")))
+             file.path(dirname(BASE), "Suncor_v2", "MobileToxics_CDPHE.docx")))
 
 # ---- read a .docx as plain text ------------------------------------------
 docx_text <- function(path) {
