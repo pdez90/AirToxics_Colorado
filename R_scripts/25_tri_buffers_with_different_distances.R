@@ -203,17 +203,15 @@ summ_labels <- summ2 %>%
 # ----------------------------
 p2 <- ggplot(summ2, aes(x = distance, y = mean, group = inside)) +
   geom_line(aes(color = inside), linewidth = 0.7) +
-  geom_errorbar(
-    aes(ymin = pmax(mean - ci95, 0), ymax = mean + ci95, color = inside),
-    width = 0, linewidth = 0.5
-  ) +
+  # (2026-09-27) no CI bars and no p < 0.05 fill: both treat autocorrelated
+  # one-second observations as independent (SI section S4.1)
   geom_point(
-    aes(color = inside, fill = sig),
+    aes(color = inside), fill = "white",
     shape = 21, size = 2.7, stroke = 0.7
   ) +
   ggrepel::geom_text_repel(
     data = summ_labels,
-    aes(x = x_lab, y = mean + ci95, label = n_lab),
+    aes(x = x_lab, y = mean, label = n_lab),
     size = 3.0,
     show.legend = FALSE,
     min.segment.length = 0,
@@ -232,11 +230,6 @@ p2 <- ggplot(summ2, aes(x = distance, y = mean, group = inside)) +
     expand = expansion(mult = c(0.05, 0.45))
   ) +
   scale_color_manual(values = c("Outside" = "blue", "Inside" = "red"), name = NULL) +
-  scale_fill_manual(
-    values = c(`TRUE` = "#d55e00", `FALSE` = "white"),
-    labels = c(`TRUE` = "p < 0.05", `FALSE` = "ns"),
-    name   = "M–W test"
-  ) +
   coord_cartesian(clip = "off") +
   labs(x = "Buffer radius (m)", y = "Mean concentration") +
   theme_minimal(base_size = 12) +

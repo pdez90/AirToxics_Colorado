@@ -192,6 +192,14 @@ say("3.1 / 3.8: below-MDL shares", sprintf("%s%% of benzene, %s%% of H2S and %s%
 say("S1.4: negatives retained", sprintf("%s of them for benzene and %s for H2S", cm(q14[pollutant == "Benzene", n_negative_after_qc]), cm(q14[pollutant == "H2S", n_negative_after_qc])), SI)
 say("Table S3.1: analysis-set counts", sprintf("| %s | %s | %s | %s | %s | %s |", cm(s31$analysis[1]), cm(s31$analysis[2]), cm(s31$analysis[3]), cm(s31$analysis[4]), cm(s31$analysis[5]), cm(s31$analysis[6])),
     rows(SI))
+# Table S3.1 funnel (round 6): each stage row in processing order, and the funnel must close
+for (.st in c("no_gps_flag", "one_per_second", "with_position")) if (.st %in% names(s31))
+  say(sprintf("Table S3.1: stage %s", .st), paste0("| ", paste(cm(s31[[.st]]), collapse = " | "), " |"), rows(SI))
+if ("outside_hq" %in% names(s31)) cat(sprintf("  [%s] %-46s last funnel stage == analysis set\n",
+    if (all(s31$outside_hq == s31$analysis)) "OK  " else "FAIL", "Table S3.1: funnel closes"))
+say("2.1.1: HCN funnel", sprintf("the HCN record comprises %s delivered rows, of which %s remain in the analysis set", cm(s31[pollutant == "HCN", after_excl]), cm(s31[pollutant == "HCN", analysis])), MS)
+if ("no_gps_flag" %in% names(s31)) { .gp <- 100 * (1 - s31$no_gps_flag / s31$after_excl)
+  say("S1.4: GPS-flag share", sprintf("which removes %s-%s%% of each pollutant's record after the campaign exclusions", rh(min(.gp), 1), rh(max(.gp), 1)), SI) }
 say("Table S3.1: sampling days", sprintf("| %d | %d | %d | %d | %d | %d |", s31$n_days[1], s31$n_days[2], s31$n_days[3], s31$n_days[4], s31$n_days[5], s31$n_days[6]),
     rows(SI))
 say("Table S3.1: below-MDL row", sprintf("| %s%% | %s%% | %s%% | %s%% | %s%% | %s%% |", rh(s31$pct_belowMDL[1], 1), rh(s31$pct_belowMDL[2], 1), rh(s31$pct_belowMDL[3], 1), rh(s31$pct_belowMDL[4], 1), rh(s31$pct_belowMDL[5], 1), rh(s31$pct_belowMDL[6], 1)),
@@ -264,8 +272,9 @@ say("3.4.2: group 4 TRI distance", sprintf("It lies %s km from the Phillips 66 t
 say("3.4.2: groups 40 and 43", sprintf("at %s km (Owens Corning Roofing and Asphalt) and %s km (KBP Coil Coaters)", rh(gm(40)$tri_dist_km, 2), rh(gm(43)$tri_dist_km, 2)), MS)
 say("3.4.2: groups 22 and 29", sprintf("with %d and %d measurements within 100 m", g5(22)$n_rows_100m, g5(29)$n_rows_100m), MS)
 say("3.4.2: group 13 TRI distance", sprintf("Group 13, %s km from a glass-container plant", rh(gm(13)$tri_dist_km, 2)), MS)
-say("3.4.2: group 11", sprintf("with %s mobile measurements within 100 m and exceedances on %d distinct days", cm(g5(11)$n_rows_100m), gm(11)$max_n_days), MS)
-say("3.4.2: group 60", sprintf("%s km from the Sinclair Denver products terminal, and is persistent for HCN, trimethylbenzene and xylene for up to %d days", rh(gm(60)$tri_dist_km, 2), gm(60)$max_n_days), MS)
+say("3.4.2: group 11", sprintf("with %s mobile measurements within 100 m, and its benzene cluster registered exceedances on %d distinct days (the group persistence metric", cm(g5(11)$n_rows_100m), gm(11)$max_n_days), MS)
+say("3.4.2: group 60", sprintf("%s km from the Sinclair Denver products terminal, and is persistent for HCN, trimethylbenzene and xylene; its xylene cluster registered exceedances on %d distinct days", rh(gm(60)$tri_dist_km, 2), gm(60)$max_n_days), MS)
+say("3.4.2: group 28", sprintf("its xylene cluster registering exceedances on %d distinct days (the group persistence metric)", gm(28)$max_n_days), MS)
 # SI Table S5.1 rows: per-group days and TRI distance
 SIrow <- rows(SI)
 for (i in seq_len(nrow(S5))) { r <- S5[i]
@@ -277,7 +286,12 @@ ds <- need("TABLE_dbscan_sensitivity.csv"); b <- ds[baseline == TRUE]
 one <- ds[(thr_pctl != b$thr_pctl) + (eps_m != b$eps_m) + (pers_pctl != b$pers_pctl) == 1]
 say("2.5.3 / S5.3: single-step recovery range", sprintf("%s-%s%% of the %d baseline group locations", pc(100 * min(one$recovery_of_baseline)), pc(100 * max(one$recovery_of_baseline)), ss$n_groups_3plus_pollutants), MS)
 lo <- one[recovery_of_baseline == min(recovery_of_baseline)]
-say("2.5.3: minimum single-step recovery", sprintf("falling to %s%% when either the clustering radius is raised from 100 to 200 m or the persistence percentile is raised from the 90th to the 95th", pc(100 * min(one$recovery_of_baseline))), MS)
+.r1 <- function(th, ep, pe) pc(100 * ds[thr_pctl == th & eps_m == ep & pers_pctl == pe, recovery_of_baseline])
+say("2.5.3: single-step recoveries", sprintf("(%s%% and %s%% for the lower and higher event thresholds, %s%% and %s%% for the smaller and larger clustering radii, and %s%% and %s%% for the lower and higher persistence percentiles)",
+    .r1(0.985, 100, 0.9), .r1(0.995, 100, 0.9), .r1(0.99, 50, 0.9), .r1(0.99, 200, 0.9), .r1(0.99, 100, 0.85), .r1(0.99, 100, 0.95)), MS)
+say("2.5.3: combined radius + persistence", sprintf("recovery falls to %s%% when the larger radius is combined with the stricter persistence percentile", .r1(0.99, 200, 0.95)), MS)
+say("S5.3: single-step and combined", sprintf("but recovery is %s%% for the larger clustering radius or the stricter persistence percentile and falls to %s%% when those two are combined",
+    pc(100 * min(one$recovery_of_baseline)), .r1(0.99, 200, 0.95)), SI)
 say("S5.3: groups range", sprintf("ranges from %d (coarsest eps with strictest persistence) to %d (finest eps with loosest persistence)", min(ds$groups_3plus), max(ds$groups_3plus)), SI)
 mod <- ds[eps_m %in% c(50, 100) & pers_pctl %in% c(0.85, 0.90)]
 say("S5.3: moderate-perturbation recovery", sprintf("%s-%s%% of the 14 baseline locations are recovered for eps of 50-100 m with persistence p85-p90", pc(100 * min(mod$recovery_of_baseline)), pc(100 * max(mod$recovery_of_baseline))), SI)
@@ -422,6 +436,8 @@ if (have("TABLE_S4.1_background_sensitivity.csv")) {
 }
 say("S4.5: aggregate ratio and CI", sprintf("The aggregate ratio is %s with a 95%% bootstrap interval of %s-%s", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), SI)
 say("4: CI in the manuscript", sprintf("(risk ratio %s, 95%% CI: %s, %s)", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), MS)
+if ("n_gt2_min" %in% names(br)) say("S4.5: upper tail per replicate", sprintf("every one of the %d replicates has at least %d blocks above twice AirToxScreen (median %s; 95%% interval %s-%s)",
+    br$B, br$n_gt2_min, rh(br$n_gt2_med, 0), rh(br$n_gt2_lo, 0), rh(br$n_gt2_hi, 0)), SI)
 say("S4.5: block counts", sprintf("of the %d blocks whose point estimate exceeds twice the AirToxScreen value in this construction, %d remain above 2x in at least 80%% of bootstrap replicates and %d in at least 95%%", nrow(bb), sum(bb$pr_gt2 >= 0.8), sum(bb$pr_gt2 >= 0.95)), SI)
 
 # The bootstrap (58) must re-aggregate the SAME block surface as section 3.3 (18/20).
@@ -489,6 +505,20 @@ say("S7.2: acute TMB peak", sprintf("the trimethylbenzene peak reaches %s%% of i
 say("S7.2: acute p99", sprintf("(largest HQ %s, benzene)", rh(max(h2$HQ_p99), 2)), SI)
 
 # ==========================================================================
+hdr("M2. TRI inside/outside and La Casa CPF  <- tri_inside_outside_1km_stats.csv, TABLE_lacasa_cpf.csv")
+if (have("tri_inside_outside_1km_stats.csv")) { ti <- need("tri_inside_outside_1km_stats.csv"); tm <- function(pol_, col_) ti[Pollutant == pol_][[col_]]
+  say("3.3: TRI medians (aromatics)", sprintf("toluene (%s vs %s ppb), xylene (%s vs %s ppb), trimethylbenzene (%s vs %s ppb)",
+      rh(tm("Toluene","med_in"),2), rh(tm("Toluene","med_out"),2), rh(tm("Xylene","med_in"),2), rh(tm("Xylene","med_out"),2),
+      rh(tm("Trimethylbenzene","med_in"),2), rh(tm("Trimethylbenzene","med_out"),2)), MS)
+  say("3.3: TRI medians (H2S)", sprintf("S (%s vs %s ppb) and HCN (%s vs %s ppb)", rh(tm("H2S","med_in"),2), rh(tm("H2S","med_out"),2), rh(tm("HCN","med_in"),2), rh(tm("HCN","med_out"),2)), MS)
+  say("3.3: TRI benzene medians equal", sprintf("and equal for benzene (%s ppb in both", rh(tm("Benzene","med_in"),2)), MS)
+  if (tm("Benzene","med_in") != tm("Benzene","med_out")) cat("  [FAIL] benzene inside/outside medians differ\n") }
+if (have("TABLE_lacasa_cpf.csv")) { cp <- need("TABLE_lacasa_cpf.csv")
+  ne <- cp[sector %in% c(2, 3)]; base <- cp[, sum(n_high) / sum(n), by = pollutant]$V1
+  say("S5.4: CPF NE sectors and base rate", sprintf("the CPF over all sectors together is %s by construction; for the northeasterly sectors containing the industrial corridor (bearings 45-70 degrees; Figure S5.7) it is %s-%s",
+      rh(mean(base), 2), rh(min(ne$cpf), 2), rh(max(ne$cpf), 2)), SI)
+  say("S5.4: CPF SW-W peak", sprintf("(CPF %s-%s)", rh(min(cp[sector %in% 9:12, cpf]), 2), rh(max(cp[sector %in% 9:12, cpf]), 2)), SI) }
+
 hdr("N. Claims this script does NOT vouch for (sourced from documents, not code)")
 cat("  - Permit and TRI quantities in S6.1 / S6.7 / Table S6.1 (119.01 and 2.38 t/yr; 340 lb/yr; 8 t/yr digester gas; 5,819 lb and 22,373 lb TRI)\n")
 cat("  - Literature values in S6.4 (>= 15 transects; >= 10 transects; ~95% within +/-70%; slope 0.96; 266 plumes; ~4%)\n")

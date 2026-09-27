@@ -14,10 +14,9 @@
 #
 # The Goodrich route is not part of this CSV set and is excluded everywhere.
 #
-# Row definitions follow the filters the pipeline actually applies, in order.
-# The previous table's row labels ("additional contaminated data points") named
-# a step that exists nowhere in the code; each row here names a filter that
-# does.
+# Row definitions follow the filters the pipeline actually applies. Each row
+# applies one further filter to the row above it (cumulative), and the last
+# row reproduces the analysis set exactly (asserted below).
 #
 #   1 Reported by CDPHE          non-missing value in the monthly CSVs, after
 #                                dropping exactly-duplicated rows
@@ -26,16 +25,30 @@
 #                                below the MDL (MD) and negative values are KEPT
 #   3 With valid GPS             plus finite Latitude and Longitude
 #   4 After campaign exclusions  the date exclusions in 03_checks_flags.R (see
-#                                EXCLUDE below). This is what the submitted
-#                                table called "removing additional contaminated
-#                                data points". The two HCN windows follow
-#                                CDPHE's own read-me documents; the 2023 and
-#                                August 2024 windows carry no published reason.
-#   5 In the analysis set        mobile_wswd.RData, i.e. after the measured
-#                                instrument-delay correction and native-cadence
-#                                averaging
+#                                EXCLUDE below). The HCN windows follow CDPHE's
+#                                own read-me documents.
+#   5 Without a GPS qualifier    02_newmobile_data.R removes every row that
+#                                carries any GPS_flag token (route deviations and
+#                                suspect fixes), with its pollutant values
+#   6 One row per second         03: the delay shift moves each pollutant to its
+#                                sampling second; rows delivered with the same
+#                                laboratory, route and timestamp are averaged
+#   7 With a position            03: the delay-corrected second must fall on the
+#                                laboratory-route-day position grid and carry a
+#                                latitude/longitude (gaps of <= 3 s interpolated,
+#                                longer gaps left empty and the row dropped)
+#   8 Analysis set               03: rows whose delay-corrected position lies
+#                                within 300 m of the CDPHE headquarters removed.
+#                                Equals mobile_wswd.RData (Goodrich excluded).
 #
-# All summary statistics and the below-MDL fraction are computed on row 4.
+# (Until 2026-09-27 row 5 was an HQ screen on the DELIVERED position of the raw
+# rows, and rows 5-7 were folded silently into the analysis-set row. The
+# delivered-position screen described no step the pipeline takes, and the GPS
+# qualifier filter of 02, which removes 7-10% of each record, was not shown.)
+#
+# The native-cadence averaging of H2S/HCN (03, section 3b) changes values, not
+# row counts, so it is not a row of the funnel. All summary statistics and the
+# below-MDL fraction are computed on the analysis set (row 8).
 # ==============================================================
 suppressPackageStartupMessages({library(data.table)})
 
@@ -98,8 +111,13 @@ stopifnot(length(files) == 58)
 # Local_Time_MST MUST be read as character: fread otherwise parses it to
 # POSIXct and silently discards the -0700 offset, which is the one thing this
 # pipeline asserts about its timestamps (see REPRODUCIBILITY.md).
-raw <- rbindlist(lapply(files, fread, showProgress = FALSE,
-                        colClasses = c(Local_Time_MST = "character")), fill = TRUE)
+# Site is assigned from the file name exactly as 02_newmobile_data.R does, because
+# the per-second collapse and the position grid of 03 are keyed on it.
+raw <- rbindlist(lapply(files, function(f) {
+  x <- fread(f, showProgress = FALSE, colClasses = c(Local_Time_MST = "character"))
+  x[, Site := if (startsWith(basename(f), "Suncor")) "Suncor" else "Terminal"]
+  x
+}), fill = TRUE)
 setnames(raw, "Asset (CAT/EMU)", "Asset", skip_absent = TRUE)
 message("  rows read              : ", format(nrow(raw), big.mark = ","))
 n0 <- nrow(raw); raw <- unique(raw)
@@ -114,13 +132,8 @@ message("  all timestamps carry -0700: TRUE")
 
 gps_ok <- is.finite(raw$Latitude) & is.finite(raw$Longitude)
 message("  rows with finite GPS   : ", format(sum(gps_ok), big.mark = ","))
-# CDPHE headquarters exclusion (added 2026-09-22). 03_checks_flags.R drops every
-# row whose SAMPLING position (after the delay shift) lies within 300 m of the
-# ATOPs headquarters, where the vans are garaged and run start-up/shut-down and
-# calibration procedures. This stage applies the same point and radius to the
-# DELIVERED positions of the raw rows, so it describes the delivered record; the
-# exact, delay-aware exclusion is what the analysis-set row reflects. The two
-# differ only by the few seconds of driving around each departure and arrival.
+# CDPHE headquarters (03_checks_flags.R section 3c): the screen is applied to the
+# DELAY-CORRECTED position, so it is evaluated below on the position grid.
 HQ_LAT <- 39.785189; HQ_LON <- -105.104411; HQ_RADIUS_M <- 300
 .hav_m <- function(lat1, lon1, lat2, lon2) {
   r <- pi / 180
@@ -128,9 +141,10 @@ HQ_LAT <- 39.785189; HQ_LON <- -105.104411; HQ_RADIUS_M <- 300
        cos(lat1 * r) * cos(lat2 * r) * sin((lon2 - lon1) * r / 2)^2
   2 * 6371008.8 * asin(pmin(1, sqrt(a)))
 }
-hq_ok <- !(gps_ok & .hav_m(raw$Latitude, raw$Longitude, HQ_LAT, HQ_LON) <= HQ_RADIUS_M)
-hq_ok[is.na(hq_ok)] <- TRUE
-message("  rows within ", HQ_RADIUS_M, " m of CDPHE HQ : ", format(sum(!hq_ok), big.mark = ","))
+# GPS qualifier (02_newmobile_data.R): any non-blank GPS_flag removes the row.
+gflag <- trimws(as.character(raw$GPS_flag)); gflag[is.na(gflag)] <- ""
+gps_flagged <- nzchar(gflag)
+message("  rows carrying a GPS flag: ", format(sum(gps_flagged), big.mark = ","))
 
 # ---- campaign exclusions, verbatim from 03_checks_flags.R lines 107-130 ----
 # These are hard-coded date windows carrying no comment in the source. They are
@@ -155,17 +169,51 @@ EXCLUDE <- function(nm) {
   ex
 }
 
+# ---- position grid of 03_checks_flags.R section 1 ----
+# built from every row that survives 02 (finite, unflagged GPS): latest row per
+# laboratory-route-day-second, a 1-s grid from the first to the last second of
+# each laboratory-route-day, and latitude/longitude interpolated linearly across
+# gaps of up to 3 s (zoo::na.approx(maxgap = 3)); longer gaps stay empty.
+raw[, .sec := as.numeric(ts)]
+met <- unique(raw[gps_ok & !gps_flagged, .(Asset, Site, day, .sec, Latitude, Longitude)],
+              by = c("Asset", "Site", "day", ".sec"), fromLast = TRUE)
+grid <- met[, .(.sec = seq(min(.sec), max(.sec), by = 1)), by = .(Asset, Site, day)]
+grid <- merge(grid, met, by = c("Asset", "Site", "day", ".sec"), all.x = TRUE)
+setorder(grid, Asset, Site, day, .sec)
+grid[, `:=`(Latitude  = zoo::na.approx(Latitude,  x = .sec, maxgap = 3, na.rm = FALSE),
+            Longitude = zoo::na.approx(Longitude, x = .sec, maxgap = 3, na.rm = FALSE)),
+     by = .(Asset, Site, day)]
+grid <- unique(grid, by = c("Asset", "Site", ".sec"))
+grid[, has_pos := is.finite(Latitude) & is.finite(Longitude)]
+grid[, in_hq := has_pos & .hav_m(Latitude, Longitude, HQ_LAT, HQ_LON) <= HQ_RADIUS_M]
+grid <- grid[, .(Asset, Site, .sec, has_pos, in_hq)]
+message("  position grid seconds  : ", format(nrow(grid), big.mark = ","))
+
+DELAY <- list(btex = c(CAT = 4, EMU = 5), h2s = c(CAT = 21, EMU = 17), hcn = c(CAT = 6, EMU = 3))
+POLL[, delay := c("btex", "btex", "btex", "btex", "h2s", "hcn")]
+
 stage <- POLL[, .(name)]
 stage[, `:=`(reported = NA_integer_, after_qc = NA_integer_,
-             gps = NA_integer_, after_excl = NA_integer_, outside_hq = NA_integer_)]
+             gps = NA_integer_, after_excl = NA_integer_, no_gps_flag = NA_integer_,
+             one_per_second = NA_integer_, with_position = NA_integer_,
+             outside_hq = NA_integer_)]
 for (i in seq_len(nrow(POLL))) {
   v <- raw[[POLL$raw[i]]]; f <- raw[[POLL$flag[i]]]
   keep <- !voided(f); ex <- EXCLUDE(POLL$name[i])
-  stage$reported[i]   <- sum(!is.na(v))
-  stage$after_qc[i]   <- sum(!is.na(v) & keep)
-  stage$gps[i]        <- sum(!is.na(v) & keep & gps_ok)
-  stage$after_excl[i] <- sum(!is.na(v) & keep & gps_ok & !ex)
-  stage$outside_hq[i] <- sum(!is.na(v) & keep & gps_ok & !ex & hq_ok)
+  s5 <- !is.na(v) & keep & gps_ok & !ex & !gps_flagged
+  stage$reported[i]    <- sum(!is.na(v))
+  stage$after_qc[i]    <- sum(!is.na(v) & keep)
+  stage$gps[i]         <- sum(!is.na(v) & keep & gps_ok)
+  stage$after_excl[i]  <- sum(!is.na(v) & keep & gps_ok & !ex)
+  stage$no_gps_flag[i] <- sum(s5)
+  x <- raw[s5, .(Asset, Site, .sec)]
+  dl <- DELAY[[POLL$delay[i]]]
+  x[, .sec := .sec - ifelse(toupper(Asset) == "CAT", dl[["CAT"]], dl[["EMU"]])]
+  x <- unique(x)
+  stage$one_per_second[i] <- nrow(x)
+  x <- merge(x, grid, by = c("Asset", "Site", ".sec"), all.x = TRUE)
+  stage$with_position[i] <- sum(x$has_pos %in% TRUE)
+  stage$outside_hq[i]    <- sum(x$has_pos %in% TRUE & !(x$in_hq %in% TRUE))
 }
 print(stage)
 message("\ncampaign exclusions (03_checks_flags.R):")
@@ -188,7 +236,8 @@ fmt  <- function(x, dp = 2) formatC(x, format = "f", digits = dp, big.mark = ","
 res <- data.table(pollutant = POLL$name)
 res[, `:=`(reported = stage$reported, after_qc = stage$after_qc,
            gps = stage$gps, after_excl = stage$after_excl,
-           outside_hq = stage$outside_hq)]
+           no_gps_flag = stage$no_gps_flag, one_per_second = stage$one_per_second,
+           with_position = stage$with_position, outside_hq = stage$outside_hq)]
 
 # Step function on the quarter start month. A measurement before the first
 # quarter the packets give for that lab has no audit MDL and is left NA rather
@@ -234,6 +283,12 @@ for (i in seq_len(nrow(POLL))) {
 }
 res[, most_common_flags := flagtop]
 
+# the funnel must close: the last stage IS the analysis set
+if (!isTRUE(all.equal(res$outside_hq, res$analysis))) {
+  print(res[, .(pollutant, outside_hq, analysis, diff = analysis - outside_hq)])
+  stop("Table S3.1 funnel does not reproduce the analysis set")
+}
+message("funnel closes: last stage == analysis set for all six pollutants")
 fwrite(res, OUT)
 message("\nwrote ", OUT)
 
@@ -243,10 +298,12 @@ lab <- c("Most common flags"                                = "most_common_flags
          "Retained after QA/QC (null qualifiers voided)"    = "after_qc",
          "With valid GPS"                                   = "gps",
          "After campaign date exclusions"                   = "after_excl",
-         "Outside 300 m of the CDPHE headquarters"          = "outside_hq",
-         "In the analysis set"                              = "analysis",
+         "Without a GPS qualifier flag"                     = "no_gps_flag",
+         "One row per delay-corrected second"               = "one_per_second",
+         "With a position at that second"                   = "with_position",
+         "Outside 300 m of HQ = analysis set"               = "analysis",
          "Sampling days represented"                        = "n_days",
-         "  distinct reported values"                       = "n_unique",
+         "  distinct values in the analysis set"            = "n_unique",
          "% of analysis set below audit MDL"                = "pct_belowMDL",
          "  values with no audit MDL published"              = "n_no_mdl",
          "    CAT only"                                     = "pct_belowMDL_CAT",
@@ -264,7 +321,7 @@ cat(sprintf("%-46s %12s %12s %12s %16s %12s %12s\n", "", res$pollutant[1], res$p
 for (k in names(lab)) {
   col <- lab[[k]]; v <- res[[col]]
   s <- if (is.character(v)) v
-       else if (col %in% c("reported","after_qc","gps","after_excl","outside_hq","analysis","n_unique","n_days","n_no_mdl"))
+       else if (col %in% c("reported","after_qc","gps","after_excl","no_gps_flag","one_per_second","with_position","outside_hq","analysis","n_unique","n_days","n_no_mdl"))
          format(v, big.mark = ",")
        else if (grepl("^pct", col)) paste0(formatC(v, format = "f", digits = 1), "%")
        else formatC(v, format = "f", digits = 2, big.mark = ",")

@@ -6,8 +6,9 @@
 # stationary readings preferentially occur under winds from the
 # industrial-corridor sector, that independently corroborates the
 # mobile back-projection (Figure 3) with a fixed site.
-# Bearings from La Casa: Suncor ~63 deg (ENE), Sinclair ~40 deg,
-# Phillips 66 ~52 deg (computed below and printed).
+# Bearings from La Casa (computed below, printed, and written into the figure
+# caption): Sinclair ~45 deg, WWTF1 ~53, Suncor ~62, Phillips 66 ~70. The
+# caption previously carried hand-typed values (40/52/63) that did not match.
 # Outputs: TABLE_lacasa_cpf.csv, FinalFig/FIG_lacasa_cpf.png
 # ==============================================================
 SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
@@ -63,10 +64,16 @@ p <- ggplot(cpf, aes(factor(sector, levels=0:15), cpf)) +
   geom_vline(data=data.frame(x=fac$bearing/sect + 1),
              aes(xintercept=x), color="red", linetype=2, linewidth=0.4) +
   coord_polar(start=-pi/16) +
-  scale_x_discrete(labels=c("N","","NE","","E","","SE","","S","","SW","","W","","NW","")) +
+  # expand = 0 (2026-09-27): the default discrete expansion widened the x range
+  # to [0.4, 16.6], so the radials and bars sat ~1-2 degrees off their bearings.
+  scale_x_discrete(labels=c("N","","NE","","E","","SE","","S","","SW","","W","","NW",""),
+                   expand = c(0, 0)) +
   facet_wrap(~pollutant) +
   labs(x=NULL, y="P(> site p90 | wind sector)",
-       caption="Red dashed radials: bearings from La Casa to Sinclair (~40 deg), Phillips 66 (~52 deg), Suncor (~63 deg), and WWTF1. Winds > 1 m/s; La Casa's own meteorology.") +
+       caption=paste0("Red dashed radials: bearings from La Casa to ",
+                      paste(sprintf("%s (~%d deg)", fac$name[order(fac$bearing)],
+                                    round(sort(fac$bearing))), collapse = ", "),
+                      ".\nWinds > 1 m/s; La Casa's own meteorology.")) +
   theme_bw(base_size=11) +
   theme(axis.text.y=element_blank(), plot.caption=element_text(size=8.5, hjust=0))
 ggsave(file.path(BASE,"FinalFig","FIG_lacasa_cpf.png"), p,

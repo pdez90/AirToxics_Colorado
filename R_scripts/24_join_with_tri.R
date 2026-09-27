@@ -15,7 +15,11 @@
 # - Creates inside/outside flags for multiple buffer radii
 # - Summarizes mean ± 95% CI + n by radius, pollutant, inside
 # - Runs Wilcoxon tests per (radius, pollutant)
-# - Plots mean vs radius with CI, with n labels and significance stars
+# - Plots mean vs radius with n labels. No confidence intervals or significance
+#   marks (2026-09-27): both would be computed on individual one-second
+#   observations, which are strongly autocorrelated, so the intervals would be
+#   far too narrow and the p-values not valid (SI section S4.1). The panels are
+#   descriptive.
 #   (extra top margin so nothing gets cropped)
 # ============================================================
 
@@ -121,90 +125,40 @@ L <- L[is.finite(Latitude) & is.finite(Longitude)]
 L <- L[is.finite(value)]
 L[, Pollutant := as.character(Pollutant)]
 
-# Convert to sf (points)
-df_sf <- st_as_sf(
-  as.data.frame(L),
-  coords = c("Longitude","Latitude"),
-  crs = 4326,
-  remove = FALSE
-)
-
 # ----------------------------
-# 4) Project to Denver-local CRS + nearest TRI distance (FAST)
+# 4) Nearest TRI distance (metres, UTM 13N)
 # ----------------------------
+# (2026-09-27) Memory: the earlier version built an sf object of every
+# long-format row and then cross-joined every row with all eight radii
+# (~120 million rows), which exceeds 7 GB. Distances are now computed once
+# per unique coordinate and the inside/outside summaries radius by radius.
+# The numbers are identical; only the memory footprint changed.
 denver_crs <- sf::st_crs(26913)  # NAD83 / UTM zone 13N (meters)
 tri_local  <- st_transform(tri_sf, denver_crs)
-df_local   <- st_transform(df_sf, denver_crs)
-
-# kNN distance to nearest TRI facility (meters)
-df_xy  <- sf::st_coordinates(df_local)[, 1:2, drop = FALSE]
-tri_xy <- sf::st_coordinates(tri_local)[, 1:2, drop = FALSE]
-nn     <- RANN::nn2(data = tri_xy, query = df_xy, k = 1)
-dmin_m <- as.numeric(nn$nn.dists[, 1])  # meters
+tri_xy     <- sf::st_coordinates(tri_local)[, 1:2, drop = FALSE]
+U <- unique(L[, .(Longitude, Latitude)])
+u_xy <- sf::sf_project(from = "EPSG:4326", to = "EPSG:26913",
+                       pts = as.matrix(U[, .(Longitude, Latitude)]))
+U[, dmin_m := as.numeric(RANN::nn2(data = tri_xy, query = u_xy, k = 1)$nn.dists[, 1])]
+L <- merge(L, U, by = c("Longitude", "Latitude"), sort = FALSE)
 
 # ----------------------------
-# 5) Inside/outside flags for multiple radii
+# 5-6) Inside/outside summaries for multiple radii
 # ----------------------------
 buffer_distances_m <- c(500, 1000, 1500, 2000, 2500, 3000, 3500, 4000)
 
-dpf <- df_local |>
-  st_drop_geometry() |>
-  mutate(
-    dmin_m = dmin_m,
-    row_id = row_number()
-  )
+summ <- rbindlist(lapply(buffer_distances_m, function(r) {
+  L[, .(n = .N, mean = mean(value), sd = sd(value)),
+    by = .(Pollutant, inside = factor(dmin_m <= r, levels = c(FALSE, TRUE),
+                                      labels = c("Outside", "Inside")))][
+    , `:=`(distance = r, distance_label = paste0("\u2264", r, " m"))]
+}))
+summ[, se := sd / sqrt(pmax(n, 1))]
+summ[, ci95 := 1.96 * se]
+summ <- as_tibble(summ)
+dpf2 <- L   # used below only for the pseudo-log epsilon
 
-# Expand each observation across radii and flag inside/outside
-flags <- tidyr::crossing(
-  row_id   = dpf$row_id,
-  distance = buffer_distances_m
-) |>
-  mutate(
-    inside = dpf$dmin_m[row_id] <= distance,
-    inside = factor(inside, levels = c(FALSE, TRUE), labels = c("Outside","Inside")),
-    distance_label = paste0("\u2264", distance, " m")
-  )
-
-dpf2 <- dpf |>
-  select(row_id, date, Latitude, Longitude, Pollutant, value) |>
-  left_join(flags, by = "row_id")
-
-# ----------------------------
-# 6) Summaries + Wilcoxon tests per (distance, Pollutant)
-# ----------------------------
-summ <- dpf2 |>
-  group_by(Pollutant, distance, distance_label, inside) |>
-  summarise(
-    n    = n(),
-    mean = mean(value, na.rm = TRUE),
-    sd   = sd(value, na.rm = TRUE),
-    se   = sd / sqrt(pmax(n, 1)),
-    .groups = "drop"
-  ) |>
-  mutate(ci95 = 1.96 * se)
-
-tests <- dpf2 |>
-  group_by(Pollutant, distance) |>
-  summarise(
-    p_value = {
-      v_in  <- value[inside == "Inside"]
-      v_out <- value[inside == "Outside"]
-      if (length(v_in) >= 3 && length(v_out) >= 3) suppressWarnings(wilcox.test(v_in, v_out)$p.value) else NA_real_
-    },
-    .groups = "drop"
-  ) |>
-  mutate(
-    sig_lab = case_when(
-      is.na(p_value)        ~ "",
-      p_value < 0.001       ~ "***",
-      p_value < 0.01        ~ "**",
-      p_value < 0.05        ~ "*",
-      TRUE                  ~ ""
-    )
-  )
-
-summ2 <- summ |>
-  left_join(tests, by = c("Pollutant","distance"))
+summ2 <- summ
 
 # Labels for n (place near top of errorbar, offset inside/outside slightly)
 x_delta <- max(diff(range(buffer_distances_m)) * 0.01, 10)
@@ -213,7 +167,7 @@ summ_labels <- summ2 |>
   mutate(
     x_lab = distance + ifelse(inside == "Inside", +x_delta, -x_delta),
     n_lab = paste0("n=", format(n, big.mark = ",")),
-    y_lab = mean + ci95
+    y_lab = mean
   )
 
 # ----------------------------
@@ -230,7 +184,7 @@ summ2 <- summ2 %>%
     mean = as.numeric(mean),
     ci95 = as.numeric(ci95)
   ) %>%
-  dplyr::filter(is.finite(distance), is.finite(mean), is.finite(ci95))
+  dplyr::filter(is.finite(distance), is.finite(mean))
 
 if (nrow(summ2) == 0) {
   stop("summ2 has 0 finite rows (mean/ci95). Check that 'value' has finite numbers after filtering.")
@@ -243,25 +197,12 @@ summ_labels <- summ2 %>%
   dplyr::mutate(
     x_lab = distance + ifelse(inside == "Inside", +x_delta, -x_delta),
     n_lab = paste0("n=", format(n, big.mark = ",")),
-    y_lab = mean + ci95
+    y_lab = mean
   ) %>%
   dplyr::filter(is.finite(x_lab), is.finite(y_lab))
 
-# Significance text position (ONLY where finite)
-sig_pos <- summ2 %>%
-  dplyr::group_by(Pollutant, distance, distance_label) %>%
-  dplyr::summarise(
-    y_sig   = max(mean + ci95, na.rm = TRUE),
-    sig_lab = dplyr::first(sig_lab),
-    .groups = "drop"
-  ) %>%
-  dplyr::mutate(y_sig = y_sig * 1.25) %>%
-  dplyr::filter(is.finite(y_sig), !is.na(sig_lab), sig_lab != "")
-
 p <- ggplot(summ2, aes(x = distance, y = mean, group = inside, color = inside)) +
   geom_line(linewidth = 0.5, na.rm = TRUE) +
-  geom_errorbar(aes(ymin = pmax(mean - ci95, 0), ymax = mean + ci95),
-                width = 0, na.rm = TRUE) +
   geom_point(size = 2.2, na.rm = TRUE) +
 
   # n labels (only finite rows)
@@ -279,16 +220,6 @@ p <- ggplot(summ2, aes(x = distance, y = mean, group = inside, color = inside)) 
     seed = 123
   ) +
 
-  # stars (only where present + finite)
-  geom_text(
-    data = sig_pos,
-    aes(x = distance, y = y_sig, label = sig_lab),
-    inherit.aes = FALSE,
-    size = 4.2,
-    fontface = "bold",
-    vjust = 0
-  ) +
-
   scale_x_continuous(breaks = buffer_distances_m) +
   scale_y_continuous(
     trans = scales::pseudo_log_trans(sigma = epsilon, base = 10),
@@ -298,7 +229,7 @@ p <- ggplot(summ2, aes(x = distance, y = mean, group = inside, color = inside)) 
   labs(
     x = "Buffer radius (m)",
     y = "Mean concentration (ppb)",
-    caption = "Error bars: mean ± 95% CI. Stars: Wilcoxon test (Inside vs Outside) at each radius."
+    caption = "Points: mean of individual observations. No intervals or tests are shown: consecutive observations are autocorrelated (SI section S4.1)."
   ) +
   facet_wrap(~ Pollutant, scales = "free_y", ncol = 2) +
   theme_bw(base_size = 12) +

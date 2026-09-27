@@ -13,13 +13,13 @@
 # ==============================================================
 suppressPackageStartupMessages({ library(data.table); library(sf); library(ggplot2); library(scales) })
 set.seed(42)
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # was hard-coded to one machine
 
 # SCALING FACTORS (2026-09-23): read them from the file R04 writes instead of
 # hard-coding. The 300 m headquarters exclusion moved the factors from
 # 1.149/1.228/1.377 to 1.165/1.274/1.443, and a hard-coded constant would have
 # left this table on the old scaling while the block surface used the new one.
-.sf_file <- file.path("/Users/priyanka/Downloads/Suncor", "lacasa_scaling_factors_option1_binweighted.RData")
+.sf_file <- file.path(BASE, "lacasa_scaling_factors_option1_binweighted.RData")
 .sf_get <- function(pol, fallback) {
   if (!file.exists(.sf_file)) { message("[SCALING] file absent - using documented value for ", pol); return(fallback) }
   e <- new.env(); load(.sf_file, envir = e); o <- get(ls(e)[1], envir = e)
@@ -90,6 +90,10 @@ message(sprintf("Point estimates: aggregate ratio %.3f | blocks >2x: %d",
 
 setkey(daily, day)
 ratios <- numeric(B)
+# (2026-09-27) number of blocks above 2x AirToxScreen in each replicate, over
+# ALL blocks, not only the 100 point-estimate blocks: this is what a statement
+# about the stability of the upper tail as a whole has to rest on.
+n_gt2_rep <- integer(B)
 gt2_count <- setNames(integer(length(gt2_full)), gt2_full)
 t0 <- Sys.time()
 for (b in seq_len(B)) {
@@ -99,14 +103,19 @@ for (b in seq_len(B)) {
   bs <- merge(bs, ats, by="block")
   bs <- bs[is.finite(bval) & is.finite(ats) & is.finite(pop) & pop > 0]   # see BUGFIX above
   ratios[b] <- with(bs, sum(pop*bval*SCALE)/sum(pop*ats))
+  n_gt2_rep[b] <- bs[bval*SCALE/ats > 2, .N]
   hit <- bs[block %in% gt2_full & bval*SCALE/ats > 2, block]
   gt2_count[hit] <- gt2_count[hit] + 1L
   if (b %% 50 == 0) message("  ", b, "/", B, " (",
       round(difftime(Sys.time(), t0, units="mins"),1), " min)")
 }
 ci <- quantile(ratios, c(.025,.975))
+ci_n <- quantile(n_gt2_rep, c(.025, .5, .975), names = FALSE)
 out1 <- data.table(ratio_point=round(ratio_full,3),
-                   ci_lo=round(ci[1],3), ci_hi=round(ci[2],3), B=B)
+                   ci_lo=round(ci[1],3), ci_hi=round(ci[2],3), B=B,
+                   n_gt2_point = length(gt2_full),
+                   n_gt2_lo = ci_n[1], n_gt2_med = ci_n[2], n_gt2_hi = ci_n[3],
+                   n_gt2_min = min(n_gt2_rep))
 fwrite(out1, file.path(BASE,"TABLE_bootstrap_ratio.csv")); print(out1)
 out2 <- data.table(block=names(gt2_count),
                    pr_gt2 = round(gt2_count/B, 3))[order(-pr_gt2)]
