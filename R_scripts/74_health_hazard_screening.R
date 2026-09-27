@@ -37,8 +37,12 @@
 #
 # A companion ACUTE screen compares the campaign 99th-percentile and maximum
 # short-term concentrations (SI Table S3.1) with OEHHA 1-hour acute Reference
-# Exposure Levels. Because our peaks are sub-minute and the REL averaging time
-# is one hour, the acute HQs are conservative upper bounds.
+# Exposure Levels. Our peaks are sub-minute and the REL averaging time is one
+# hour, so both are short-duration comparisons, not bounds on hourly exposure.
+# For H2S and HCN the comparison is also made on the DELIVERED values
+# (Table S3.1 *_delivered columns), because the 5-s / 2-s bin averaging of
+# 03_checks_flags.R lowers peaks (H2S maximum 345.6 ppb as a bin mean, 481 ppb
+# as delivered).
 #
 #   SUNCOR_BASE=~/Downloads/Suncor Rscript R_scripts/74_health_hazard_screening.R
 #
@@ -226,8 +230,14 @@ acute <- rbindlist(lapply(seq_len(nrow(POLL)), function(i) {
     HQ_p99      = if (is.na(rel)) NA_real_ else signif(p99 * cf / rel, 3),
     max_ppb     = mx,
     max_ugm3    = round(mx * cf, 1),
-    HQ_max      = if (is.na(rel)) NA_real_ else signif(mx * cf / rel, 3))
+    HQ_max      = if (is.na(rel)) NA_real_ else signif(mx * cf / rel, 3),
+    p99_ppb_delivered  = if ("p99_delivered" %in% names(r)) as.numeric(r$p99_delivered) else NA_real_,
+    max_ppb_delivered  = if ("max_delivered" %in% names(r)) as.numeric(r$max_delivered) else NA_real_)
 }))
+acute[, `:=`(p99_ugm3_delivered = round(p99_ppb_delivered * POLL$cf, 2),
+             HQ_p99_delivered   = signif(p99_ppb_delivered * POLL$cf / acuteREL_ugm3, 3),
+             max_ugm3_delivered = round(max_ppb_delivered * POLL$cf, 1),
+             HQ_max_delivered   = signif(max_ppb_delivered * POLL$cf / acuteREL_ugm3, 3))]
 fwrite(acute, OUT2)
 message("-> ", OUT2)
 cat("\n== SI Table S7.2  acute screen vs OEHHA 1-h acute REL ==\n")
@@ -257,6 +267,7 @@ ck("acute HQ, H2S at campaign max",          acute[pollutant=="H2S",     HQ_max]
 ck("acute HQ, toluene at campaign max",      acute[pollutant=="Toluene", HQ_max], 1.77, 0.02)
 ck("acute HQ, 1,2,4-TMB at campaign max",    acute[pollutant=="1,2,4-Trimethylbenzene", HQ_max], 0.404, 0.02)
 ck("acute HQ, benzene at p99",               acute[pollutant=="Benzene", HQ_p99], 0.174, 0.02)
+ck("acute HQ, H2S at delivered maximum",     acute[pollutant=="H2S",     HQ_max_delivered], 13.1, 0.02)
 
 # ---- sensitivity noted in S7.3: OEHHA chronic RELs sit far below the IRIS ----
 # RfC for two species (benzene 3 vs 30 ug/m3; trimethylbenzenes 4 vs 60 ug/m3).
@@ -267,7 +278,7 @@ for (nm in names(oehha_chr)) {
   cat(sprintf("  [SENS] %-46s run %-10s (S7.3 says %s)\n",
               paste0(nm, " max-block HQ vs OEHHA chronic REL"),
               format(signif(hq, 3)),
-              if (nm == "Benzene") "2.37" else "3.24"))
+              if (nm == "Benzene") "1.74" else "2.85"))
 }
 
 cat("\n  EDIT means the run disagrees with the sentence in S7 and the SI\n")

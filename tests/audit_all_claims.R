@@ -200,6 +200,14 @@ if ("outside_hq" %in% names(s31)) cat(sprintf("  [%s] %-46s last funnel stage ==
 say("2.1.1: HCN funnel", sprintf("the HCN record comprises %s delivered rows, of which %s remain in the analysis set", cm(s31[pollutant == "HCN", after_excl]), cm(s31[pollutant == "HCN", analysis])), MS)
 if ("no_gps_flag" %in% names(s31)) { .gp <- 100 * (1 - s31$no_gps_flag / s31$after_excl)
   say("S1.4: GPS-flag share", sprintf("which removes %s-%s%% of each pollutant's record after the campaign exclusions", rh(min(.gp), 1), rh(max(.gp), 1)), SI) }
+# delivered (un-averaged) H2S / HCN statistics beside the bin means (2026-09-27)
+if (all(c("median_delivered", "p99_delivered", "max_delivered") %in% names(s31))) {
+  .dv <- function(col) { v <- s31[[col]]; ifelse(is.finite(v), formatC(v, format = "f", digits = 2, big.mark = ","), "-") }   # docx_text() maps en-dash to hyphen
+  for (.c in c("median_delivered", "p99_delivered", "max_delivered"))
+    say(sprintf("Table S3.1: %s row", .c), paste0("| ", paste(.dv(.c), collapse = " | "), " |"), rows(SI))
+  say("S7.1: H2S maximum on both series", sprintf("the hydrogen sulfide maximum is %s ppb as a bin mean and %s ppb as delivered",
+      formatC(s31[pollutant == "H2S", max], format = "fg"), formatC(s31[pollutant == "H2S", max_delivered], format = "fg")), SI)
+}
 say("Table S3.1: sampling days", sprintf("| %d | %d | %d | %d | %d | %d |", s31$n_days[1], s31$n_days[2], s31$n_days[3], s31$n_days[4], s31$n_days[5], s31$n_days[6]),
     rows(SI))
 say("Table S3.1: below-MDL row", sprintf("| %s%% | %s%% | %s%% | %s%% | %s%% | %s%% |", rh(s31$pct_belowMDL[1], 1), rh(s31$pct_belowMDL[2], 1), rh(s31$pct_belowMDL[3], 1), rh(s31$pct_belowMDL[4], 1), rh(s31$pct_belowMDL[5], 1), rh(s31$pct_belowMDL[6], 1)),
@@ -500,9 +508,26 @@ say("S7.4: break-even (max block)", sprintf("the corresponding thresholds are %s
 say("Table S7.4: neurological row", sprintf("| %s / %s | %s / %s |", rh(b4("Neurological","HI_pwmean_unscaled"), 3), rh(b4("Neurological","HI_maxblock_unscaled"), 2), rh(b4("Neurological","f_breakeven_pwmean"), 2), rh(b4("Neurological","f_breakeven_maxblock"), 2)), SIrow)
 say("Table S7.4: endocrine row", sprintf("| %s / %s | %s / %s |", rh(b4("Endocrine","HI_pwmean_unscaled"), 3), rh(b4("Endocrine","HI_maxblock_unscaled"), 2), rh(b4("Endocrine","f_breakeven_pwmean"), 2), rh(b4("Endocrine","f_breakeven_maxblock"), 2)), SIrow)
 ac <- function(p, c) h2[pollutant == p][[c]]
-say("S7.2: acute HQ at campaign max", sprintf("benzene (HQ ~ %s), H2S (HQ ~ %s) and toluene (HQ ~ %s) exceed the 1-hour REL", rh(ac("Benzene","HQ_max"), 0), rh(ac("H2S","HQ_max"), 1), rh(ac("Toluene","HQ_max"), 1)), SI)
+say("S7.2: acute HQ at campaign max", sprintf("benzene (HQ ~ %s), H2S (HQ ~ %s on the 5-s bin means", rh(ac("Benzene","HQ_max"), 0), rh(ac("H2S","HQ_max"), 1)), SI)
+say("S7.2: acute HQ toluene", sprintf("and toluene (HQ ~ %s) exceed the 1-hour REL", rh(ac("Toluene","HQ_max"), 1)), SI)
 say("S7.2: acute TMB peak", sprintf("the trimethylbenzene peak reaches %s%% of its REL (HQ ~ %s)", rh(100 * ac("1,2,4-Trimethylbenzene","HQ_max"), 0), rh(ac("1,2,4-Trimethylbenzene","HQ_max"), 2)), SI)
 say("S7.2: acute p99", sprintf("(largest HQ %s, benzene)", rh(max(h2$HQ_p99), 2)), SI)
+if (have("TABLE_S7.2_acute_screen.csv")) { .ac <- need("TABLE_S7.2_acute_screen.csv")
+  if ("HQ_max_delivered" %in% names(.ac)) {
+    .h <- .ac[pollutant == "H2S"]; .n <- .ac[pollutant == "HCN"]
+    say("S7.2: H2S acute HQ on both series", sprintf("S (HQ ~ %s on the 5-s bin means; ~%s at the highest delivered reading, %s ppb)",
+        rh(.h$HQ_max, 1), rh(.h$HQ_max_delivered, 1), formatC(.h$max_ppb_delivered, format = "fg")), SI)
+    say("Table S7.2: H2S row with delivered values", sprintf("| %s (%s) | %s (%s) | %s (%s) | %s (%s) |",
+        formatC(.h$p99_ugm3, format = "f", digits = 2), formatC(.h$p99_ugm3_delivered, format = "f", digits = 2),
+        formatC(.h$HQ_p99, format = "f", digits = 3), formatC(.h$HQ_p99_delivered, format = "f", digits = 3),
+        formatC(.h$max_ugm3, format = "f", digits = 1), formatC(.h$max_ugm3_delivered, format = "f", digits = 1),
+        formatC(.h$HQ_max, format = "f", digits = 2), formatC(.h$HQ_max_delivered, format = "f", digits = 1)), rows(SI))
+    say("Table S7.2: HCN row with delivered values", sprintf("| %s (%s) | %s (%s) | %s (%s) | %s (%s) |",
+        formatC(.n$p99_ugm3, format = "f", digits = 2), formatC(.n$p99_ugm3_delivered, format = "f", digits = 2),
+        formatC(.n$HQ_p99, format = "f", digits = 4), formatC(.n$HQ_p99_delivered, format = "f", digits = 4),
+        formatC(.n$max_ugm3, format = "f", digits = 1), formatC(.n$max_ugm3_delivered, format = "f", digits = 1),
+        formatC(.n$HQ_max, format = "f", digits = 3), formatC(.n$HQ_max_delivered, format = "f", digits = 3)), rows(SI))
+  } }
 
 # ==========================================================================
 hdr("M2. TRI inside/outside and La Casa CPF  <- tri_inside_outside_1km_stats.csv, TABLE_lacasa_cpf.csv")

@@ -708,7 +708,10 @@ ui <- navbarPage(
                          "bound on that hour's exposure, because the rest of the ",
                          "hour was not sampled at that location, and the 99th ",
                          "percentile bounds nothing. Neither estimates a realized ",
-                         "one-hour exposure. The statistic and scaling toggles ",
+                         "one-hour exposure. For H2S and HCN, which are averaged ",
+                         "within 5-s and 2-s bins, the delivered columns repeat the ",
+                         "comparison before that averaging, which lowers peaks. ",
+                         "The statistic and scaling toggles ",
                          "do not apply here: both concern long-term means, not ",
                          "short-term peaks."),
                 tableOutput("p7_acute")))),
@@ -852,10 +855,16 @@ server <- function(input, output, session) {
   output$p1_summary <- renderTable({
     s <- summ[pollutant == input$p1_poll]
     if (nrow(s) == 0) return(data.frame(note = "campaign stats: see manuscript"))
-    data.frame(Metric = c("One-second rows (analysis set)", "% below audit MDL",
-                          "Median", "p95", "p99", "Max"),
-               Value = c(format(s$n, big.mark = ","),
-                         paste0(s$pct_below_mdl, "%"), s$median, s$p95, s$p99, s$max))
+    out <- data.frame(Metric = c("One-second rows (analysis set)", "% below audit MDL",
+                                 "Median", "p95", "p99", "Max"),
+                      Value = c(format(s$n, big.mark = ","),
+                                paste0(s$pct_below_mdl, "%"), s$median, s$p95, s$p99, s$max))
+    # H2S and HCN are averaged within 5-s / 2-s bins; show the delivered values too
+    if ("max_delivered" %in% names(s) && is.finite(s$max_delivered))
+      out <- rbind(out, data.frame(
+        Metric = c("Median, delivered (before bin averaging)", "p99, delivered", "Max, delivered"),
+        Value = c(s$median_delivered, s$p99_delivered, s$max_delivered)))
+    out
   }, colnames = FALSE)
   output$p1_day_ui <- renderUI({
     if (is.null(tracks))
@@ -1305,6 +1314,10 @@ server <- function(input, output, session) {
                `HQ at p99` = sprintf("%.3g", d$HQ_p99),
                `Max (ug/m3)` = sprintf("%.4g", d$max_ugm3),
                `HQ at max` = sprintf("%.3g", d$HQ_max),
+               `HQ at p99, delivered` = if ("HQ_p99_delivered" %in% names(d))
+                 ifelse(is.finite(d$HQ_p99_delivered), sprintf("%.3g", d$HQ_p99_delivered), "") else "",
+               `HQ at max, delivered` = if ("HQ_max_delivered" %in% names(d))
+                 ifelse(is.finite(d$HQ_max_delivered), sprintf("%.3g", d$HQ_max_delivered), "") else "",
                check.names = FALSE)
   })
 

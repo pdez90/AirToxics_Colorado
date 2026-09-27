@@ -271,7 +271,23 @@ for (i in seq_len(nrow(POLL))) {
     first_day = format(min(d$date[ok], na.rm = TRUE), "%Y-%m-%d"),
     last_day  = format(max(d$date[ok], na.rm = TRUE), "%Y-%m-%d"),
     n_days    = uniqueN(as.Date(d$date[ok])))]
+  # DELIVERED VALUES (2026-09-27). H2S and HCN are averaged within 5-s / 2-s
+  # bins in 03_checks_flags.R, which preserves the mean but lowers peaks and
+  # moves the median; the delivered values are kept in *_raw. Report the
+  # delivered median / p99 / max beside the bin-mean statistics for those two
+  # species. The aromatics are not averaged, so the columns are NA for them.
+  rawc <- paste0(POLL$fin[i], "_raw")
+  if (rawc %in% names(d)) {
+    xr <- d[[rawc]]; xr <- xr[ok & is.finite(xr)]
+    qr <- quantile(xr, c(.5, .99, 1), names = FALSE)
+    res[i, `:=`(n_delivered = length(xr), median_delivered = qr[1],
+                p99_delivered = qr[2], max_delivered = qr[3])]
+  }
 }
+for (.c in c("n_delivered", "median_delivered", "p99_delivered", "max_delivered"))
+  if (!.c %in% names(res)) res[, (.c) := NA_real_]
+if (any(is.finite(res$n_delivered) & res$n_delivered != res$analysis))
+  stop("delivered and bin-mean series differ in length for some pollutant")
 
 # most common flag tokens actually present, per pollutant
 flagtop <- character(nrow(POLL))
@@ -315,7 +331,10 @@ lab <- c("Most common flags"                                = "most_common_flags
          "75th percentile (ppb)"                            = "p75",
          "95th percentile (ppb)"                            = "p95",
          "99th percentile (ppb)"                            = "p99",
-         "Maximum (ppb)"                                    = "max")
+         "Maximum (ppb)"                                    = "max",
+         "Median, delivered values (ppb)"                   = "median_delivered",
+         "99th percentile, delivered values (ppb)"          = "p99_delivered",
+         "Maximum, delivered values (ppb)"                  = "max_delivered")
 cat(sprintf("%-46s %12s %12s %12s %16s %12s %12s\n", "", res$pollutant[1], res$pollutant[2],
             res$pollutant[3], res$pollutant[4], res$pollutant[5], res$pollutant[6]))
 for (k in names(lab)) {

@@ -72,9 +72,16 @@ msg("cells_summary.rds: ", nrow(cell_sum), " cell-pollutant rows")
 # campaign-level summary stats (below-MDL fractions from Table S3.1)
 summ <- rbindlist(lapply(names(POLLS), function(pn) {
   col <- POLLS[[pn]]; v <- dt[[col]][is.finite(dt[[col]])]
+  # H2S / HCN are bin-averaged in 03 (5-s / 2-s); their delivered values are
+  # kept in *_raw and summarized alongside (2026-09-27), as in SI Table S3.1.
+  rc <- paste0(col, "_raw")
+  vr <- if (rc %in% names(dt)) dt[[rc]][is.finite(dt[[col]]) & is.finite(dt[[rc]])] else numeric(0)
   data.table(pollutant = pn, n = length(v),
              median = round(median(v), 3), p95 = round(quantile(v, 0.95), 3),
-             p99 = round(quantile(v, 0.99), 3), max = round(max(v), 1))
+             p99 = round(quantile(v, 0.99), 3), max = round(max(v), 1),
+             median_delivered = if (length(vr)) round(median(vr), 3) else NA_real_,
+             p99_delivered = if (length(vr)) round(quantile(vr, 0.99), 3) else NA_real_,
+             max_delivered = if (length(vr)) round(max(vr), 1) else NA_real_)
 }))
 # %<MDL: read from TABLE_S3.1.csv (written by 70_table_s31.R) rather than
 # hard-coded, so the app cannot drift from the SI table. Falls back to the
