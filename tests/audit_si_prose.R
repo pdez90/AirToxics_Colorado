@@ -71,61 +71,70 @@ cat("SI  : ", if (is.null(SI)) paste("NOT FOUND ->", SI_DOCX) else SI_DOCX, "\n"
 cat("MS  : ", if (is.null(MS)) paste("NOT FOUND ->", MS_DOCX) else MS_DOCX, "\n", sep = "")
 
 # ==========================================================================
+# FRAGMENTS RE-ALIGNED 2026-09-27 to the wording of the Suncor_v2 documents
+# (Priyanka's copy-edit of S4.6 and S6.5.2). Every number is still derived
+# from the CSVs; only the surrounding words changed.
 cat("\n== SI section S4.6 vs TABLE_S4.1_background_sensitivity.csv ==\n")
 t  <- need("TABLE_S4.1_background_sensitivity.csv")
 bs <- t[percentile == 20 & window_min == 20]; nb <- t[!(percentile == 20 & window_min == 20)]
 g  <- function(col, f) f(t[[col]])
 
 say("benzene range",
-    sprintf("ranges from %s to %s ppb", rh(g("mobile_pw_ppb", min), 3), rh(g("mobile_pw_ppb", max), 3)),
+    sprintf("ranged from %s to %s ppb", rh(g("mobile_pw_ppb", min), 3), rh(g("mobile_pw_ppb", max), 3)),
     SI, sprintf("%.7f - %.7f", g("mobile_pw_ppb", min), g("mobile_pw_ppb", max)))
 say("AirToxScreen benzene",
-    sprintf("against %s ppb for AirToxScreen", rh(t$airtox_pw_ppb[1], 3)), SI, t$airtox_pw_ppb[1])
+    sprintf("compared with %s ppb for AirToxScreen", rh(t$airtox_pw_ppb[1], 3)), SI, t$airtox_pw_ppb[1])
 say("ratio range + published",
-    sprintf("ranges from %s to %s, against %s at the published setting",
+    sprintf("ranged from %s to %s, compared with %s at the published setting",
             rh(g("ratio_mobile_over_airtox", min), 2), rh(g("ratio_mobile_over_airtox", max), 2),
             rh(bs$ratio_mobile_over_airtox, 2)), SI,
     sprintf("%.4f - %.4f, base %.4f", g("ratio_mobile_over_airtox", min),
             g("ratio_mobile_over_airtox", max), bs$ratio_mobile_over_airtox))
 say("excess-case range",
-    sprintf("%s-%s cases at the lower unit risk and %s-%s at the upper",
+    sprintf("ranged from %s to %s using the lower unit risk and from %s to %s using the upper unit risk",
             rh(g("mobile_cases_low", min), 3), rh(g("mobile_cases_low", max), 3),
             rh(g("mobile_cases_high", min), 3), rh(g("mobile_cases_high", max), 3)), SI,
     sprintf("%.7f/%.7f  %.7f/%.7f", g("mobile_cases_low", min), g("mobile_cases_low", max),
             g("mobile_cases_high", min), g("mobile_cases_high", max)))
 say("AirToxScreen cases",
-    sprintf("against %s and %s for AirToxScreen", rh(t$airtox_cases_low[1], 3), rh(t$airtox_cases_high[1], 3)),
+    sprintf("compared with %s and %s, respectively, for AirToxScreen", rh(t$airtox_cases_low[1], 3), rh(t$airtox_cases_high[1], 3)),
     SI, sprintf("%.6f / %.6f", t$airtox_cases_low[1], t$airtox_cases_high[1]))
 say("endocrine HI range",
-    sprintf("spans %s to %s across the nine settings", rh(g("HI_pwmean_Endocrine", min), 3),
+    sprintf("ranged from %s to %s;", rh(g("HI_pwmean_Endocrine", min), 3),
             rh(g("HI_pwmean_Endocrine", max), 3)), SI,
     sprintf("%.5f - %.5f", g("HI_pwmean_Endocrine", min), g("HI_pwmean_Endocrine", max)))
 say("respiratory HI range",
-    sprintf("spans %s to %s;", rh(g("HI_pwmean_Respiratory", min), 3), rh(g("HI_pwmean_Respiratory", max), 3)),
+    sprintf("from %s to %s;", rh(g("HI_pwmean_Respiratory", min), 3), rh(g("HI_pwmean_Respiratory", max), 3)),
     SI, sprintf("%.5f - %.5f", g("HI_pwmean_Respiratory", min), g("HI_pwmean_Respiratory", max)))
+# (2026-09-27) median-of-daily-medians basis: the hematological index is 0.011 in every arm,
+# so the SI says "was 0.011 throughout" rather than quoting a range.
+.hh <- c(rh(g("HI_pwmean_Hematological", min), 3), rh(g("HI_pwmean_Hematological", max), 3))
 say("neuro + haem HI ranges",
-    sprintf("index spans %s to %s and the hematological index %s to %s",
-            rh(g("HI_pwmean_Neurological", min), 3), rh(g("HI_pwmean_Neurological", max), 3),
-            rh(g("HI_pwmean_Hematological", min), 3), rh(g("HI_pwmean_Hematological", max), 3)), SI, "")
+    if (.hh[1] == .hh[2]) sprintf("index from %s to %s; and the hematological index was %s throughout",
+                                  rh(g("HI_pwmean_Neurological", min), 3), rh(g("HI_pwmean_Neurological", max), 3), .hh[1])
+    else sprintf("index from %s to %s; and the hematological index from %s to %s",
+                 rh(g("HI_pwmean_Neurological", min), 3), rh(g("HI_pwmean_Neurological", max), 3), .hh[1], .hh[2]), SI, "")
+say("endocrine share of threshold",
+    sprintf("with the endocrine index at %s-%s of the threshold", rh(g("HI_pwmean_Endocrine", min), 2), rh(g("HI_pwmean_Endocrine", max), 2)), SI, "")
 say("most-exposed-block HI ranges",
-    sprintf("endocrine index spans %s to %s and the respiratory index %s to %s",
+    sprintf("ranging from %s to %s and from %s to %s, respectively",
             rh(g("HI_maxblock_Endocrine", min), 2), rh(g("HI_maxblock_Endocrine", max), 2),
             rh(g("HI_maxblock_Respiratory", min), 2), rh(g("HI_maxblock_Respiratory", max), 2)), SI, "")
 say("cells identical",
-    sprintf("between %s%% and %s%% of the %d mapped benzene cells",
+    sprintf("%s-%s%% of those %d cells retained exactly the same value",
             rh(min(nb$cells_identical_pct), 0), rh(max(nb$cells_identical_pct), 0), t$n_cells[1]), SI,
     sprintf("%.2f - %.2f", min(nb$cells_identical_pct), max(nb$cells_identical_pct)))
 say("cells within one step",
-    sprintf("between %s%% and %s%% lie within one 0.05 ppb reporting step",
+    sprintf("%s-%s%% differed by no more than 0.05 ppb, one instrument reporting step",
             rh(min(nb$cells_within_one_step_pct), 0), rh(max(nb$cells_within_one_step_pct), 0)), SI,
     sprintf("%.2f - %.2f", min(nb$cells_within_one_step_pct), max(nb$cells_within_one_step_pct)))
 say("largest single-cell change",
-    sprintf("is %s ppb on the 24-hour basis", rh(max(t$max_abs_diff_ppb), 2)), SI, max(t$max_abs_diff_ppb))
+    sprintf("was %s ppb on a 24-hour basis", rh(max(t$max_abs_diff_ppb), 2)), SI, max(t$max_abs_diff_ppb))
 
 tb <- need("TABLE_S4.1b_background_sensitivity_cells.csv")
 en <- tb[pollutant == "Endocrine" & is.finite(pct_HI_gt1)]
 say("cell endocrine exceedance",
-    sprintf("ranges from %s%% to %s%%", rh(min(en$pct_HI_gt1), 0), rh(max(en$pct_HI_gt1), 0)), SI,
+    sprintf("from %s%% to %s%%.", rh(min(en$pct_HI_gt1), 0), rh(max(en$pct_HI_gt1), 0)), SI,
     sprintf("%.2f - %.2f", min(en$pct_HI_gt1), max(en$pct_HI_gt1)))
 
 # ==========================================================================
@@ -141,27 +150,27 @@ dur <- sort(att[plume_id %in% p$plume_id, duration_s])
 np  <- range(pts[plume_id %in% p$plume_id, .N, by = plume_id]$N)
 
 say("traverse durations",
-    sprintf("last %s and %s s", paste(head(dur, -1), collapse = ", "), tail(dur, 1)), SI, paste(dur, collapse = ","))
+    sprintf("lasted %s, and %s s", paste(head(dur, -1), collapse = ", "), tail(dur, 1)), SI, paste(dur, collapse = ","))
 say("retained points per traverse",
-    sprintf("carry %d to %d retained points each", np[1], np[2]), SI, paste(np, collapse = "-"))
+    sprintf("contained %d-%d retained points each", np[1], np[2]), SI, paste(np, collapse = "-"))
 say("peak/mean ratios",
-    sprintf("is %s, %s, %s and %s, averaging %s",
+    sprintf("were %s, %s, %s, and %s, averaging %s",
             rh(sort(r$ratio)[1], 2), rh(sort(r$ratio)[2], 2), rh(sort(r$ratio)[3], 2),
             rh(sort(r$ratio)[4], 2), rh(mean(r$ratio), 2)), SI,
     paste(sprintf("%.4f", sort(r$ratio)), collapse = " "))
 say("traverse-mean vs peak mean",
-    sprintf("a mean of %s against %s metric tons/yr", cm(mean(r$q_mean)), cm(mean(p$inferred_tpy))), SI,
+    sprintf("from %s to %s metric tons/yr", cm(mean(p$inferred_tpy)), cm(mean(r$q_mean))), SI,
     sprintf("%.1f vs %.1f", mean(r$q_mean), mean(p$inferred_tpy)))
 say("reduction",
-    sprintf("a reduction of %s%%", rh(100 * (1 - mean(r$q_mean) / mean(p$inferred_tpy)), 0)), SI,
+    sprintf("reduced the four-encounter mean emission estimate by %s%%", rh(100 * (1 - mean(r$q_mean) / mean(p$inferred_tpy)), 0)), SI,
     sprintf("%.2f%%", 100 * (1 - mean(r$q_mean) / mean(p$inferred_tpy))))
 
 # ==========================================================================
 cat("\n== manuscript ==\n")
 say("MS emission caveat",
-    sprintf("by %s%%, from %s to %s metric tons/yr",
+    sprintf("reduces the estimate by %s%%, to %s metric tons/yr",
             rh(100 * (1 - mean(r$q_mean) / mean(p$inferred_tpy)), 0),
-            cm(mean(p$inferred_tpy)), cm(mean(r$q_mean))), MS, "")
+            cm(mean(r$q_mean))), MS, "")
 .dev <- max(abs(t$mobile_pw_ppb - bs$mobile_pw_ppb) / bs$mobile_pw_ppb) * 100
 say("MS S4.6 pointer bound",
     sprintf("moves by at most %d%%", ceiling(.dev)), MS, sprintf("max deviation %.2f%%", .dev))

@@ -410,6 +410,13 @@ say("S3.3: HCN by season", sprintf("a winter median of %s ppb falling to %s-%s p
 # ==========================================================================
 hdr("L. Bootstrap  <- TABLE_bootstrap_ratio.csv, TABLE_bootstrap_blocks.csv")
 br <- need("TABLE_bootstrap_ratio.csv"); bb <- need("TABLE_bootstrap_blocks.csv")
+# Table S4.1 hazard-index columns (median basis after the 79 re-run)
+if (have("TABLE_S4.1_background_sensitivity.csv")) {
+  t41 <- need("TABLE_S4.1_background_sensitivity.csv")
+  for (r in seq_len(nrow(t41))) say(sprintf("Table S4.1 HI columns, %s", t41$arm[r]),
+    sprintf("| %s | %s | %s | %s |", rh(t41$HI_pwmean_Endocrine[r], 3), rh(t41$HI_pwmean_Respiratory[r], 3), rh(t41$HI_pwmean_Neurological[r], 3), rh(t41$HI_pwmean_Hematological[r], 3)), rows(SI))
+  say("S4.6: max-block ranges", sprintf("ranging from %s to %s and from %s to %s, respectively", rh(min(t41$HI_maxblock_Endocrine), 2), rh(max(t41$HI_maxblock_Endocrine), 2), rh(min(t41$HI_maxblock_Respiratory), 2), rh(max(t41$HI_maxblock_Respiratory), 2)), SI)
+}
 say("S4.5: aggregate ratio and CI", sprintf("The aggregate ratio is %s with a 95%% bootstrap interval of %s-%s", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), SI)
 say("4: CI in the manuscript", sprintf("(risk ratio %s, 95%% CI: %s, %s)", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), MS)
 say("S4.5: block counts", sprintf("of the %d blocks whose point estimate exceeds twice the AirToxScreen value in this construction, %d remain above 2x in at least 80%% of bootstrap replicates and %d in at least 95%%", nrow(bb), sum(bb$pr_gt2 >= 0.8), sum(bb$pr_gt2 >= 0.95)), SI)
