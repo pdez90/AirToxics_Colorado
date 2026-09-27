@@ -150,10 +150,10 @@ chronic <- rbindlist(lapply(seq_len(nrow(POLL)), function(i) {
       pop_covered     = round(pop_cov),
       pwmean_ppb      = round(pw_ppb, 4),
       pwmean_ugm3     = round(pw_ppb * cf, 4),
-      HQ_pwmean       = signif(pw_ppb  * cf / POLL$RfC_ugm3[i], 3),
+      HQ_pwmean       = signif(pw_ppb  * cf / POLL$RfC_ugm3[i], 4),   # 4 s.f. (2026-09-27): 3 s.f. double-rounded 0.8947 -> 0.895 -> "0.90"
       maxblock_ppb    = round(max_ppb, 3),
       maxblock_ugm3   = round(max_ppb * cf, 3),
-      HQ_maxblock     = signif(max_ppb * cf / POLL$RfC_ugm3[i], 3))
+      HQ_maxblock     = signif(max_ppb * cf / POLL$RfC_ugm3[i], 4))
   }))
   
   # WITHIN-BLOCK MAXIMUM (2026-09-27). HI_maxblock was sum(HQ_maxblock): the sum
@@ -176,7 +176,7 @@ chronic <- rbindlist(lapply(seq_len(nrow(POLL)), function(i) {
     j <- which.max(hi_b)
     data.table(target_organ = og,
                pollutants = paste(POLL$name[idx], collapse = " + "),
-               HI_pwmean = round(sum(chronic[target_organ == og, HQ_pwmean]), 4),   # 4 dp: 77 cross-checks this file
+               HI_pwmean = round(sum(chronic[target_organ == og, HQ_pwmean]), 5),   # 5 dp (2026-09-27: 4 dp double-rounded 0.89473 to 0.90); 77 cross-checks this file at 5e-3
                HI_maxblock = round(max(hi_b), 3),
                HI_maxblock_block = as.character(d[["GEOID20"]][ok][j]),
                n_blocks_all_pollutants = sum(ok),

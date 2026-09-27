@@ -83,12 +83,17 @@ SCEN_CHOICES <- if (!is.null(haz) && !is.null(haz$scen)) {
 SCALE_WINDOW_TXT <- if (length(.meas) && !is.null(.be)) {
   cl <- c(.clause("Respiratory", "H2S"), .clause("Endocrine", "HCN"))
   fs <- c(.bget("Respiratory", "f_breakeven_pwmean"), .bget("Endocrine", "f_breakeven_pwmean"))
-  inside <- is.finite(fs) & fs >= min(.meas) & fs <= max(.meas)
+  # A measured factor "reaches" a break-even when it would carry that index
+  # across 1: for an index below 1 that means any factor >= f*, for an index
+  # above 1 any factor <= f*. (The earlier test asked only whether f* fell
+  # inside the measured span, which missed f* = 1.12 sitting BELOW 1.165.)
+  h0 <- c(.hi0("Respiratory"), .hi0("Endocrine"))
+  reaches <- is.finite(fs) & is.finite(h0) & ifelse(h0 < 1, max(.meas) >= fs, min(.meas) <= fs)
   paste0("How wrong would a borrowed factor have to be to matter? ", paste(cl, collapse = ", and "),
          sprintf(". The measured aromatic factors span %.2f to %.2f", min(.meas), max(.meas)),
-         if (any(inside)) paste0(", which reaches the ", paste(c("respiratory", "endocrine")[inside], collapse = " and "),
-                                 " break-even: that community-level conclusion depends on the scaling assumption for a species with no measured factor.")
-         else ", comfortably inside that window - which is why no conclusion on this page moves between scenarios A and D.")
+         if (any(reaches)) paste0("; borrowing any of them would carry the ", paste(c("respiratory", "endocrine")[reaches], collapse = " and "),
+                                  " index across 1, so that community-level conclusion depends on the scaling assumption for a species with no measured factor.")
+         else ", which would not carry either index across 1 - which is why no conclusion on this page moves between scenarios A and D.")
 } else NULL
 
 POLLS <- sort(unique(cells$pollutant))
