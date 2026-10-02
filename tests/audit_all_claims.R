@@ -711,7 +711,7 @@ if (have("TABLE_delivery_spacing.csv")) { ds <- need("TABLE_delivery_spacing.csv
 if (have("TABLE_background_sign_changes.csv")) { bs <- need("TABLE_background_sign_changes.csv"); b <- bs[pollutant == "Benzene"]; h <- bs[pollutant == "H2S"]
   say("S4.1.1: sign changes", sprintf("in this record %s%% of negative benzene readings and %s%% of negative H2S values become positive, and %s%% and %s%% of positive readings become negative",
       rh(b$pct_neg_to_pos, 1), rh(h$pct_neg_to_pos, 1), rh(b$pct_pos_to_neg, 1), rh(h$pct_pos_to_neg, 1)), SI)
-  say("S4.1.1: negative run medians", sprintf("the run-median background is itself negative in %s%% of benzene rows and %s%% of H2S values; Equation 3 applies with a negative run median in %s benzene and %s H2S values (%s%% and %s%% of each record), and in %s and %s of them",
+  say("S4.1.1: negative run medians", sprintf("the run-median background is itself negative in %s%% of benzene rows and %s%% of H2S values; Equation S2 applies with a negative run median in %s benzene and %s H2S values (%s%% and %s%% of each record), and in %s and %s of them",
       rh(b$pct_run_median_negative, 0), rh(h$pct_run_median_negative, 0), cm(b$n_eq3_negative_median), cm(h$n_eq3_negative_median),
       rh(b$pct_eq3_negative_median, 1), rh(h$pct_eq3_negative_median, 2), cm(b$n_eq3_pos_to_neg), cm(h$n_eq3_pos_to_neg)), SI)
 } else skip("S4.1.1 sign changes", "TABLE_background_sign_changes.csv not found (run 82)")

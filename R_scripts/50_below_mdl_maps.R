@@ -89,28 +89,39 @@ for (i in seq_along(POLLS)) {
                           n_cells = nrow(cm), pct_cells_below_mdl = pct)
   message(sprintf("%-17s MDL %5.2f ppb | %4d cells | %5.1f%% below MDL",
                   P$name, P$mdl, nrow(cm), pct))
-  lims <- quantile(cm[!(below), med], c(0.02, 0.98), na.rm = TRUE)
-  if (!all(is.finite(lims)) || lims[1] >= lims[2])
-    lims <- range(cm$med, na.rm = TRUE)
+  # Colour scale only where some cell is above the MDL. When none is (H2S and
+  # HCN), a colour bar fitted to the below-MDL medians would describe cells
+  # that are all drawn gray, so the panel carries no colour scale at all.
+  n_above <- sum(!cm$below)
   p <- ggplot() +
     annotation_map_tile(type = Sys.getenv("SUNCOR_TILES", "osm"), zoom = 11) +
     geom_point(data = cm[(below)], aes(lon, lat), color = "grey55",
-               size = 0.55, alpha = 0.8) +
-    geom_point(data = cm[!(below)], aes(lon, lat, color = med),
-               size = 0.65, alpha = 0.95) +
-    scale_color_viridis_c(limits = lims, oob = scales::squish,
-                          name = "ppb", option = "D") +
+               size = 0.55, alpha = 0.8)
+  if (n_above > 0) {
+    lims <- quantile(cm[!(below), med], c(0.02, 0.98), na.rm = TRUE)
+    if (!all(is.finite(lims)) || lims[1] >= lims[2])
+      lims <- range(cm[!(below), med], na.rm = TRUE) + c(-1e-6, 1e-6)
+    p <- p +
+      geom_point(data = cm[!(below)], aes(lon, lat, color = med),
+                 size = 0.65, alpha = 0.95) +
+      scale_color_viridis_c(limits = lims, oob = scales::squish,
+                            name = "ppb", option = "D")
+  }
+  p <- p +
     coord_sf(crs = 4326, default_crs = 4326, xlim = xlim, ylim = ylim,
              expand = FALSE) +
     labs(title = sprintf("%s", P$name),
-         subtitle = sprintf("%.0f%% of cells below MDL (%.2g ppb, gray)",
-                            pct, P$mdl), x = NULL, y = NULL) +
+         subtitle = if (n_above > 0) sprintf("%.0f%% of cells below MDL (%.2g ppb, gray)", pct, P$mdl)
+                    else sprintf("All %d cells below MDL (%.2g ppb, gray)", nrow(cm), P$mdl),
+         x = NULL, y = NULL) +
     theme_bw(base_size = 10) +
     theme(axis.text = element_blank(), axis.ticks = element_blank(),
           panel.grid = element_blank(),
           plot.title = element_text(face = "bold", size = 11),
           plot.subtitle = element_text(size = 8.5),
           legend.key.height = unit(0.9, "lines"))
+  # keep the map the same size as in the panels that carry a colour bar
+  if (n_above == 0) p <- p + theme(plot.margin = margin(5.5, 5.5 + 44, 5.5, 5.5))
   panels[[i]] <- p
 }
 summ <- rbindlist(summ)
@@ -126,6 +137,6 @@ fig <- (panels[[1]] | panels[[2]] | panels[[3]]) /
                      "Basemap: \u00a9 OpenStreetMap contributors."),
     theme = theme(plot.caption = element_text(size = 8, hjust = 0)))
 out_png <- file.path(BASE, "FinalFig", "FIG_belowMDL_maps.png")
-ggsave(out_png, fig, width = 13.5, height = 8.6, dpi = 400, bg = "white")
+ggsave(out_png, fig, width = 13.5, height = 6.9, dpi = 400, bg = "white")   # 6.9 in: no blank band between the map rows
 message("[Saved] ", out_png)
 message("DONE.")

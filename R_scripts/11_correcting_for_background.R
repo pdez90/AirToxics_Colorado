@@ -54,21 +54,21 @@ bg_correct <- function(obs, base, med) {
   #                                 -3 ppb reading is published as +1.5 ppb
   #   base == 0                 ->  the row falls through BOTH branches and is
   #                                 silently deleted as NA
-  # Neither is intended. Equation 3 exists to avoid negative corrected values
+  # Neither is intended. SI Equation S2 (multiplicative) exists to avoid negative corrected values
   # when a POSITIVE background exceeds the observation; it is only meaningful
-  # for a positive baseline. Fall back to the additive form (Equation 2)
+  # for a positive baseline. Fall back to the additive form (SI Equation S1)
   # whenever the baseline is not strictly positive - that is well defined,
   # order-preserving, and leaves a genuinely negative observation negative,
   # which is what SI Section S4.1.1 says happens.
   out <- rep(NA_real_, length(obs))
   ok  <- is.finite(obs) & is.finite(base) & is.finite(med)
 
-  # Equation 2 (additive): baseline at or below the observation, OR any
+  # SI Equation S1 (additive): baseline at or below the observation, OR any
   # baseline that is not strictly positive.
   ok_add <- ok & ((base <= obs) | (base <= 0))
   out[ok_add] <- obs[ok_add] - base[ok_add] + med[ok_add]
 
-  # Equation 3 (multiplicative): only when a STRICTLY POSITIVE baseline
+  # SI Equation S2 (multiplicative): only when a STRICTLY POSITIVE baseline
   # exceeds the observation.
   ok_ratio <- ok & (base > obs) & (base > 0)
   out[ok_ratio] <- obs[ok_ratio] * med[ok_ratio] / base[ok_ratio]
