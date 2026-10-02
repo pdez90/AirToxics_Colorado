@@ -25,16 +25,25 @@ ms <- rbindlist(lapply(names(POLLS), function(pn) {
 ms <- ms[n >= 1000]     # skip fragmentary months
 fwrite(ms, file.path(BASE, "TABLE_monthly_stability.csv"))
 print(data.table::dcast(ms[pollutant=="Benzene"], month ~ van, value.var="median"))
-# audit boundaries to display (MDL change points, Table S1.2)
-bounds <- as.Date(c("2024-10-01", "2025-01-01", "2024-04-01", "2024-07-01"))
+# MDL change points per pollutant (Table S1.2), read from the audit MDL table:
+# the first day of each quarter in which either vehicle's MDL differs from the
+# previous quarter (a vehicle's first MDL, when it joins the campaign, is not a change).
+mdl <- fread(file.path(BASE, "CDPHE_audit_MDLs.csv"))
+mdl[, pollutant := ifelse(grepl("HCN", compound), "HCN", ifelse(grepl("H2S", compound), "H2S", compound))]
+setorder(mdl, pollutant, from_ym)
+mdl[, `:=`(chg = (!is.na(cat_mdl) & !is.na(shift(cat_mdl)) & cat_mdl != shift(cat_mdl)) |
+                 (!is.na(emu_mdl) & !is.na(shift(emu_mdl)) & emu_mdl != shift(emu_mdl))), by = pollutant]
+bounds <- mdl[chg == TRUE, .(pollutant, x = as.Date(sprintf("%d-%02d-01", from_ym %/% 100, from_ym %% 100)))]
+stopifnot(all(bounds$pollutant %in% names(POLLS)))
+print(bounds[, .(dates = paste(format(x, "%Y-%m"), collapse = ", ")), by = pollutant])
 p <- ggplot(ms, aes(month, median, color=van)) +
-  geom_vline(xintercept=bounds, linetype=3, color="grey60", linewidth=0.3) +
+  geom_vline(data=bounds, aes(xintercept=x), linetype=3, color="grey60", linewidth=0.3) +
   geom_line(linewidth=0.6) + geom_point(size=1.4) +
   geom_line(aes(y=p95), linetype=2, linewidth=0.4) +
   facet_wrap(~pollutant, scales="free_y") +
   scale_color_manual(values=c(CAT="#2166ac", EMU="#b2182b"), name=NULL) +
   labs(x=NULL, y="Monthly median (solid) and p95 (dashed), ppb",
-       caption="Dotted verticals: audit-period boundaries where MDLs changed (Table S1.2). Months with <1,000 valid observations omitted.") +
+       caption="Dotted verticals: start of each quarter in which that pollutant's MDL changed on either vehicle (Table S1.2). Months with <1,000 valid observations omitted.") +
   theme_bw(base_size=11) +
   theme(legend.position="bottom", plot.caption=element_text(size=8.5, hjust=0))
 ggsave(file.path(BASE,"FinalFig","FIG_monthly_stability.png"), p,

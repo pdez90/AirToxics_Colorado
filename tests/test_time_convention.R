@@ -122,7 +122,8 @@ if (!length(files)) {
 # against human behaviour instead: crews start at a fixed CIVIL hour, so if the
 # clock really is fixed MST, the day's first record must fall about an hour
 # EARLIER during daylight-saving months. Measured over the campaign it does,
-# by 0.95 h (95% CI 0.60-1.30) - consistent with 1.00 h, and 0.00 h rejected.
+# by 0.99 h (95% CI 0.74-1.25) over the 203 sampling days - consistent with
+# 1.00 h, and 0.00 h rejected.
 # --------------------------------------------------------------
 section("DST diagnostic: day-start times shift by ~1 h across the DST boundary")
 

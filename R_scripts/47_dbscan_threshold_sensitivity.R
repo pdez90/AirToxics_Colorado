@@ -115,12 +115,10 @@ for (thr in THRS) for (eps in EPSS) {
     } else 0
     # BASELINE DIAGNOSTIC (2026-09-27): this script reimplements the hotspot
     # chain (28 -> 29 -> 30) in-line, so its baseline cell must reproduce the
-    # published group set exactly or the 26 perturbed cells are being measured
-    # against a different baseline than the one the manuscript reports. It does
-    # not: the published chain yields 14 groups persistent in >=3 pollutants and
-    # this cell yields 15, at identical parameters and from the same input. The
-    # extra group is written out below so the cause can be found in one run
-    # rather than inferred. Everything else in this script is unchanged.
+    # main-analysis group set exactly or the 26 perturbed cells are being
+    # measured against a different baseline. With the distinct-location
+    # centroid (above) it does: 15 groups, each within 0.1 m of its
+    # main-analysis counterpart. Any mismatch is written out below.
     if (thr == BASELINE$thr && eps == BASELINE$eps && pers == BASELINE$pers) {
       .d_to_master <- vapply(seq_len(nrow(g3)), function(j)
         min(sqrt((mxy[, 1] - g3$x[j])^2 + (mxy[, 2] - g3$y[j])^2)), numeric(1))
@@ -183,8 +181,11 @@ long <- data.table::melt(res, id.vars = c("thr_lab", "eps_m", "pers_lab", "basel
              measure.vars = c("groups_3plus", "recovery_of_baseline"))
 long[variable == "recovery_of_baseline", value := value * 100]
 long[, panel := ifelse(variable == "groups_3plus",
-                       "Groups persistent in >=3 pollutants (n)",
-                       sprintf("Baseline %d groups recovered within 300 m (%%)", nrow(mxy)))]
+                       "Groups persistent in\n>=3 pollutants (n)",
+                       sprintf("Baseline %d groups recovered\nwithin 300 m (%%)", nrow(mxy)))]
+# top row: recovery (%); bottom row: group count
+long[, panel := factor(panel, levels = c(sprintf("Baseline %d groups recovered\nwithin 300 m (%%)", nrow(mxy)),
+                                         "Groups persistent in\n>=3 pollutants (n)"))]
 p <- ggplot(long, aes(factor(eps_m), value, color = pers_lab,
                       group = pers_lab)) +
   geom_line(linewidth = 0.6) + geom_point(size = 2.2) +

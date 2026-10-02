@@ -85,7 +85,7 @@ say("benzene range",
 say("AirToxScreen benzene",
     sprintf("compared with %s ppb for AirToxScreen", rh(t$airtox_pw_ppb[1], 3)), SI, t$airtox_pw_ppb[1])
 say("ratio range + published",
-    sprintf("ranged from %s to %s, compared with %s at the published setting",
+    sprintf("ranged from %s to %s, compared with %s at the baseline setting",
             rh(g("ratio_mobile_over_airtox", min), 2), rh(g("ratio_mobile_over_airtox", max), 2),
             rh(bs$ratio_mobile_over_airtox, 2)), SI,
     sprintf("%.4f - %.4f, base %.4f", g("ratio_mobile_over_airtox", min),
@@ -125,7 +125,7 @@ say("cells identical",
             rh(min(nb$cells_identical_pct), 0), rh(max(nb$cells_identical_pct), 0), t$n_cells[1]), SI,
     sprintf("%.2f - %.2f", min(nb$cells_identical_pct), max(nb$cells_identical_pct)))
 say("cells within one step",
-    sprintf("%s-%s%% differed by no more than 0.05 ppb, one instrument reporting step",
+    sprintf("%s-%s%% differed by no more than 0.05 ppb, half the 0.1 ppb benzene reporting step",
             rh(min(nb$cells_within_one_step_pct), 0), rh(max(nb$cells_within_one_step_pct), 0)), SI,
     sprintf("%.2f - %.2f", min(nb$cells_within_one_step_pct), max(nb$cells_within_one_step_pct)))
 say("largest single-cell change",

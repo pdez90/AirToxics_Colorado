@@ -6,8 +6,9 @@
 #
 #   Rscript tests/audit_manuscript_claims.R
 #
-# CLAIM REFRESH (2026-09-25). The `claim` argument of every ok() call is what
-# the DOCUMENTS say, so it has to move whenever they do. After the 300 m
+# CLAIM REFRESH (2026-09-25). The `claim` argument of every ok() call is a
+# typed copy of what the DOCUMENTS say (this script does not read the .docx;
+# tests/audit_all_claims.R does), so it has to move whenever they do. After the 300 m
 # ATOPs-headquarters exclusion these were left on the pre-exclusion text and a
 # clean run reported ten failures that were not failures - the documents were
 # right and this file was stale. That is worse than no harness: it trains the
@@ -33,8 +34,10 @@ d[, day := as.Date(date)]
 d[, hr  := as.integer(format(date, "%H", tz = "UTC"))]
 d[, ym  := as.integer(format(day, "%Y%m"))]
 
+n_fail <- 0L
 ok <- function(lab, got, want, tol = 0) {
   pass <- isTRUE(all.equal(got, want, tolerance = tol, check.attributes = FALSE))
+  if (!pass) n_fail <<- n_fail + 1L
   cat(sprintf("  [%s] %-46s got %-22s claim %s\n",
               if (pass) "OK  " else "FAIL", lab,
               paste(format(got), collapse = ","),
@@ -179,6 +182,7 @@ if (!file.exists(pf)) {
     r <- pr[deployment == dep]
     if (!nrow(r)) { cat(sprintf("  [MISS] %-24s not in the csv\n", dep)); return(invisible()) }
     got <- sprintf("%s to %s", r$first_record[1], r$last_record[1])
+    if (!identical(got, doc)) n_fail <<- n_fail + 1L
     cat(sprintf("  [%s] %-24s data %-26s Table S1.1 says %s\n",
                 if (identical(got, doc)) "OK  " else "EDIT", dep, got, doc))
   }
@@ -194,3 +198,6 @@ if (!file.exists(pf)) {
   cat("\n  (\"Table S1.1 says\" is the wording in the REVISED SI. EDIT means the\n")
   cat("   table no longer matches the measurement files.)\n")
 }
+
+cat(sprintf("\n%d FAIL/EDIT\n", n_fail))
+if (n_fail > 0) quit(status = 1)

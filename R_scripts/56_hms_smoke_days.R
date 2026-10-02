@@ -131,7 +131,7 @@ p <- ggplot(daily, aes(class, dmed, fill = class)) +
                                medium = "#fdbb84", heavy = "#e34a33")) +
   labs(x = "NOAA HMS smoke overlay on the study domain (sampling day)",
        y = "Daily median concentration (ppb)",
-       caption = "Each point in a box is one sampling day's campaign-wide median. Smoke classes from NOAA Hazard Mapping System smoke polygons intersecting the study domain (maximum density).") +
+       caption = "Each point in a box is one sampling day's campaign-wide median.\nSmoke classes from NOAA Hazard Mapping System smoke polygons intersecting the study domain (maximum density).") +
   theme_bw(base_size = 11) +
   theme(plot.caption = element_text(size = 8.5, hjust = 0))
 ggsave(file.path(BASE, "FinalFig", "FIG_smoke_comparison.png"),

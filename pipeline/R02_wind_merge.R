@@ -49,7 +49,7 @@ diag_df_summary(m, "merged mobile+wind", key_cols = c("ws", "wd"))
 
 if (all(c("ws", "wd") %in% names(m))) {
   miss_pct <- 100 * mean(is.na(m$ws) | is.na(m$wd))
-  diag_check_value("% rows missing wind (ms says 11.1%)", miss_pct, REF$missing_wind_pct, tol_pct = 25)
+  diag_check_value("% rows missing wind", miss_pct, REF$missing_wind_pct, tol_pct = 25)
 }
 if ("dist_km" %in% names(m)) {
   diag_check_value("median distance to met station (km)", stats::median(m$dist_km, na.rm = TRUE),

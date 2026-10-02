@@ -338,6 +338,9 @@ h2s_evt_keep <- h2s_evt_flags %>%
 # retained 6 events where this script retains 4. A count is not a contract;
 # writing the identifiers, vehicle and timestamps here lets a consumer assert an
 # exact match instead of hoping that two funnels agree.
+# Times below are the MST wall clock (the mobile record's convention), held in
+# POSIXct objects labelled UTC; the "Z" suffix is that storage label, not a UTC
+# offset. Consumers (70, P11, tests) parse them with tz = "UTC" and so recover MST.
 retained_out <- h2s_evt_keep %>%
   dplyr::transmute(
     plume_id, Asset,

@@ -18,8 +18,8 @@
 #                                       vector limit (set below).
 #   4  impact diagnostic      ~2 min    what the time fixes moved
 #
-# Budget the better part of a day, and leave the machine plugged in; every
-# stage runs under caffeinate where it matters.
+# Budget the better part of a day, and leave the machine plugged in (on macOS,
+# run the whole script under `caffeinate -i` to stop the machine sleeping).
 #
 # UPDATED 2026-09-23:
 #   - R_MAX_VSIZE is now set for stage 3. Without it groups A and L die with
@@ -43,7 +43,7 @@
 # ==============================================================
 set -u
 
-BASE="$HOME/Downloads/Suncor"
+BASE="${SUNCOR_BASE:-$HOME/Downloads/Suncor}"; export SUNCOR_BASE="$BASE"
 PIPE="$BASE/rerun_pipeline"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 LOGDIR="$PIPE/logs/run_$STAMP"
@@ -100,12 +100,14 @@ unset SKIP_PLUMES
 
 # The methane CSVs moved out of Toxics_EST; resolve them here so a wrong path
 # is caught in the pre-flight rather than 30 seconds into stage 1.
+# A METHANE_DIR set by the user wins; otherwise the same candidates as
+# RUN_ALL_from_raw.R and M01 (beside the analysis root, ~/Downloads, inside it).
 METH=""
-for c in "$HOME/Downloads/MethaneData" "/Users/priyanka/Toxics_EST/MethaneData" "$BASE/MethaneData"; do
-  if [ -d "$c" ]; then METH="$c"; break; fi
+for c in "${METHANE_DIR:-}" "$(dirname "$BASE")/MethaneData" "$HOME/Downloads/MethaneData" "$BASE/MethaneData"; do
+  if [ -n "$c" ] && [ -d "$c" ]; then METH="$c"; break; fi
 done
 if [ -z "$METH" ]; then
-  echo "         MISSING: MethaneData folder (looked in ~/Downloads, Toxics_EST, $BASE)"
+  echo "         MISSING: MethaneData folder (looked in \$METHANE_DIR, $(dirname "$BASE"), ~/Downloads, $BASE)"
   echo "                  set METHANE_DIR=/path/to/MethaneData and re-run"
   exit 1
 fi
@@ -191,14 +193,23 @@ run_stage "stage 3: MAKE_FIGURES.R (all groups, incl. HYSPLIT)  ~13-16 h" \
 # September run report "failed: 0" while eleven groups had in fact stopped.
 echo
 echo "-------- stage 3 per-group result --------"
-for f in "$PIPE"/logs/FIG_*_console.txt; do
-  g=$(basename "$f" | sed 's/FIG_//; s/_console.txt//')
-  if grep -q "^  \[FAIL\] group $g" "$f" 2>/dev/null; then
-    echo "         FAIL group $g"
-    FAILED+=("fig_$g")
-  fi
-done
-[ ${#FAILED[@]} -eq 0 ] && echo "         all groups completed"
+# MAKE_FIGURES writes its [PASS]/[FAIL] group lines to its own output
+# (03_figures.log), not to the per-group FIG_<g>_console.txt files, so read
+# 03_figures.log (same check as RUN_RESUME_from_R06.sh).
+gfail=0
+while read -r g; do
+  [ -n "$g" ] || continue
+  echo "         FAIL group $g   (log: logs/FIG_${g}_console.txt)"
+  FAILED+=("fig_$g"); gfail=1
+done < <(grep -aE '^[[:space:]]*\[FAIL\] group ' "$LOGDIR/03_figures.log" 2>/dev/null \
+         | awk '{print $3}' | sort -u)
+_started=$(grep -ac 'DIAG | GROUP ' "$LOGDIR/03_figures.log" 2>/dev/null || echo 0)
+_ended=$(grep -acE '^[[:space:]]*\[(PASS|FAIL)\] group ' "$LOGDIR/03_figures.log" 2>/dev/null || echo 0)
+if [ "$_started" -ne "$_ended" ]; then
+  echo "         WARNING: $_started group(s) started but $_ended result line(s) written"
+  FAILED+=("fig_incomplete"); gfail=1
+fi
+[ "$gfail" = 0 ] && echo "         all groups completed"
 
 # --------------------------------------------------------------
 # 4) What moved.

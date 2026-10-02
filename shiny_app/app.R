@@ -32,7 +32,8 @@ BASIS_SHORT <- c(med = "median of daily medians", mean = "mean of daily means")
 .bdf <- sf::st_drop_geometry(blocks)
 MOB_COL <- c(med = "sBenzene_med_of_daily_med_scaled", mean = "sBenzene_mean_of_daily_mean_scaled")
 if (!MOB_COL[["mean"]] %in% names(.bdf)) {   # blocks.rds built before the basis toggle
-  warning("blocks.rds has no mean-of-daily-means column - rerun prep_app_data.R")
+  warning("blocks.rds has no mean-of-daily-means column (the paper's primary statistic); ",
+          "the median column is shown in its place - rerun prep_app_data.R")
   MOB_COL[["mean"]] <- MOB_COL[["med"]]
 }
 IUR_PPB <- c(lo = 5.75e-6, hi = 20.40e-6)   # IRIS benzene IUR per ppb (paper section 2.4)
@@ -591,10 +592,11 @@ ui <- navbarPage(
         h4("Methane hotspot screen"), htmlOutput("pch4_summary"),
         helpText("Methane was recorded by the same Picarro G2204 that measures ",
                  "H2S, at a 5 s acquisition cadence, and is processed through ",
-                 "the identical chain: inlet-delay correction, native-cadence ",
-                 "averaging, the rolling local background of SI section S4.1, ",
-                 "and the same high-event and clustering rules used for the ",
-                 "quality-assured species on page 4."),
+                 "the same chain as H2S: inlet-delay correction, one value per ",
+                 "5-s bin, and the rolling local background of SI section S4.1. ",
+                 "Its hotspot screen differs from the one used for the ",
+                 "quality-assured species on page 4 (DBSCAN minPts = 5 and the ",
+                 "persistence rule below; paper section 3.7)."),
         helpText("Clusters are built from observations at or above the ",
                  "campaign 99th percentile, grouped spatially; a cluster is ",
                  "persistent when it carries more than 10% of all ",

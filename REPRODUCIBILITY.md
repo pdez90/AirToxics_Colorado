@@ -5,12 +5,12 @@
 **Policy: every number in the manuscript, the SI and the Shiny app is regenerated from primary
 inputs by the code in this repository; no hand-made or interactive intermediate is used.**
 `tests/audit_all_claims.R` checks the numbers quoted in both documents against the outputs
-(294 checks), `tests/audit_si_prose.R` the SI prose (21) and `tests/audit_manuscript_claims.R`
+(313 checks), `tests/audit_si_prose.R` the SI prose (21) and `tests/audit_manuscript_claims.R`
 the measurement-file claims (44); all pass on the current outputs.
 
 **How the current outputs were produced.** Full run from the raw CDPHE packets on 23-25 Sep 2026
 (after the 300 m headquarters exclusion); the one-value-per-bin re-run of 27-28 Sep (H2S, HCN
-and CH4 reduced to one value per 5-s / 2-s bin; `RUN_BINS.sh`); the mean-of-daily-means primary
+and CH4 reduced to one value per 5-s / 2-s bin); the mean-of-daily-means primary
 basis and the median-basis supplementary outputs of 30 Sep (MAKE_FIGURES groups X, XM and the
 block/hazard scripts); figure-group re-runs through 2 Oct. Sections further down headed
 "What the ... re-run changed" and the other dated notes are a record of how the analysis got
@@ -49,13 +49,13 @@ alone does not write the tables and figures; `MAKE_FIGURES.R` does.
 | Table S1.2, MDL lookup | `69_cdphe_audit_mdls.R` (`CDPHE_audit_MDLs.csv`) | J2 |
 | Figure S1.1 / S1.2 | `51_cat_emu_comparison.R` / `57_monthly_stability.R` | R |
 | Figure S3.1 | `37_creating_gif_figure_s1_1.R` | J |
-| Figures S3.2-S3.8 | `07_...R` with `FIG_A_finisher_bins.R` | A |
+| Figures S3.2-S3.8 | `07_timeplot_timevariation_ggally_correlation_plots.R` | A |
 | Figures S3.9 / S3.10 | `09_creating_figures.R` / `08_polarplot_maps.R` | B |
 | Table S3.1 | `70_table_s31.R` | J2 |
 | Table S3.2 | `54_health_reference_table.R` | S |
 | Figures S3.11 / S3.12 / S3.13 / S3.14 | `45` / `50` / `56` / `62` | R |
 | Figure S4.1 | `17_..._scaling_factors_...R` | R04 |
-| Figures S4.2 / S4.3 / S4.4 | `41` / `24` / `21` | K / G / E |
+| Figures S4.2 / S4.3 / S4.4 | `41` / `24` / `21` | K / K / E |
 | Figure S4.5 | `16_500_m_plotting_ratios.R` | C |
 | Figures S4.6 / S4.7 | `19_plot_maps_census_blocks.R` | D |
 | Figure S4.8 | `36_hysplit_of_lowest_trimethylbenzene_benzene_ratios.R` | I |
@@ -66,6 +66,7 @@ alone does not write the tables and figures; `MAKE_FIGURES.R` does.
 | Figures S5.4 / S5.5 | `35_hotspot_figure_2.R` | H |
 | Figures S5.6 / S5.8 / S5.9, positional uncertainty | `47` / `52` / `60` / `80_bin_location_error.R` | P |
 | MS 3.4.2 Group 13 headquarters diagnostic | `81_group13_hq_annulus.R` | P |
+| SI S1.4 delivery spacing / S4.1.1 background sign changes / MS 2.3 wind-station distances | `83` / `82` / `84` | TX |
 | Figures S6.1 / S6.2 / S6.5, Table S6.2 inputs | `P07` / `P07` / `P08` | R07 |
 | Figures S6.3 / S6.4 / S6.6, Table S6.2 detection limits | `P09` / `P10` / `46_min_detectable_rate.R` | V |
 | S6.4 receptor height, S6.8 bearings | `P11_plume_geometry_checks.R` | V |
@@ -120,8 +121,8 @@ compromising the from-raw guarantee.
 `Local_Time_MST` is **fixed MST, UTC−7 all year, no daylight saving.** Verified two ways:
 every raw string carries the literal `-0700` in all 12 months, and crews start at a fixed
 *civil* hour, so on a true-MST clock the day's first record falls an hour earlier during
-daylight-saving months — measured across the 101 sampling days at **0.95 h (95% CI
-0.60–1.30)**, consistent with 1.00 h (p = 0.77) and rejecting 0.00 h (p ≈ 1e-6).
+daylight-saving months — measured across the 203 sampling days at **0.99 h (95% CI
+0.74–1.25)**, consistent with 1.00 h (p = 0.95) and rejecting 0.00 h (p ≈ 8e-12).
 
 `date` is therefore a **fixed-MST wall clock stored with a UTC attribute — not an absolute
 UTC instant.** The tzone attribute is a carrier for the clock reading, not a claim about the
@@ -162,18 +163,31 @@ worse than no gate. See `tests/README.md`.
 receptors placed off-centreline the way the ±10° acceptance window does, then inverts with
 P08's own function. 540 cases, recovery exact to 7e-14 %.
 
+## Scripts not run by the runners
+
+These are kept for the record or as one-off tools; no number or figure in the documents depends on them.
+
+- `R_scripts/00_run_all.R` (legacy driver, superseded by `pipeline/RUN_EVERYTHING.sh`), `04_stats_hour_of_day_weekend_weekday.R`, `44_daily_coverage_gif.R`, `53_windrose.R`, `63_deheld_sensitivity.R`, `64_commoncadence_sensitivity.R`, `65_plume_cadence_sensitivity.R`, `avg_to_5s_helper.R`, `75_airtoxscreen_from_epa.R/.py`, `methane/M05_methane_sourceprob_facilities.R`.
+- `R_scripts/74_group9_garage_check.R`: superseded. It refers to an earlier hotspot numbering and headquarters point; the current Group 9 is the group 0.19 km from the Sinclair terminal.
+- `R_scripts/38_download_roads.R`: run once to create `all_colorado_roads.RData` (see Primary inputs).
+- `pipeline/FIG_A_*.R`: stand-alone copies of code already in `07_...R` (group A).
+- `hrrr_scripts/H01-H04`: an alternative HRRR download and join (R06 uses `plume_scripts/P03-P04`); kept because `tests/test_time_convention.R` checks that H04 and P04 agree.
+- `shiny_app/prep_app_data.R`: run by hand after a pipeline run to rebuild `shiny_app/data/*.rds`.
+- `tests/`: run by hand (see `tests/README.md`); `RUN_EVERYTHING.sh` runs the time-convention and P08 geometry tests in its pre-flight.
+
 ## Primary inputs (the only accepted data)
 
 | Input | Location | Source |
 |---|---|---|
 | Mobile air-toxics quarterly packets (20) | `Updated/*.xlsx` | **Official CDPHE repository** (colorado.gov/airquality/air_toxics_repo.aspx): 2023 Q1–2024 Q2 = _r3, 2024 Q3–2025 Q2 = _r2 — verified exact match to the posted revisions (R00a). 2025 Q3 posted but outside study period. |
 | Mobile monthly CSVs (58) | `Updated/csv/{Suncor,Terminal}_<Month>_<Year>.csv` | Derived from the packets above (what script 02 reads). Coverage verified complete Feb 2023–Jun 2025 (R00a); content check vs xlsx via `DEEP=1`; regenerable via `REBUILD=1`. |
-| Methane deployment CSVs (299) | `~/Toxics_EST/MethaneData/<quarter>/` | CDPHE direct — the only input NOT from the public repository; Picarro, uncalibrated. M01 truncates to the study period (≤ 2025-06-30) by default. |
+| Methane deployment CSVs (299) | `MethaneData/<quarter>/` beside the analysis root (e.g. `~/Downloads/MethaneData`), or `METHANE_DIR` | CDPHE direct — the only input NOT from the public repository; Picarro, uncalibrated. M01 truncates to the study period (≤ 2025-06-30) by default. |
 | Hourly wind | `hourly_WIND_2023/2024/2025.csv` | EPA AQS Air Data (Local Standard Time) |
 | La Casa stationary | `ascent_2023.csv`, `ascent_2024.csv`, `lacasa3.csv` | CDPHE / ASCENT |
 | AirToxScreen 2020 | `airtoxscreen.xlsx` (+ `.csv` for Population) | EPA |
 | TRI | `TRI.csv` | EPA |
 | Census blocks | fetched live (`tigris::blocks("08", 2020)`) | US Census |
+| Colorado roads (`all_colorado_roads.RData`, read by MAKE_FIGURES groups E and F) | written once by `R_scripts/38_download_roads.R` (TIGER/Line roads via `tigris`; needs network; not run by the runners) | US Census |
 | HRRR meteorology | fetched live via Herbie (AWS), cached in `hrrr_hour_cache/` | NOAA |
 | Grids (500 m, 5 km) | generated from scratch by `R00b_make_grids.R` (UTM 13N, cells snapped to absolute multiples over domain corners −105.25..−104.70, 39.60..40.00). No legacy shapefile used. | fully derived |
 

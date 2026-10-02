@@ -26,7 +26,7 @@
 #   A, L           R ran out of vector memory. They run last, one at a time,
 #                  with a raised limit. Close other applications first.
 # ==============================================================
-BASE="$HOME/Downloads/Suncor"
+BASE="${SUNCOR_BASE:-$HOME/Downloads/Suncor}"
 PIPE="$BASE/rerun_pipeline"
 LOG="$PIPE/logs/hq300_fixups_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG"; cd "$BASE" || exit 1

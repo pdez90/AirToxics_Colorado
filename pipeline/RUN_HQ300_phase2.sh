@@ -15,7 +15,7 @@
 # Every stage is logged; a failed stage is reported and the rest continue.
 # ==============================================================
 # (no set -u: macOS bash 3.2 treats empty arrays as unbound)
-BASE="$HOME/Downloads/Suncor"
+BASE="${SUNCOR_BASE:-$HOME/Downloads/Suncor}"
 PIPE="$BASE/rerun_pipeline"
 STAMP=$(date +%Y%m%d_%H%M%S)
 LOG="$PIPE/logs/hq300_phase2_$STAMP"

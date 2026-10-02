@@ -29,7 +29,7 @@
 # they cannot import herbie, unset it and run sequentially.
 # ==============================================================
 set -u
-BASE="$HOME/Downloads/Suncor"
+BASE="${SUNCOR_BASE:-$HOME/Downloads/Suncor}"; export SUNCOR_BASE="$BASE"
 PIPE="$BASE/rerun_pipeline"
 LOGDIR="$PIPE/logs/resume_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOGDIR"
@@ -46,7 +46,8 @@ run_stage () {
   local log="$1"; shift
   echo; echo "-------- $label --------"; echo "         log: $log"
   local t0=$SECONDS
-  if caffeinate -i "$@" > "$log" 2>&1; then
+  local keep=""; command -v caffeinate >/dev/null 2>&1 && keep="caffeinate -i"   # macOS only
+  if $keep "$@" > "$log" 2>&1; then
     printf '         OK   (%d min)\n' $(( (SECONDS - t0) / 60 ))
   else
     printf '         FAIL (%d min)  <-- see the log\n' $(( (SECONDS - t0) / 60 ))

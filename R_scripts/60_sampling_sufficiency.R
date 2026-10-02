@@ -48,8 +48,10 @@ run_groups <- function(sub) {
     s <- sub[fin & v > thr, .(px,py,day)]
     if (nrow(s) < 10) next
     cid <- dbscan::dbscan(as.matrix(s[,.(px,py)]), eps=100, minPts=1)$cluster
+    # centroid of the DISTINCT sampling locations, as in 28_...R and 47
     cs <- data.table(clust=cid, x=s$px, y=s$py, day=s$day)[
-      , .(n=.N, n_days=uniqueN(day), x=mean(x), y=mean(y)), by=clust]
+      , { u <- unique(data.table(x=x, y=y))
+          .(n=.N, n_days=uniqueN(day), x=mean(u$x), y=mean(u$y)) }, by=clust]
     keep[[pn]] <- cs[n>=quantile(n,.9) & n_days>=quantile(n_days,.9)][, pollutant:=pn]
   }
   keep <- rbindlist(keep)

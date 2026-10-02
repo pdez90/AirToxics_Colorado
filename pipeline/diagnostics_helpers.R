@@ -251,8 +251,10 @@ REF <- utils::modifyList(REF, list(
   # once. HCN's p99 is unchanged (11).
   scaling = c(benzene = 1.165, toluene = 1.274, xylene = 1.443),
   n_blocks = 1667, population = 126527,
-  risk_mobile = c(0.108, 0.383), risk_ratio = 0.92,
-  dbscan_initial = 2652, clusters_ge3 = 14, final_groups = 14
+  # block benzene risk on the primary mean-of-daily-means basis (the median
+  # basis gives 0.108-0.383 cases, ratio 0.92)
+  risk_mobile = c(0.147, 0.523), risk_ratio = 1.26,
+  dbscan_initial = 2763, clusters_ge3 = 15, final_groups = 15
 ))
 
 .ref_delta <- names(REF)[vapply(names(REF), function(k)

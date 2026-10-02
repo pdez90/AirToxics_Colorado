@@ -1,11 +1,11 @@
 # ==============================================================
 # M03_hotspots.R
 # Methane hotspot analysis, mirroring the manuscript pipeline:
-#   - high-concentration events: raw 1-s values >= 99th percentile
+#   - high-concentration events: 5-s bin values >= 99th percentile
 #   - DBSCAN clustering (eps = 100 m, minPts = 5)
 #   - persistence: cluster must exceed 10% of all high events AND
 #     occur on >10% of sampling days with any high event
-#   - centroids + summary CSVs, comparison to the 17 existing
+#   - centroids + summary CSVs, comparison to the 15
 #     multi-pollutant hotspot groups
 # Outputs: hs_df_methane.RData, cent_out_methane_all.csv,
 #          cent_out_methane_persistent.csv, methane_hotspot_summary.csv
@@ -49,7 +49,7 @@ n_clusters <- uniqueN(hs$cluster[hs$cluster > 0])
 noise_pct <- 100 * mean(hs$cluster == 0)
 diag_msg(sprintf("  DBSCAN(eps=100 m, minPts=5): %d clusters | %.1f%% noise points",
                  n_clusters, noise_pct))
-diag_msg("  (toxics analogue in ms: 160 initial clusters across all pollutants)")
+diag_msg("  (toxics analogue: 2,763 initial clusters across the six pollutants, section 2.5.3.2)")
 
 # ----------------------------------------------------------------
 # 3) Persistence: >10% of high events AND >10% of high-event days
@@ -90,7 +90,7 @@ for (eps in c(50, 100, 200)) {
 }
 
 # ----------------------------------------------------------------
-# 5) Compare methane hotspots to the 17 multi-pollutant groups
+# 5) Compare methane hotspots to the 15 multi-pollutant groups
 # ----------------------------------------------------------------
 diag_section("M03-DIAG: proximity to existing multi-pollutant hotspot groups")
 idx_f <- file.path(BASE, "MASTER_hotspot_group_index.csv")

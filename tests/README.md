@@ -1,16 +1,29 @@
 # tests/
 
-Three scripts. The first two are regression tests and should pass on any
-checkout; the third is a diagnostic that reports numbers rather than passing or
-failing.
+Seven scripts:
+
+- regression tests: `test_p08_geometry.R`, `test_time_convention.R`,
+  `test_delay_and_cadence.R`;
+- document audits, which compare the manuscript and SI with the pipeline
+  outputs: `audit_all_claims.R` (reads both .docx files), `audit_si_prose.R`,
+  `audit_manuscript_claims.R` (typed claims checked against the measurement
+  record);
+- `impact_of_time_fixes.R`, a diagnostic that reports numbers rather than
+  passing or failing.
 
 ```bash
 Rscript tests/test_p08_geometry.R
 SUNCOR_CSV_DIR=Updated/csv SUNCOR_BASE=~/Downloads/Suncor Rscript tests/test_time_convention.R
+SUNCOR_BASE=~/Downloads/Suncor Rscript tests/test_delay_and_cadence.R
+SUNCOR_BASE=~/Downloads/Suncor Rscript tests/audit_all_claims.R
+SUNCOR_BASE=~/Downloads/Suncor Rscript tests/audit_si_prose.R
+SUNCOR_BASE=~/Downloads/Suncor Rscript tests/audit_manuscript_claims.R
 SUNCOR_BASE=~/Downloads/Suncor Rscript tests/impact_of_time_fixes.R
 ```
 
-Both tests exit non-zero on failure, so they drop straight into CI.
+The tests and the audits exit non-zero on failure, so they drop straight into
+CI. The audits find the documents in `../Suncor_v2/` beside the analysis root,
+or at `MS_DOCX` / `SI_DOCX`.
 
 **`SUNCOR_STRICT=1`** turns "no data found, skipping" into a failure. Set it
 whenever the suite is being used as a gate — `RUN_EVERYTHING.sh` does. Without
@@ -31,7 +44,7 @@ Locks down the one unusual thing about time here: **`date` is a fixed-MST wall
 clock stored with a UTC attribute — not an absolute UTC instant.** The tzone
 attribute is a carrier for the clock reading, not a claim about the instant.
 
-Four sections:
+Six sections:
 
 1. **Unit test.** `09:00` Local_Time_MST must map to `16:00` UTC in *both*
    seasons under `force_tz("MST")`; under `force_tz("America/Denver")` it maps
@@ -45,8 +58,8 @@ Four sections:
    2 would not catch. This tests the labels against behaviour instead: crews
    start at a fixed *civil* hour, so on a true-MST clock the day's first record
    must fall about an hour earlier during daylight-saving months. Measured over
-   the 101 sampling days it does, by **0.95 h (95% CI 0.60–1.30)** —
-   consistent with 1.00 h (p = 0.77), and 0.00 h rejected (p ≈ 1e-6). Also
+   the 203 sampling days it does, by **0.99 h (95% CI 0.74–1.25)** —
+   consistent with 1.00 h (p = 0.95), and 0.00 h rejected (p ≈ 8e-12). Also
    confirms no sampling day falls on a DST transition date.
 4. **Intermediates.** Any `.RData` on disk still carries the convention.
 5. **Static scan.** No live code converts pipeline timestamps via
@@ -79,8 +92,9 @@ concentration that receptor would see, then hands it to P08's own
 
 540 cases — 4 distances × 5 off-axis angles × 3 stability classes × 3 wind
 speeds × 3 boundary-layer heights. Recovery is exact to **7e-14 %**. The forward
-model is written independently in the test file, so this is not the code
-checking itself.
+model's along-wind/cross-wind decomposition and prefactor are written
+independently in the test file; it reuses P08's sigma, reflection and unit
+functions, so errors in those would cancel and are not tested here.
 
 It also measures what the superseded centreline assumption (θ forced to 0) does
 to the same data: **median −19.6 %, worst −80.3 %** — an under-estimate, the

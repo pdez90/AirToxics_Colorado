@@ -63,10 +63,13 @@ diag_compare_rdata_rows("hs_df_methane.RData", "hs_df_methane")
 # DIAG 2: cluster pipeline counts vs manuscript
 # ----------------------------------------------------------------
 diag_section("R05-DIAG 2: cluster counts vs manuscript (Section 2.5.3.2)")
-idx_file <- file.path(BASE, "MASTER_hotspot_group_index.csv")
+# The group file checked here must be one R05 itself writes (script 30), not
+# MASTER_hotspot_group_index.csv, which MAKE_FIGURES group N (71) builds later:
+# under CLEAN=1 that file does not exist yet, and otherwise it is last run's.
+idx_file <- file.path(BASE, "super_hotspots_3plus_persistent.csv")
 if (file.exists(idx_file)) {
   idx <- utils::read.csv(idx_file)
-  diag_msg("  MASTER_hotspot_group_index.csv: ", nrow(idx), " rows; cols: ",
+  diag_msg("  super_hotspots_3plus_persistent.csv: ", nrow(idx), " rows; cols: ",
            paste(head(names(idx), 12), collapse = ", "))
   # final persistent multi-pollutant groups
   gid_col <- grep("group", names(idx), ignore.case = TRUE, value = TRUE)[1]
@@ -75,10 +78,10 @@ if (file.exists(idx_file)) {
     # tol_pct = 0: this one is exact by construction, so it must be checked
     # against the CURRENT expected count (REF, updated 2026-08-20), not the
     # as-submitted 17 (still available as REF_SUBMITTED$final_groups).
-    diag_check_value("final persistent hotspot groups (expect 14)", n_groups,
+    diag_check_value(sprintf("final persistent hotspot groups (expect %d)", REF$final_groups), n_groups,
                      REF$final_groups, tol_pct = 0)
   }
-} else diag_msg("  [WARN] MASTER_hotspot_group_index.csv not found")
+} else stop("R05: super_hotspots_3plus_persistent.csv not written by script 30")
 
 pc_file <- file.path(BASE, "pair_counts_persistent.csv")
 if (file.exists(pc_file)) {
@@ -105,8 +108,8 @@ if (file.exists(th_file)) {
   # LABEL REFRESH (2026-09-23): these were the AS-SUBMITTED thresholds. The
   # manuscript now carries the post-exclusion set, so both are printed.
   diag_msg("  As submitted:  benzene 63.8/12d, toluene 43/7, TMB 36/5, xylene 53.5/8, H2S 28/9, HCN 24/3.")
-  diag_msg("  Current (ms):  benzene 63.7/12d, toluene 55.5/8, TMB 57.1/8, xylene 58/9, H2S 39/13, HCN 24.4/4.")
+  diag_msg("  Current: the rows printed above (hotspot_thresholds_summary.csv) are the values section 2.5.3.2 quotes.")
 } else diag_msg("  [WARN] hotspot_thresholds_summary.csv not found")
 
 diag_msg("\nR05 complete. If group membership changed, Table S5.1, Figures 3-4, and the")
-diag_msg("hotspot-type narrative (Groups 4, 10, 13, 24, 28, 83, ...) must be re-checked.")
+diag_msg("hotspot-type narrative (section 3.4.2) must be re-checked.")

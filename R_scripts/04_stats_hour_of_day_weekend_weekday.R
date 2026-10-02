@@ -64,7 +64,7 @@ d0 <- df_out %>% dplyr::filter(!is.na(date))
 # ----------------------------
 run_days <- d0 %>%
   dplyr::mutate(day = as.Date(date),
-         wday = wday(date, label = TRUE, abbr = FALSE, week_start = 1)) %>% # Monday=1
+         wday = lubridate::wday(date, label = TRUE, abbr = FALSE, week_start = 1)) %>% # Monday=1
   dplyr::distinct(day, wday)
 
 weekday_counts <- run_days %>%

@@ -25,7 +25,7 @@
 #   - webshot2  + a Chrome/Chromium install, for the leaflet screenshot.
 # Runtime: roughly 20-60 min for 60 trajectories, dominated by met download.
 # ==============================================================
-BASE="$HOME/Downloads/Suncor"
+BASE="${SUNCOR_BASE:-$HOME/Downloads/Suncor}"
 PIPE="$BASE/rerun_pipeline"
 LOG="$PIPE/logs/hq300_hysplit_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG"; cd "$BASE" || exit 1

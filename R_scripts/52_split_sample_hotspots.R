@@ -58,8 +58,13 @@ run_half <- function(sub, label) {
     if (nrow(s) < 10) next
     cid <- dbscan::dbscan(as.matrix(s[, .(px, py)]), eps = 100,
                           minPts = 1)$cluster
+    # cluster centroid = mean of the DISTINCT sampling locations, as in
+    # 28_...R (st_centroid(st_union(geometry))) and 47_dbscan_threshold_sensitivity.R;
+    # an observation-weighted mean shifts centroids by tens of metres and changes
+    # which clusters merge at eps = 100 m.
     cs <- data.table(clust = cid, x = s$px, y = s$py, day = s$day)[
-      , .(n = .N, n_days = uniqueN(day), x = mean(x), y = mean(y)),
+      , { u <- unique(data.table(x = x, y = y))
+          .(n = .N, n_days = uniqueN(day), x = mean(u$x), y = mean(u$y)) },
       by = clust]
     pers <- cs[n >= quantile(n, 0.90) & n_days >= quantile(n_days, 0.90)]
     pers[, pollutant := pn]
@@ -119,6 +124,7 @@ md <- rbindlist(mapdat)
 ll <- st_coordinates(st_transform(st_as_sf(
   as.data.frame(md[, .(x, y)]), coords = c("x", "y"), crs = 32613), 4326))
 md[, `:=`(lon = ll[, 1], lat = ll[, 2])]
+md[, split := factor(split, levels = c("odd_even", "calendar"))]   # left: odd/even, right: calendar
 mll <- data.table(lon = master$Longitude, lat = master$Latitude)
 p <- ggplot() +
   annotation_map_tile(type = Sys.getenv("SUNCOR_TILES", "osm"), zoom = 11) +
@@ -133,7 +139,7 @@ p <- ggplot() +
            xlim = range(c(md$lon, mll$lon)) + c(-0.01, 0.01),
            ylim = range(c(md$lat, mll$lat)) + c(-0.01, 0.01), expand = FALSE) +
   labs(x = NULL, y = NULL,
-       caption = sprintf("X symbols: the %d full-campaign persistent multi-pollutant groups. Colored points: groups identified independently within each half using identical parameters (p99 within-half, eps 100 m, persistence p90). Basemap: © OpenStreetMap contributors.", nrow(master))) +
+       caption = sprintf("X symbols: the %d full-campaign persistent multi-pollutant groups. Colored points: groups identified independently within each half\nusing identical parameters (p99 within-half, eps 100 m, persistence p90). Basemap: \u00a9 OpenStreetMap contributors.", nrow(master))) +
   theme_bw(base_size = 11) +
   theme(legend.position = "bottom", panel.grid = element_blank(),
         axis.text = element_blank(), axis.ticks = element_blank(),

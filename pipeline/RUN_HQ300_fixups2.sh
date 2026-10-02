@@ -14,7 +14,7 @@
 #   B  script 09 has the same apply() problem (patched); this script re-runs B
 #      only if its last run failed, so a successful B is not repeated.
 # ==============================================================
-BASE="$HOME/Downloads/Suncor"
+BASE="${SUNCOR_BASE:-$HOME/Downloads/Suncor}"
 PIPE="$BASE/rerun_pipeline"
 LOG="$PIPE/logs/hq300_fixups2_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG"; cd "$BASE" || exit 1

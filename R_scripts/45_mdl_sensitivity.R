@@ -252,7 +252,8 @@ pB <- ggplot(blk, aes(case_f, bval, fill = case_f)) +
            label = "median AirToxScreen", color = "red", size = 3.2) +
   scale_fill_brewer(palette = "Blues") +
   labs(x = NULL, y = "Block benzene (ppb)",
-       title = "B) Census-block benzene (median of daily medians, unscaled) by case") +
+       title = sprintf("B) Census-block benzene (%s, unscaled) by case",
+                       if (EXPOSURE_BASIS == "mean_of_daily_mean") "mean of daily means" else "median of daily medians")) +
   theme_bw(base_size = 11)
 library(patchwork)
 ggsave(file.path(BASE, "FinalFig", paste0("FIG_mdl_sensitivity", .sfx, ".png")),

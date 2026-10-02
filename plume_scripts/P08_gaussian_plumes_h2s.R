@@ -846,7 +846,7 @@ p_base_time_tpy <- ggplot2::ggplot(baseline_rows, ggplot2::aes(x = datetime, y =
   ggplot2::scale_color_viridis_c(name = "Distance (km)") +
   ggplot2::scale_y_continuous(labels = scales::comma) +
   ggplot2::labs(
-    x = "Datetime (UTC)",
+    x = "Date and time (MST)",   # times are the MST wall clock, held in a POSIXct labelled UTC
     y = paste0("Baseline emissions (metric tons/year; op_fraction=", op_fraction, ")"),
     title = paste0(
       "Baseline inferred WWTP H\u2082S emissions per plume ",

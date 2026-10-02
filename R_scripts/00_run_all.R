@@ -1,6 +1,8 @@
 # ==============================================================
-# 00_run_all.R  -- source every section script in order
-# Auto-generated from Suncor.Rmd
+# 00_run_all.R  -- LEGACY: sources the section scripts 01-40 in order, as
+# split from Suncor.Rmd. It is not the reproduction path and does not cover
+# the later scripts; use pipeline/RUN_EVERYTHING.sh (or RUN_ALL_from_raw.R
+# followed by MAKE_FIGURES.R) - see README.md.
 # ==============================================================
 
 scripts <- c(

@@ -225,7 +225,14 @@ GROUPS <- list(
             scripts = c("77_health_scaling_sensitivity.R", "58_bootstrap_blocks.R",
                         "45_mdl_sensitivity.R", "54_health_reference_table.R",
                         "59_enviroscreen_overlay.R", "19_plot_maps_census_blocks.R",
-                        "79_background_sensitivity.R"))
+                        "79_background_sensitivity.R")),
+  # Numbers quoted in the text that no figure script writes: SI S1.4 delivery
+  # spacing (raw monthly CSVs), SI S4.1.1 background sign changes, MS 2.3 wind-
+  # station distances. ~2 min.
+  TX = list(desc = "Text diagnostics (SI S1.4, S4.1.1; MS 2.3)",
+            pre = character(0),
+            scripts = c("83_delivery_spacing_stats.R", "82_background_sign_changes.R",
+                        "84_wind_station_distance.R"))
 )
 
 sel <- Sys.getenv("GROUPS")

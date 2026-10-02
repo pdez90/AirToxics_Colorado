@@ -2,11 +2,11 @@
 # 50  BELOW-MDL-GRAYED CONCENTRATION MAPS (SI alternative to Fig 2)
 # For each pollutant: 500 m cell median of daily medians (raw
 # reported values), with cells whose median falls below the
-# predominant audited MDL shown in gray. This separates cells whose
+# reference MDL shown in gray. This separates cells whose
 # mapped value is instrument noise from cells with a real ambient
 # signal - the reviewer's point about the HCN panel, extended to
 # all six pollutants.
-# MDLs: predominant CAT audit values (CDPHE repository READ-MEs /
+# MDLs: reference (CAT) audit values (CDPHE quarterly data packets, Quarterly Summary tab /
 # Table S1.2): benzene 0.5, toluene 0.18, xylene 0.19, TMB 0.22,
 # H2S 5 ppb. HCN (2026-09-27): 13 ppb was the CAT value BEFORE the
 # retained HCN record (22 Jan - 23 Jun 2025). Over that record the
@@ -120,11 +120,10 @@ print(summ)
 fig <- (panels[[1]] | panels[[2]] | panels[[3]]) /
        (panels[[4]] | panels[[5]] | panels[[6]]) +
   plot_annotation(
-    caption = paste("Cell values are medians of daily medians of raw reported",
-                    "concentrations on the 500 m grid. Gray cells fall below the",
-                    "predominant audited MDL (CAT lab; CDPHE repository READ-ME",
-                    "files; HCN: observation-weighted median over its 2025 record,",
-                    "5 ppb). Basemap: © OpenStreetMap contributors."),
+    caption = paste0("Cell values are medians of daily medians of raw reported concentrations on the 500 m grid. ",
+                     "Gray cells fall below the reference MDL (CAT laboratory audit values from the Quarterly Summary\n",
+                     "tab of the CDPHE quarterly data packets; HCN: observation-weighted median over its 2025 record, 5 ppb). ",
+                     "Basemap: \u00a9 OpenStreetMap contributors."),
     theme = theme(plot.caption = element_text(size = 8, hjust = 0)))
 out_png <- file.path(BASE, "FinalFig", "FIG_belowMDL_maps.png")
 ggsave(out_png, fig, width = 13.5, height = 8.6, dpi = 400, bg = "white")

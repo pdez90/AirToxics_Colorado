@@ -34,8 +34,9 @@ rd <- function(f, parser) { x <- read.csv(file.path(BASE,f), stringsAsFactors=FA
   x$date <- .mst                            # MST clock, to match the mobile record
   x }
 lc <- rbindlist(list(rd("ascent_2023.csv", dmy_hm), rd("ascent_2024.csv", dmy_hm)))
-lc <- as.data.table(lc)[is.finite(wd) & is.finite(ws) & ws > 1]
-message("La Casa rows with valid wind, ws>1: ", format(nrow(lc), big.mark=","))
+# The ascent files report wind speed in mph (WS_mph); convert before the 1 m/s cut.
+lc <- as.data.table(lc)[, ws := ws * 0.44704][is.finite(wd) & is.finite(ws) & ws > 1]
+message("La Casa rows with valid wind, ws > 1 m/s: ", format(nrow(lc), big.mark=","))
 
 # bearings La Casa -> key facilities
 lacasa <- c(39.7794, -105.0052)

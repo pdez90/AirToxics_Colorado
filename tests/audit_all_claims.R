@@ -360,7 +360,7 @@ say("3.4.2: group 13 annuli", sprintf("Among retained measurements of the four a
     rh(min(ar$pct_above_300_400), 1), rh(max(ar$pct_above_300_400), 1), rh(min(ar$pct_above_400_500), 1), rh(max(ar$pct_above_400_500), 1),
     rh(hc$pct_above_300_400, 1), rh(hc$pct_above_400_500, 1)), MS)
 say("3.4.2: campaign-wide rate", sprintf("a campaign-wide rate of about %s%%", rh(max(G13$pct_above_campaign), 0)), MS)
-if (gm(9)$tri_dist_km != min(M$tri_dist_km, na.rm = TRUE)) cat("  [FAIL] 3.4.2: Group 9 is no longer the group nearest a TRI facility\n")
+if (gm(9)$tri_dist_km != min(M$tri_dist_km, na.rm = TRUE)) { n_fail <<- n_fail + 1L; cat("  [FAIL] 3.4.2: Group 9 is no longer the group nearest a TRI facility\n") }
 # SI Table S5.1 rows: per-group days and TRI distance
 SIrow <- rows(SI)
 for (i in seq_len(nrow(S5))) { r <- S5[i]
@@ -476,7 +476,7 @@ if (file.exists(HR)) {
 } else skip("3.8 wind disagreement", "mobile_hrrr.RData not present")
 WS <- file.path(BASE, "mobile_wswd.RData")
 if (file.exists(WS)) { e <- new.env(); suppressWarnings(load(WS, envir = e)); o <- get(ls(e)[1], envir = e)
-  say("2.3: median station distance", sprintf("nearest meteorological monitoring station used was %s km", rh(median(o$dist_km, na.rm = TRUE), 1)), MS)
+  say("2.3: median station distance", sprintf("The median distance from that hourly position to the station used was %s km", rh(median(o$dist_km, na.rm = TRUE), 1)), MS)
   # (2026-09-30) one value per acquisition bin: counts, per-lab weighting, bin vs delivered statistics
   if ("Hydrogen_Sulfide_ppb_raw" %in% names(o)) { o <- data.table::as.data.table(o)[Site != "Goodrich Corporation (Collins Aerospace)"]
     hb <- o[is.finite(Hydrogen_Sulfide_ppb)]; hr_ <- o[is.finite(Hydrogen_Sulfide_ppb_raw)]
@@ -492,7 +492,7 @@ if (file.exists(WS)) { e <- new.env(); suppressWarnings(load(WS, envir = e)); o 
     say("S1.4: bin vs delivered H2S", sprintf("For H2S the median is %s ppb against %s ppb for the delivered seconds, the mean %s against %s ppb",
       rh(median(hb$Hydrogen_Sulfide_ppb), 2), pc(median(hr_$Hydrogen_Sulfide_ppb_raw)), rh(mean(hb$Hydrogen_Sulfide_ppb), 2), rh(mean(hr_$Hydrogen_Sulfide_ppb_raw), 2)), SI)
     if (all(c("Hydrogen_Sulfide_ppb_rep", "Hydrogen_Cyanide_ppb_rep") %in% names(o))) cat("  [OK  ] mobile_wswd carries the repeated 1-s bin means (*_rep) for the correlations\n") else
-      cat("  [FAIL] mobile_wswd lacks *_rep: the correlation figures fell back to the one-per-bin columns (re-run R02)\n")
+      { n_fail <<- n_fail + 1L; cat("  [FAIL] mobile_wswd lacks *_rep: the correlation figures fell back to the one-per-bin columns (re-run R02)\n") }
   }
   rm(o, e); invisible(gc())
 } else skip("2.3 station distance", "mobile_wswd.RData not present")
@@ -534,7 +534,7 @@ say("S3.3: benzene by season", sprintf("benzene %s ppb in DJF vs %s ppb in other
 tl <- c(sz("Toluene","MAM"), sz("Toluene","JJA"), sz("Toluene","SON"))
 say("S3.3: toluene by season", sprintf("toluene %s vs %s-%s ppb", rh(sz("Toluene","DJF"), 2), rh(min(tl), 2), rh(max(tl), 2)), SI)
 say("S3.3: H2S by season", sprintf("(%s ppb in DJF, %s in MAM, %s in JJA and SON)", rh(sz("H2S","DJF"), 2), rh(sz("H2S","MAM"), 2), rh(sz("H2S","JJA"), 2)), SI)
-if (rh(sz("H2S","JJA"), 2) != rh(sz("H2S","SON"), 2)) cat("  [FAIL] S3.3: H2S JJA and SON medians differ; the sentence pairs them\n")
+if (rh(sz("H2S","JJA"), 2) != rh(sz("H2S","SON"), 2)) { n_fail <<- n_fail + 1L; cat("  [FAIL] S3.3: H2S JJA and SON medians differ; the sentence pairs them\n") }
 say("S3.3: HCN by season", sprintf("a winter median of %s ppb falling to %s-%s ppb", rh(sz("HCN","DJF"), 2), rh(min(sz("HCN","MAM"), sz("HCN","JJA")), 1), rh(max(sz("HCN","MAM"), sz("HCN","JJA")), 0)), SI)
 
 # ==========================================================================
@@ -577,7 +577,7 @@ if (have("TABLE_scaling_sensitivity_risk.csv")) {
   ss <- need("TABLE_scaling_sensitivity_risk.csv")
   say("S4.3: scaling ratio range (mean basis)", sprintf("the resulting aggregate risk ratio ranges from %s (median-based construction) to %s (baseline), with mobile risk ranges of %s-%s excess cases",
       rh(min(ss$ratio_vs_ATS), 2), rh(ss[construction == "A_binweighted", ratio_vs_ATS], 2), sprintf("%.3f", min(ss$risk_lo)), sprintf("%.3f", max(ss$risk_hi))), SI)
-  if (min(ss$ratio_vs_ATS) <= 1) cat("  [FAIL] S4.3: a scaling construction puts the mean-basis ratio at or below 1; the text says every one exceeds AirToxScreen\n")
+  if (min(ss$ratio_vs_ATS) <= 1) { n_fail <<- n_fail + 1L; cat("  [FAIL] S4.3: a scaling construction puts the mean-basis ratio at or below 1; the text says every one exceeds AirToxScreen\n") }
 }
 
 if (have("TABLE_bin_location_error.csv")) {
@@ -690,13 +690,47 @@ if (have("tri_inside_outside_1km_stats.csv")) { ti <- need("tri_inside_outside_1
   } else
   say("3.3: TRI medians (H2S)", sprintf("S (%s vs %s ppb) and HCN (%s vs %s ppb)", rh(tm("H2S","med_in"),2), rh(tm("H2S","med_out"),2), rh(tm("HCN","med_in"),2), rh(tm("HCN","med_out"),2)), MS)
   say("3.3: TRI benzene medians equal", sprintf("and equal for benzene (%s ppb in both", rh(tm("Benzene","med_in"),2)), MS)
-  if (tm("Benzene","med_in") != tm("Benzene","med_out")) cat("  [FAIL] benzene inside/outside medians differ\n") }
+  if (tm("Benzene","med_in") != tm("Benzene","med_out")) { n_fail <<- n_fail + 1L; cat("  [FAIL] benzene inside/outside medians differ\n") } }
 if (have("TABLE_lacasa_cpf.csv")) { cp <- need("TABLE_lacasa_cpf.csv")
   ne <- cp[sector %in% c(2, 3)]; base <- cp[, sum(n_high) / sum(n), by = pollutant]$V1
   say("S5.4: CPF NE sectors and base rate", sprintf("the CPF over all sectors together is %s by construction; for the northeasterly sectors containing the industrial corridor (bearings 45-70 degrees; Figure S5.7) it is %s-%s",
       rh(mean(base), 2), rh(min(ne$cpf), 2), rh(max(ne$cpf), 2)), SI)
   say("S5.4: CPF SW-W peak", sprintf("(CPF %s-%s)", rh(min(cp[sector %in% 9:12, cpf]), 2), rh(max(cp[sector %in% 9:12, cpf]), 2)), SI) }
 
+hdr("T. Text diagnostics  <- TABLE_delivery_spacing.csv (83), TABLE_background_sign_changes.csv (82), TABLE_wind_station_distance.csv (84)")
+if (have("TABLE_delivery_spacing.csv")) { ds <- need("TABLE_delivery_spacing.csv")
+  g <- function(l, y, v) ds[lab == l & year == y][[v]]
+  emu <- ds[lab == "EMU" & year %in% c("2023", "2024", "2025")]
+  say("S1.4: delivery spacing", sprintf("mostly 1 s apart for the EMU laboratory (%s-%s%% of intervals, by year) and for the CAT laboratory in 2025 (%s%%), but mostly 2 s apart for the CAT laboratory in 2023 and 2024 (%s%% and %s%% of intervals)",
+      rh(min(emu$pct_1s), 0), rh(max(emu$pct_1s), 0), rh(g("CAT", "2025", "pct_1s"), 0), rh(g("CAT", "2023", "pct_2s"), 0), rh(g("CAT", "2024", "pct_2s"), 0)), SI)
+  say("S1.4: EMU 2024 repeated timestamps", sprintf("in 2024 about %s%% of EMU rows repeat the timestamp of the preceding row", rh(g("EMU", "2024", "pct_rows_repeat_prev"), 0)), SI)
+  lb <- ds[lab %in% c("CAT", "EMU") & year == "all"]
+  say("S1.4: consecutive values differ", sprintf("and %s-%s%% of consecutive one-second values differ", rh(min(lb$pct_h2s_pairs_differ, lb$pct_hcn_pairs_differ), 0), rh(max(lb$pct_h2s_pairs_differ, lb$pct_hcn_pairs_differ), 0)), SI)
+  say("S1.4: MaxiMet flag share", sprintf("A large portion (%s%% of the records retained after the GPS screen)", rh(g("both", "all", "pct_metflag_kept02"), 1)), SI)
+} else skip("S1.4 delivery statistics", "TABLE_delivery_spacing.csv not found (run 83)")
+if (have("TABLE_background_sign_changes.csv")) { bs <- need("TABLE_background_sign_changes.csv"); b <- bs[pollutant == "Benzene"]; h <- bs[pollutant == "H2S"]
+  say("S4.1.1: sign changes", sprintf("in this record %s%% of negative benzene readings and %s%% of negative H2S values become positive, and %s%% and %s%% of positive readings become negative",
+      rh(b$pct_neg_to_pos, 1), rh(h$pct_neg_to_pos, 1), rh(b$pct_pos_to_neg, 1), rh(h$pct_pos_to_neg, 1)), SI)
+  say("S4.1.1: negative run medians", sprintf("the run-median background is itself negative in %s%% of benzene rows and %s%% of H2S values; Equation 3 applies with a negative run median in %s benzene and %s H2S values (%s%% and %s%% of each record), and in %s and %s of them",
+      rh(b$pct_run_median_negative, 0), rh(h$pct_run_median_negative, 0), cm(b$n_eq3_negative_median), cm(h$n_eq3_negative_median),
+      rh(b$pct_eq3_negative_median, 1), rh(h$pct_eq3_negative_median, 2), cm(b$n_eq3_pos_to_neg), cm(h$n_eq3_pos_to_neg)), SI)
+} else skip("S4.1.1 sign changes", "TABLE_background_sign_changes.csv not found (run 82)")
+if (have("TABLE_wind_station_distance.csv")) { wsd <- need("TABLE_wind_station_distance.csv")
+  say("2.3: wind-station distances", sprintf("The median distance from that hourly position to the station used was %s km (%s km from the individual measurements; for %s%% of measurements",
+      rh(wsd$median_dist_hourly_position_km, 1), rh(wsd$median_dist_measurement_km, 1), rh(wsd$pct_other_station_nearer, 1)), MS)
+} else skip("2.3 wind-station distances", "TABLE_wind_station_distance.csv not found (run 84)")
+if (have("TABLE_lacasa_cpf.csv")) { cp2 <- need("TABLE_lacasa_cpf.csv")
+  say("S5.4: CPF rows", sprintf("(winds > 1 m/s; %s rows with valid concentrations", cm(cp2[pollutant == "benzene", sum(n)])), SI) }
+dm <- need("hotspot_source_fingerprint_outputs/hotspot_source_directional_metrics.csv")[group_id == 13]
+b13 <- need("TABLE_group13_hq_annulus.csv")$bearing_group13_to_hq_deg[1]
+inw <- dm[abs(((source_bearing_deg - b13 + 180) %% 360) - 180) <= 30]
+lbl <- function(nm) round(inw[source_name == nm, source_bearing_deg])
+say("3.4.2: Group 13 acceptance window", sprintf("as WWTF2 (%d degrees), Sinclair (%d), WWTF1 (%d), Suncor (%d), Phillips 66 (%d), the woodshop (%d) and three refuelling locations (%s)",
+    lbl("WWTF2"), lbl("Sinclair"), lbl("WWTF1"), lbl("Suncor"), lbl("Phillips 66"), lbl("Woodshop"),
+    sub(", (\\d+)$", " and \\1", paste(sort(round(inw[source_type == "Refuel", source_bearing_deg])), collapse = ", "))), MS)
+if (nrow(inw) != 9) { n_fail <- n_fail + 1L; cat(sprintf("  [FAIL] 3.4.2: %d candidate sources in the Group 13 window; the text lists 9\n", nrow(inw))) }
+sm <- need("FinalFig/WWTP_H2S_inversion_summary_mean_ci_METRIC_TPY.csv")
+say("S6.5.2: averaging-time range", sprintf("(%s-%s metric tons/yr for 60 s to 3,600 s)", cm(sm[scenario == "avg_60s", metric_mean]), cm(sm[scenario == "avg_3600s", metric_mean])), SI)
 hdr("N. Claims this script does NOT vouch for (sourced from documents, not code)")
 cat("  - Permit and TRI quantities in S6.1 / S6.7 / Table S6.1 (119.01 and 2.38 t/yr; 340 lb/yr; 8 t/yr digester gas; 5,819 lb and 22,373 lb TRI)\n")
 cat("  - Literature values in S6.4 (>= 15 transects; >= 10 transects; ~95% within +/-70%; slope 0.96; 266 plumes; ~4%)\n")

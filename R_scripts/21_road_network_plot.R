@@ -120,12 +120,19 @@ make_clean_road_figure <- function(DT, pollutant_cols, out_file,
   # statistics; scale_y_log10() drops the non-positive ones from the
   # DISPLAY on its own.
   L <- L[is.finite(value)]
+  # strip labels: drop the "s" prefix of the background-corrected columns
+  L[, Pollutant := factor(sub("^s(?=[A-Z])", "", as.character(Pollutant), perl = TRUE),
+                          levels = sub("^s(?=[A-Z])", "", cols_use, perl = TRUE))]
 
   med_dt <- L[, .(med = median(value, na.rm = TRUE)), by = .(Pollutant, road_class)]
   med_dt[, lab := formatC(med, format = "f", digits = digits)]
   med_dt[, y_lab := Inf]
 
-  p <- ggplot(L, aes(x = road_class, y = value)) +
+  # violins and boxes are drawn for values >= 0.001 ppb (as in Figure S4.2):
+  # background-corrected values can be zero, negative or floating-point
+  # residues (~1e-17) that a log axis cannot show and that otherwise stretch
+  # the axis over 15 decades; the printed medians use every value.
+  p <- ggplot(L[value >= 0.001], aes(x = road_class, y = value)) +
     geom_violin(aes(fill = road_class), trim = TRUE, alpha = 0.70, linewidth = 0.25) +
     geom_boxplot(width = 0.18, outlier.shape = NA, linewidth = 0.30, alpha = 0.95) +
     geom_label(
@@ -141,7 +148,7 @@ make_clean_road_figure <- function(DT, pollutant_cols, out_file,
     ) +
     facet_wrap(~ Pollutant, ncol = 2, scales = "free_y") +
     scale_fill_viridis_d(option = "E", guide = "none") +
-    scale_y_log10(labels = scales::label_number(accuracy = 0.01)) +
+    scale_y_log10(labels = scales::label_number(drop0trailing = TRUE, big.mark = ",")) +
     coord_cartesian(clip = "off") +
     labs(x = NULL, y = ylab) +
     theme_bw(base_size = 13) +

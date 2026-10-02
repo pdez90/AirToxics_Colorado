@@ -45,7 +45,7 @@ p <- ggplot(daily, aes(season, dmed, fill=season)) +
   facet_wrap(~pollutant, scales="free_y") +
   scale_fill_brewer(palette="Paired") +
   labs(x=NULL, y="Daily median concentration (ppb)",
-       caption="Each point in a box is one sampling day's campaign-wide median. HCN is available from January 22, 2025 only (DJF/MAM 2025).") +
+       caption="Each point in a box is one sampling day's campaign-wide median. HCN is available from January 22, 2025 only (DJF, MAM and JJA 2025).") +
   theme_bw(base_size=11) + theme(plot.caption=element_text(size=8.5, hjust=0))
 ggsave(file.path(BASE,"FinalFig","FIG_seasonal.png"), p,
        width=10, height=6.2, dpi=400, bg="white")

@@ -90,11 +90,20 @@ POLL[, block_col := paste0("s", poll, "_", HAZARD_BASIS)]
 # ---- La Casa scaling factors, read from the file R04 writes ---------------
 # Hard-coding these is how the 300 m exclusion silently left two SI tables on
 # the pre-exclusion scaling; read them, and fall back only with a loud message.
-.sf_get <- function(pol, fallback) {
-  if (!file.exists(SF)) { message("[SCALING] factor file absent - using documented ", pol); return(fallback) }
-  e <- new.env(); load(SF, envir = e); o <- get(ls(e)[1], envir = e)
+.sf_file <- SF
+.sf_get <- function(pol, fallback = NULL) {
+  # The factor is read from the La Casa output of script 17; a missing or
+  # malformed file stops the script rather than falling back to a typed-in
+  # constant that could be stale.
+  if (!file.exists(.sf_file))
+    stop("[SCALING] ", basename(.sf_file), " not found - run R_scripts/17 (pipeline R04) first.")
+  e <- new.env(); load(.sf_file, envir = e)
+  o <- get(ls(e)[1], envir = e)
+  if (!all(c("pollutant", "ratio_all_over_mobilelike") %in% names(o)))
+    stop("[SCALING] ", basename(.sf_file), " lacks pollutant / ratio_all_over_mobilelike columns.")
   r <- as.numeric(o[["ratio_all_over_mobilelike"]])[match(pol, o[["pollutant"]])]
-  if (length(r) != 1L || !is.finite(r)) fallback else r
+  if (length(r) != 1L || !is.finite(r)) stop("[SCALING] no finite factor for ", pol, " in ", basename(.sf_file))
+  r
 }
 f_benz <- .sf_get("benzene", 1.165)
 f_tol  <- .sf_get("toluene", 1.274)

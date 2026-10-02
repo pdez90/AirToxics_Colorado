@@ -13,8 +13,8 @@
 #             the bin's delivered seconds
 #   full_len  distance driven over the whole acquisition interval (mean speed
 #             over the delivered seconds x 5 s or 2 s)
-# for all bins and for bins at or above the campaign 99th percentile (the
-# hotspot event threshold, section 2.5.3), and compares them with the 100 m
+# for all bins and for bins above the campaign 99th percentile (the hotspot
+# events of section 2.5.3, same strict '>' test as 28_...R), and compares them with the 100 m
 # DBSCAN radius and hotspot buffer. Bins are rebuilt exactly as in 03:
 # (Asset, Site, UTC day, floor((epoch + delay) / B)), delays CAT/EMU
 # H2S 21/17 s, HCN 6/3 s.
@@ -62,7 +62,7 @@ res <- rbindlist(lapply(list(
   list("HCN", "Hydrogen_Cyanide_ppb_raw", "Hydrogen_Cyanide_ppb", 6, 3, 2)), function(a) {
     b <- bin_offsets(a[[2]], a[[3]], a[[4]], a[[5]], a[[6]])
     thr <- as.numeric(quantile(d[[a[[3]]]], 0.99, na.rm = TRUE))   # campaign p99 of the bin values
-    rbind(summ(b, a[[1]], "all bins", NA_real_), summ(b[val >= thr], a[[1]], "bins >= campaign p99", thr))
+    rbind(summ(b, a[[1]], "all bins", NA_real_), summ(b[val > thr], a[[1]], "bins > campaign p99 (hotspot events)", thr))
   }))
 fwrite(res, file.path(SUNCOR_BASE, "TABLE_bin_location_error.csv"))
 print(res[, .(pollutant, subset, threshold_ppb, n_bins, max_off_p50 = round(max_off_p50, 1), max_off_p95 = round(max_off_p95, 1),

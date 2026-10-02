@@ -487,7 +487,7 @@ pA <- ggplot(TS41, aes(x = mobile_pw_ppb, y = win_lab, colour = pct_lab)) +
   ggplot2::annotate("text", x = airtox_pw + .side * 0.015 * diff(.xa), y = 3.42, colour = "#B2182B", hjust = (1 - .side) / 2,
            size = 3.0, label = sprintf("AirToxScreen  %.3f ppb", airtox_pw)) +
   ggplot2::annotate("text", x = TS41[is_base == TRUE, mobile_pw_ppb], y = 2.02,
-           label = "published setting", size = 2.9, hjust = 1.15, colour = "grey25") +
+           label = "baseline setting", size = 2.9, hjust = 1.15, colour = "grey25") +
   scale_colour_manual(values = PAL, name = "Percentile") +
   scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 18), guide = "none") +
   scale_x_continuous(limits = .xa, breaks = pretty(.xa, 6)) +
@@ -522,8 +522,8 @@ pC <- ggplot(cc, aes(y = win_lab, colour = pct_lab)) +
              position = position_dodge(width = DW)) +
   scale_colour_manual(values = PAL, name = "Percentile") +
   scale_x_continuous(limits = .xc, breaks = pretty(.xc, 5)) +
-  labs(title = "C   500 m benzene cells relative to the published surface",
-       subtitle = "open marker: identical value    filled marker: within one 0.05 ppb reporting step",
+  labs(title = "C   500 m benzene cells relative to the baseline surface",
+       subtitle = "open marker: identical value    filled marker: within 0.05 ppb",
        x = "Share of the 378 mapped cells (%)", y = "Window") +
   thm + theme(plot.subtitle = element_text(size = 8.5, colour = "grey30"))
 
@@ -555,38 +555,35 @@ ck <- function(lab, got, claim, tol = 0.01) {
   cat(sprintf("  [%s] %-52s run %-10s S4.6 says %s\n", if (ok) "OK  " else "EDIT", lab,
               format(signif(got, 4)), format(claim)))
 }
-ck("lowest population-weighted benzene (ppb)",  min(TS41$mobile_pw_ppb),  0.1464, 0.005)
-ck("highest population-weighted benzene (ppb)", max(TS41$mobile_pw_ppb),  0.1535, 0.005)
-ck("AirToxScreen on the same blocks (ppb)",     airtox_pw,                0.1611, 0.005)
-ck("lowest mobile/AirToxScreen ratio",          min(TS41$ratio_mobile_over_airtox), 0.909, 0.005)
-ck("highest mobile/AirToxScreen ratio",         max(TS41$ratio_mobile_over_airtox), 0.953, 0.005)
-ck("lowest mobile cases, IUR 5.75",             min(TS41$mobile_cases_low),  0.1065, 0.01)
-ck("highest mobile cases, IUR 20.40",           max(TS41$mobile_cases_high), 0.3962, 0.01)
-# NOTE (2026-09-27): the HI anchors below are the MEAN-basis values quoted in the
-# current SI S4.6; on the median basis (HAZARD_BASIS default) they will print EDIT
-# until the SI and these anchors are refreshed from the first median-basis run.
-ck("lowest endocrine HI, community metric",     min(TS41$HI_pwmean_Endocrine),   1.586, 0.005)
-ck("highest endocrine HI, community metric",    max(TS41$HI_pwmean_Endocrine),   1.612, 0.005)
-ck("lowest respiratory HI, community metric",   min(TS41$HI_pwmean_Respiratory), 0.361, 0.01)
-ck("highest respiratory HI, community metric",  max(TS41$HI_pwmean_Respiratory), 0.378, 0.01)
+# Anchors are the values quoted in SI S4.6, which reports the primary
+# mean-of-daily-means basis; on the median basis (EXPOSURE_BASIS /
+# HAZARD_BASIS = med_of_daily_med) the S4.6 sentences do not apply.
+if (identical(HAZARD_BASIS, "mean_of_daily_mean")) {
+ck("lowest population-weighted benzene (ppb)",  min(TS41$mobile_pw_ppb),  0.198, 0.005)
+ck("highest population-weighted benzene (ppb)", max(TS41$mobile_pw_ppb),  0.211, 0.005)
+ck("AirToxScreen on the same blocks (ppb)",     airtox_pw,                0.161, 0.005)
+ck("lowest mobile/AirToxScreen ratio",          min(TS41$ratio_mobile_over_airtox), 1.23, 0.005)
+ck("highest mobile/AirToxScreen ratio",         max(TS41$ratio_mobile_over_airtox), 1.31, 0.005)
+ck("lowest mobile cases, IUR 5.75",             min(TS41$mobile_cases_low),  0.144, 0.01)
+ck("highest mobile cases, IUR 20.40",           max(TS41$mobile_cases_high), 0.545, 0.01)
+ck("lowest endocrine HI, community metric",     min(TS41$HI_pwmean_Endocrine),   1.600, 0.005)
+ck("highest endocrine HI, community metric",    max(TS41$HI_pwmean_Endocrine),   1.625, 0.005)
+ck("lowest respiratory HI, community metric",   min(TS41$HI_pwmean_Respiratory), 0.340, 0.01)
+ck("highest respiratory HI, community metric",  max(TS41$HI_pwmean_Respiratory), 0.357, 0.01)
 ck("highest neurological HI, community metric", max(TS41$HI_pwmean_Neurological), 0.032, 0.05)
-ck("lowest endocrine HI, most-exposed block",   min(TS41$HI_maxblock_Endocrine),   8.146, 0.005)
-ck("highest endocrine HI, most-exposed block",  max(TS41$HI_maxblock_Endocrine),   9.843, 0.005)
-ck("lowest respiratory HI, most-exposed block", min(TS41$HI_maxblock_Respiratory), 4.940, 0.005)
-ck("highest respiratory HI, most-exposed block",max(TS41$HI_maxblock_Respiratory), 5.013, 0.005)
-ck("largest change in any 500 m benzene cell (ppb)", max(TS41$max_abs_diff_ppb),   0.1165, 0.01)
-ck("lowest share within one reporting step (%)",
-   min(TS41[is_base == FALSE, cells_within_one_step_pct]), 89.2, 0.02)
-ck("highest share within one reporting step (%)",
-   max(TS41[is_base == FALSE, cells_within_one_step_pct]), 97.6, 0.02)
-.ce <- merge(cellhi[tos == "Endocrine"], data.table(arm = names(arms)), by = "arm")
-ck("lowest share of 500 m cells with endocrine HI > 1 (%)",  min(.ce$pct_HI_gt1), 36.4, 0.02)
-ck("highest share of 500 m cells with endocrine HI > 1 (%)", max(.ce$pct_HI_gt1), 59.4, 0.02)
+ck("lowest endocrine HI, most-exposed block",   min(TS41$HI_maxblock_Endocrine),   9.05, 0.005)
+ck("highest endocrine HI, most-exposed block",  max(TS41$HI_maxblock_Endocrine),   10.37, 0.005)
+ck("lowest respiratory HI, most-exposed block", min(TS41$HI_maxblock_Respiratory), 4.80, 0.005)
+ck("highest respiratory HI, most-exposed block",max(TS41$HI_maxblock_Respiratory), 4.85, 0.005)
+ck("largest change in any 500 m benzene cell (ppb)", max(TS41$max_abs_diff_ppb),   0.14, 0.05)
+ck("lowest share within 0.05 ppb (%)",
+   min(TS41[is_base == FALSE, cells_within_one_step_pct]), 99, 0.02)
+ck("highest share within 0.05 ppb (%)",
+   max(TS41[is_base == FALSE, cells_within_one_step_pct]), 100, 0.02)
 ck("HCN reference concentration at site pressure (ppb)", unname(rfc_ppb[["HCN"]]), 0.884, 0.01)
-ck("lowest share of 500 m benzene cells unchanged (%)",
-   min(TS41[is_base == FALSE, cells_identical_pct]), 64.3, 0.02)
 ck("highest share of 500 m benzene cells unchanged (%)",
-   max(TS41[is_base == FALSE, cells_identical_pct]), 80.2, 0.02)
+   max(TS41[is_base == FALSE, cells_identical_pct]), 0.5, 1)
+} else cat("  (median basis: S4.6 quotes the mean basis; see Table S4.1 _medianbasis)\n")
 cat("\n  EDIT means the run disagrees with the sentence in S4.6 and the SI\n")
 cat("  should carry the run's number instead.\n")
 message("\nDONE.")

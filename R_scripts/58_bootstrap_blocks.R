@@ -20,12 +20,19 @@ BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # was hard
 # 1.149/1.228/1.377 to 1.165/1.274/1.443, and a hard-coded constant would have
 # left this table on the old scaling while the block surface used the new one.
 .sf_file <- file.path(BASE, "lacasa_scaling_factors_option1_binweighted.RData")
-.sf_get <- function(pol, fallback) {
-  if (!file.exists(.sf_file)) { message("[SCALING] file absent - using documented value for ", pol); return(fallback) }
-  e <- new.env(); load(.sf_file, envir = e); o <- get(ls(e)[1], envir = e)
-  if (!all(c("pollutant", "ratio_all_over_mobilelike") %in% names(o))) return(fallback)
+.sf_get <- function(pol, fallback = NULL) {
+  # The factor is read from the La Casa output of script 17; a missing or
+  # malformed file stops the script rather than falling back to a typed-in
+  # constant that could be stale.
+  if (!file.exists(.sf_file))
+    stop("[SCALING] ", basename(.sf_file), " not found - run R_scripts/17 (pipeline R04) first.")
+  e <- new.env(); load(.sf_file, envir = e)
+  o <- get(ls(e)[1], envir = e)
+  if (!all(c("pollutant", "ratio_all_over_mobilelike") %in% names(o)))
+    stop("[SCALING] ", basename(.sf_file), " lacks pollutant / ratio_all_over_mobilelike columns.")
   r <- as.numeric(o[["ratio_all_over_mobilelike"]])[match(pol, o[["pollutant"]])]
-  if (length(r) != 1L || !is.finite(r)) fallback else r
+  if (length(r) != 1L || !is.finite(r)) stop("[SCALING] no finite factor for ", pol, " in ", basename(.sf_file))
+  r
 }
 B <- 500; SCALE <- .sf_get("benzene", 1.149)
 # EXPOSURE BASIS (2026-09-30): the MEAN of daily means is the primary statistic

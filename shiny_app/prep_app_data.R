@@ -200,9 +200,9 @@ rm(dt, pts); gc()
 g <- st_read(file.path(BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONBLOCKS.gpkg"),
              quiet = TRUE)
 g <- st_transform(g, 4326)
-# Both exposure bases (2026-09-27): the median of daily medians is the paper's
-# primary block statistic; the mean of daily means is reported alongside it
-# (section 3.3, SI S4.3). The app offers both behind one toggle.
+# Both exposure bases: the mean of daily means is the paper's primary block
+# statistic; the median of daily medians is the supplementary basis (SI S4.7).
+# The app offers both behind one toggle.
 stopifnot(all(c("sBenzene_med_of_daily_med_scaled", "sBenzene_mean_of_daily_mean_scaled") %in% names(g)))
 g$ratio <- ifelse(g$benzene_ppb_airtox > 0,
                   g$sBenzene_med_of_daily_med_scaled / g$benzene_ppb_airtox, NA)

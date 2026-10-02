@@ -1,18 +1,22 @@
 # AirToxics_Colorado
 
 Analysis code for: **Mobile monitoring of air toxics in North Denver / Commerce City, Colorado**
-(deSouza et al., manuscript es-2026-04959z). A 230-day CDPHE mobile campaign (Feb 2023 - Jun 2025)
+(deSouza et al., manuscript es-2026-04959z). A CDPHE mobile campaign of 203 sampling days (Feb 2023 - Jun 2025)
 measuring benzene, toluene, trimethylbenzene, xylene, H2S, HCN (and methane) around the HB21-1189
 "covered facilities", combined with the La Casa stationary site.
 
-**Reproducibility policy: every manuscript number is regenerated from primary data by one command.**
-No interactive or hand-made intermediate products are used. See `REPRODUCIBILITY.md` for the full
-input manifest, pipeline DAG, and canonical definitions.
+**Reproducibility policy: every manuscript number is regenerated from primary data.**
+No interactive or hand-made intermediate products are used. See `REPRODUCIBILITY.md` for the
+folder layout, the input manifest, the pipeline DAG, the canonical definitions and a table of
+which script produces each table and figure of the manuscript and SI.
 
 ```bash
-cd pipeline
-CLEAN=1 Rscript RUN_ALL_from_raw.R
+bash ~/Downloads/Suncor/rerun_pipeline/RUN_EVERYTHING.sh
 ```
+
+runs the guard tests, `RUN_ALL_from_raw.R` (data, maps, census blocks, hotspots, plume
+inversion, methane), the plume simulations and `MAKE_FIGURES.R` (all tables and figures).
+`RUN_ALL_from_raw.R` on its own does not write the tables and figures.
 
 ## Data (not included in this repository)
 
@@ -32,7 +36,7 @@ Every script resolves the analysis root from one environment variable:
 
 ```bash
 export SUNCOR_BASE=/path/to/your/analysis/folder
-Rscript pipeline/RUN_ALL_from_raw.R
+bash "$SUNCOR_BASE/rerun_pipeline/RUN_EVERYTHING.sh"
 ```
 
 `SUNCOR_BASE` defaults to `~/Downloads/Suncor`, which is where the authors' copy lives, so
@@ -43,8 +47,10 @@ SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))
 ```
 
 near the top, and every path is built from it. The analysis root holds the primary inputs and
-receives all intermediates and outputs; it is a separate folder from this repository, which
-holds only code.
+receives all intermediates and outputs. The pipeline also expects the code inside it:
+`R_scripts/` at `$SUNCOR_BASE/R_scripts`, `pipeline/` at `$SUNCOR_BASE/rerun_pipeline`, and
+`plume_scripts/`, `hrrr_scripts/` and `methane/` inside `rerun_pipeline/` (see
+REPRODUCIBILITY.md, "Folder layout").
 
 ### Package environment
 
@@ -90,11 +96,11 @@ byte-identical absolute path it replaced.
   comparison and benzene cancer risk (18, 20), hotspot/source-probability analyses (26-30),
   figures (07-09, 15-16, 19, 21+, 31-37).
 - `plume_scripts/` — H2S plume identification and Gaussian-plume inversion (P07-P08) with
-  HRRR meteorology, WWTF wind alignment, stability classes (P03-P06) and simulation-based
-  bias/sensitivity experiments (P09-P10).
+  HRRR meteorology, WWTF wind alignment, stability classes (P03-P06), simulation-based
+  bias/sensitivity experiments (P09-P10) and the receptor-height / plume-bearing checks (P11).
 - `hrrr_scripts/` — faster cached HRRR point-sampling variant.
-- `methane/` — CH4 module (same Picarro as H2S; delays CAT 21 s / EMU 17 s; garage-air filter;
-  hotspots + source-probability surface). See `methane/README.md` for QA caveats.
+- `methane/` — CH4 module (same Picarro as H2S; delays CAT 21 s / EMU 17 s; 5-s bins; the 300 m
+  headquarters screen; hotspots + source-probability surface). See `methane/README.md` for QA caveats.
 
 ## Key methodological notes
 

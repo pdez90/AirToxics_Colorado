@@ -97,8 +97,10 @@ if (.res_ok && .res_sub_ok) {
   diag_msg("  [PLUME EXEMPTION] H2S/baseline_H2S/plume_H2S set to RAW delivered signal ",
            "for plume detection; files re-saved.")
 } else {
-  diag_msg("  [PLUME EXEMPTION] raw H2S columns (*_raw) not found — plume branch ",
-           "using averaged H2S (set NATIVE_CADENCE and re-run 03/06/10 if plumes collapse).")
+  # Since the one-value-per-bin change the averaged H2S column is blank on ~4 of
+  # every 5 seconds, so plume detection on it would silently change the funnel.
+  stop("R06: raw H2S columns (*_raw) not found; plume detection needs the delivered ",
+       "signal. Re-run 03/06/10 with NATIVE_CADENCE <- TRUE.")
 }
 
 # ----------------------------------------------------------------

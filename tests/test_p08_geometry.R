@@ -8,9 +8,11 @@
 # off the centreline the way the acceptance window actually does, computes what
 # concentration that receptor would see, and then hands that concentration to
 # P08's own invert_gaussian() to see whether the known source strength comes
-# back. If the along-wind/cross-wind decomposition, the sigma lookups, the
-# reflection series or the unit conversion were wrong, the recovered Q would
-# not match.
+# back. The forward model reuses P08's own sigma_y_pg(), sigma_z_pg(),
+# vertical_term() and SITE_MOL_M3, so errors in those would cancel and are NOT
+# tested here; what is tested independently is the along-wind/cross-wind
+# decomposition of the receptor offset and the Gaussian prefactor/inversion
+# algebra in invert_gaussian().
 #
 # It also quantifies what the SUPERSEDED centreline assumption (theta forced to
 # zero) does to the same data, so the size of that correction is a measured

@@ -250,7 +250,7 @@ print(acute, row.names = FALSE)
 # ==============================================================
 # claim-by-claim check of the numbers quoted in SI Section S7
 # ==============================================================
-cat("\n== SI S7, claim by claim (median-of-daily-medians basis) ==\n")
+cat("\n== SI S7, claim by claim (mean-of-daily-means basis unless HAZARD_BASIS is set) ==\n")
 ck <- function(lab, got, claim, tol = 0.01) {
   agree <- is.finite(got) && is.finite(claim) && abs(got - claim) <= tol * max(1, abs(claim))
   cat(sprintf("  [%s] %-46s run %-10s S7 says %s\n",

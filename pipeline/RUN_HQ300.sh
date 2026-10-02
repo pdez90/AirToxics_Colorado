@@ -19,7 +19,7 @@
 # Usage:   bash ~/Downloads/Suncor/rerun_pipeline/RUN_HQ300.sh
 # ==============================================================
 set -uo pipefail
-BASE="$HOME/Downloads/Suncor"
+BASE="${SUNCOR_BASE:-$HOME/Downloads/Suncor}"
 PIPE="$BASE/rerun_pipeline"
 STAMP=$(date +%Y%m%d_%H%M%S)
 LOG="$PIPE/logs/hq300_$STAMP"

@@ -1,8 +1,10 @@
 # ==============================================================
 # 46  MINIMUM DETECTABLE EMISSION RATE (SI Section S6)
 # Propagates the H2S detection limit through the SAME Gaussian plume
-# model used for the WWTP inversion (P08: PG sigmas, 5-term vertical
-# with reflections, H = 12.2 m, z = 1.5 m, centerline y = 0):
+# model used for the WWTF inversion (P08: Briggs urban sigmas, vertical
+# reflection series summed to convergence, H = 12.2 m, z = 1.5 m), with
+# the receptor on the centerline (y = 0), the nominal site air density
+# (33.48 mol/m3) and, on the distance grid, a 1,500 m mixing depth:
 #   Q_min(x, stability, u) = rate producing a peak enhancement equal
 #   to the H2S MDL at the mobile platform.
 # MDL cases: 4, 5, 6 ppb (CDPHE audit MDLs for the Picarro G2204,
@@ -164,11 +166,15 @@ rib[, u_lab := factor(sprintf("u = %.1f m/s", u_ms),
 p <- ggplot(rib, aes(x_km, mid, color = CAT, fill = CAT)) +
   geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.18, color = NA) +
   geom_line(linewidth = 0.8) +
-  geom_hline(yintercept = c(500, 2529), linetype = 3, color = "grey30") +
-  ggplot2::annotate("text", x = 0.3, y = 500, vjust = -0.5, hjust = 0, size = 3,
-           label = "smallest inferred WWTF rate (500 t/yr)", color = "grey30") +
-  ggplot2::annotate("text", x = 0.3, y = 2529, vjust = -0.5, hjust = 0, size = 3,
-           label = "largest inferred WWTF rate (2,529 t/yr)", color = "grey30") +
+  # reference lines: the smallest and largest baseline inferred rates, read
+  # from the inversion output above (never typed in)
+  geom_hline(yintercept = range(pt$inferred_tpy), linetype = 3, color = "grey30") +
+  ggplot2::annotate("text", x = 0.3, y = min(pt$inferred_tpy), vjust = -0.5, hjust = 0, size = 3,
+           label = sprintf("smallest inferred WWTF rate (%s t/yr)", format(min(pt$inferred_tpy), big.mark = ",")),
+           color = "grey30") +
+  ggplot2::annotate("text", x = 0.3, y = max(pt$inferred_tpy), vjust = -0.5, hjust = 0, size = 3,
+           label = sprintf("largest inferred WWTF rate (%s t/yr)", format(max(pt$inferred_tpy), big.mark = ",")),
+           color = "grey30") +
   geom_point(data = data.frame(x_km = pt$x_km, mid = pt$qmin_mdl5,
                                CAT = pt$CAT,
                                u_lab = sprintf("u = %.1f m/s",
@@ -184,11 +190,13 @@ p <- ggplot(rib, aes(x_km, mid, color = CAT, fill = CAT)) +
   facet_wrap(~u_lab) +
   labs(x = "Downwind distance from source (km)",
        y = expression("Minimum detectable H"[2]*"S emission rate (t yr"^-1*", log scale)"),
-       caption = "Solid lines: MDL = 5 ppb; shaded bands span MDL = 4-6 ppb. Same Gaussian formulation as the WWTF inversion (PG sigmas, 5-term vertical reflection, H = 12.2 m, z = 1.5 m, centerline receptor). X marks: conditions of the four retained plumes.") +
+       caption = paste0("Solid lines: MDL = 5 ppb; shaded bands span MDL = 4-6 ppb. Same Gaussian formulation as the WWTF inversion (Briggs urban sigmas,\n",
+                        "reflection series summed to convergence, H = 12.2 m, z = 1.5 m) with a centerline receptor, 33.48 mol/m3 and a 1,500 m mixing depth.\n",
+                        "X marks: conditions of the four retained plumes.")) +
   theme_bw(base_size = 12) +
   theme(plot.caption = element_text(size = 8, hjust = 0),
         legend.position = "bottom")
 ggsave(file.path(BASE, "FinalFig", "FIG_min_detectable_rate.png"),
-       p, width = 11, height = 5.6, dpi = 400, bg = "white")
+       p, width = 11, height = 6.4, dpi = 400, bg = "white")
 message("[Saved] FinalFig/FIG_min_detectable_rate.png")
 message("DONE.")
