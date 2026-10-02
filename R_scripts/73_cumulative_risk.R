@@ -106,23 +106,25 @@ scale_f <- c(Benzene          = .sf_get("benzene", 1.149),
              H2S              = NA_real_, HCN = NA_real_)
 message(sprintf("[SCALING] benzene %.4f | toluene %.4f | xylene %.4f  (TMB, H2S, HCN unscaled - not measured at La Casa)",
                 scale_f[["Benzene"]], scale_f[["Toluene"]], scale_f[["Xylene"]]))
-# BUGFIX (2026-08-20): these were a single van-and-period slice of the audited
-# CDPHE detection limits, not the campaign values. 45_mdl_sensitivity.R holds
-# the full audited table, which is resolved by vehicle and period and spans
-# benzene 0.5-3.2, toluene 0.18-0.27, TMB 0.22-0.45, xylene 0.19-0.29,
-# H2S 2-6 and HCN 0.18-13 ppb. The two species where this matters are exactly
-# the two whose reference concentrations sit below detection: the note printed
-# below claimed "audited MDLs (4 and 5 ppb)" for H2S and HCN, where the
-# conservative audited values are 6 and 13. Use the most conservative audited
-# value per species, so the measurement-capability statement cannot understate
-# the gap, and report the range.
-mdl_audited <- list(Benzene = c(0.5, 3.2), Toluene = c(0.18, 0.27),
-                    Trimethylbenzene = c(0.22, 0.45), Xylene = c(0.19, 0.29),
-                    H2S = c(2, 6), HCN = c(0.18, 13))
+# Detection limits: read the audited CDPHE values (CDPHE_audit_MDLs.csv, written by
+# 69_cdphe_audit_mdls.R; the same file behind SI Table S1.2, Table S3.1 and
+# 45_mdl_sensitivity.R), resolved by vehicle and quarter. The measurement-capability
+# flag uses the most conservative (largest) audited value per species, so it cannot
+# understate the gap, and the full range is reported.
+.mdlf <- file.path(BASE, "CDPHE_audit_MDLs.csv")
+if (!file.exists(.mdlf)) stop("CDPHE_audit_MDLs.csv not found. Run R_scripts/69_cdphe_audit_mdls.R first.")
+.mdlraw <- data.table::fread(.mdlf)
+.cmap <- c(Benzene = "Benzene", Toluene = "Toluene", Trimethylbenzene = "Trimethylbenzene",
+           Xylene = "Xylene", H2S = "Hydrogen sulfide (H2S)", HCN = "Hydrogen cyanide (HCN)")
+stopifnot(all(.cmap %in% unique(.mdlraw$compound)))
+mdl_audited <- lapply(.cmap, function(cmp) {
+  v <- as.numeric(unlist(.mdlraw[compound == cmp, .(cat_mdl, emu_mdl)]))
+  range(v[is.finite(v)])
+})
 mdl_ppb <- vapply(mdl_audited, max, numeric(1))
 message("[MDL] using the most conservative audited value per species: ",
         paste(sprintf("%s %.2f", names(mdl_ppb), mdl_ppb), collapse = " | "))
-message("[MDL] audited ranges across vehicles and periods (45_mdl_sensitivity.R): ",
+message("[MDL] audited ranges across vehicles and quarters (CDPHE_audit_MDLs.csv): ",
         paste(sprintf("%s %.2f-%.2f", names(mdl_audited),
                       vapply(mdl_audited, min, numeric(1)),
                       vapply(mdl_audited, max, numeric(1))), collapse = " | "))
@@ -292,8 +294,10 @@ print(hq_summary)
 hr("HI by target organ system (both exposure metrics)")
 print(hi_summary)
 cat("\n[NOTE] HQ/HI for H2S and HCN are governed by values at or below the method\n")
-cat("       detection limit: audited MDLs (4 and 5 ppb) exceed the IRIS RfCs\n")
-cat("       (1.43 and 0.72 ppb). These are measurement-capability artefacts,\n")
+cat(sprintf("       detection limit: audited MDLs (H2S %.0f-%.0f ppb, HCN %.0f-%.0f ppb) exceed the IRIS RfCs\n",
+            mdl_audited$H2S[1], mdl_audited$H2S[2], mdl_audited$HCN[1], mdl_audited$HCN[2]))
+cat(sprintf("       (%.2f and %.2f ppb at site conditions). These are measurement-capability artefacts,\n",
+            rfc_ppb[["H2S"]], rfc_ppb[["HCN"]]))
 cat("       not demonstrated exceedances (SI Table S3.2).\n")
 
 # ---------------- cancer risk (Robinson framing) ----------------
