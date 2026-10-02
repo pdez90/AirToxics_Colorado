@@ -495,7 +495,7 @@ pA <- ggplot(TS41, aes(x = mobile_pw_ppb, y = win_lab, colour = pct_lab)) +
        x = "Benzene (ppb, 24-h basis)", y = "Window") + thm
 
 # --- B: organ-system hazard indices -----------------------------------------
-him <- melt(TS41, id.vars = c("arm", "pct_lab", "win_lab", "is_base"),
+him <- data.table::melt(TS41, id.vars = c("arm", "pct_lab", "win_lab", "is_base"),
             measure.vars = patterns("^HI_pwmean_"), variable.name = "organ", value.name = "HI")
 him[, organ := factor(sub("^HI_pwmean_", "", as.character(organ)),
                       levels = c("Hematological", "Neurological", "Respiratory", "Endocrine"))]

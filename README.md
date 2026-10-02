@@ -102,5 +102,5 @@ byte-identical absolute path it replaced.
   verified by lag-recovery diagnostics (`pipeline/R01_delay_reprocessing.R`).
 - The 500 m / 5 km analysis grids are generated deterministically (UTM 13N, absolute-multiple
   snapping) — no legacy GIS artifacts (`pipeline/R00b_make_grids.R`).
-- Block-level benzene risk = population-weighted, median of daily medians, La Casa
-  bin-weighted temporal scaling, on census blocks with AirToxScreen benzene and population > 0.
+- Block-level benzene risk = population-weighted, mean of daily means (median of daily
+  medians as the supplementary basis), La Casa bin-weighted temporal scaling, on census blocks with AirToxScreen benzene and population > 0.

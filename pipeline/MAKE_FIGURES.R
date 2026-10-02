@@ -127,7 +127,10 @@ GROUPS <- list(
            pre = character(0),
            scripts = c("47_dbscan_threshold_sensitivity.R",
                        "52_split_sample_hotspots.R",
-                       "60_sampling_sufficiency.R")),
+                       "60_sampling_sufficiency.R",
+                       # SI S5: positional uncertainty of the 5-s H2S / 2-s HCN bin values
+                       # against the 100 m radius (TABLE_bin_location_error.csv). ~30 s.
+                       "80_bin_location_error.R")),
   # 2026-08-23: the methane section is RESTORED as manuscript 3.7 and SI S8
   # (the hazard section is SI S7). M06's figure is SI Figure S8.2.
   Q = list(desc = "Methane at the toxics hotspot groups (3.7 / SI Figure S8.2)",
@@ -205,7 +208,17 @@ GROUPS <- list(
   # panel was regenerated only by hand (last: 2026-08-24, adding (a)-(f) titles).
   Z = list(desc = "FIGURE 3: six-panel weighted/smoothed source-probability maps",
            pre = character(0),
-           scripts = "26_hotspot_rotated_wind_source_probability_profiles.R")
+           scripts = "26_hotspot_rotated_wind_source_probability_profiles.R"),
+  # SUPPLEMENTARY BASIS (SI S4.7, S7.3): the mean of daily means is every script's
+  # default; this group re-runs the basis-dependent scripts on the median of daily
+  # medians, writing *_medianbasis outputs (19 writes ..._medofdailymed_ROBUST/).
+  # 20, 55 and 74 already write both bases in one run. Run after D, J2, R, S, X.
+  XM = list(desc = "Median-of-daily-medians supplementary outputs (SI S4.7, S7.3)",
+            pre = 'Sys.setenv(EXPOSURE_BASIS = "med_of_daily_med", HAZARD_BASIS = "med_of_daily_med")',
+            scripts = c("77_health_scaling_sensitivity.R", "58_bootstrap_blocks.R",
+                        "45_mdl_sensitivity.R", "54_health_reference_table.R",
+                        "59_enviroscreen_overlay.R", "19_plot_maps_census_blocks.R",
+                        "79_background_sensitivity.R"))
 )
 
 sel <- Sys.getenv("GROUPS")

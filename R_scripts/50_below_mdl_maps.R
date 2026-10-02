@@ -23,7 +23,7 @@ suppressPackageStartupMessages({
   library(scales); library(patchwork)
 })
 
-BASE <- "/Users/priyanka/Downloads/Suncor"
+BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 message("Loading mobile data + grid...")
 load(file.path(BASE, "mobile_wswd.RData"))   # out
 df <- as.data.table(out); rm(out); gc()

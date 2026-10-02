@@ -144,18 +144,19 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
 1. **Delays**: measured, asset-specific (CAT: aromatics 4 s, HCN 6 s, H2S 21 s; EMU: 5/3/17 s).
 
 2. **Block-level benzene risk** = population-weighted, using
-   `sBenzene_med_of_daily_med_scaled` (median of daily medians, La Casa bin-weighted scaling
-   ×1.165), on blocks with AirToxScreen benzene + population > 0. Implemented in R04b +
-   script 20. **This replaces the manuscript's irreproducible Feb-2026 numbers** (1,120
-   blocks / 2.4×): that aggregation was interactive, left no code, and no tested
-   reconstruction (10 candidates) reproduces it.
+   `sBenzene_mean_of_daily_mean_scaled` (block mean of daily means, La Casa bin-weighted
+   scaling; benzene factor 1.16, SI Figure S4.1), on blocks with AirToxScreen benzene +
+   population > 0. The block median of daily medians (`sBenzene_med_of_daily_med_scaled`) is
+   the supplementary basis: set `EXPOSURE_BASIS=med_of_daily_med` (MAKE_FIGURES group XM
+   does this and writes the `_medianbasis` outputs). Implemented in R04b + script 20.
 
-   Reproducible result, 2026-09-23/25 run: **1,667 blocks, 126,527 residents**; AirToxScreen
-   0.117–0.416 excess cases, mobile 0.108–0.383, **ratio 0.92**. Per block, mobile benzene is
-   *lower* than AirToxScreen in **77%** of blocks (median ratio 0.78), ≥2× higher in 6%, and
-   an order of magnitude higher in **3** blocks. Block-level correlation is nil (Pearson
-   0.004, Spearman −0.040). Framing: the two datasets disagree in **spatial pattern**, not in
-   overall level — screening models approximate the aggregate but misplace it spatially.
+   Result: **1,667 blocks, 126,527 residents**; AirToxScreen 0.117–0.416 excess cases,
+   mobile 0.147–0.523, **ratio 1.26** (population-weighted benzene 0.202 vs 0.161 ppb; day
+   bootstrap 1.05–1.44). Mobile is more than 2× AirToxScreen in 181 blocks (10.9%) and lower
+   in 46% (median ratio 1.06); block-level correlation is nil (Pearson 0.04, Spearman 0.02).
+   Supplementary median basis: mobile 0.108–0.383 cases, ratio 0.92 (bootstrap 0.77–1.06),
+   100 blocks above 2×, lower than AirToxScreen in 77% of blocks. The two datasets disagree
+   in **spatial pattern** on either statistic.
 
 3. **Plume inversion**: WWTP-updated funnel, **37 candidate events → 4 retained**. Baseline
    intercepts 471 / 706 / 1,003 / 1,964 metric t/yr, **range 471–1,964**, mean 1,036.
@@ -180,11 +181,10 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
    volumetric quantity and `kg_s` is a rate — neither is t/yr. Use
    `pick_emission_col()` (in `diagnostics_helpers.R`); do not pattern-match column names.
 
-4. **Hotspots**: **14** persistent multi-pollutant groups after the 300 m exclusion
-   (group ids 4, 8, 10, 11, 12, 13, 22, 28, 29, 30, 34, 40, 43, 60), from 2,652 initial
-   DBSCAN clusters → 217 persistent → 155 candidate → 37 / 14 / 8. The 2026-08 run had 17;
-   the three that no longer qualify sat within the excluded radius or lost persistence with
-   the records removed. Table S5.1 and its 56 panels (14 groups × 4) follow this set.
+4. **Hotspots**: **15** persistent multi-pollutant groups after the 300 m exclusion
+   (group ids 4, 8, 9, 10, 11, 12, 13, 22, 28, 29, 30, 34, 40, 43, 60), from 2,763 initial
+   DBSCAN clusters → 225 persistent → 164 candidate → 37 / 15 / 6. Table S5.1 and the
+   per-group panels follow this set (`MASTER_hotspot_group_index.csv`).
 
 5. **300 m CDPHE-headquarters exclusion** (added 2026-09-23 at the request of the CDPHE
    co-authors): every measurement within 300 m of 39.785189, −105.104411 is removed. The rule
@@ -199,8 +199,9 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
    *Background-corrected* = minus the rolling background (lowest 20th percentile over a
    20-minute window, SI S4.1.1); these underlie the 500 m maps, the census-block surface and
    the S7 hazard quotients. *Temporally scaled* = block-level background-corrected × the La
-   Casa bin-weighted factors; used only where a 24-h average is required (the §3.3 benzene
-   comparison, and the maximum sustained cell in Table S3.2). SI Table S3.2 reports the
+   Casa bin-weighted factors; used only where a 24-h average is required (the §3.3 block comparisons and benzene
+   risk with their S4.3/S4.5/S4.6 sensitivities, the S7.3 cell-level screen of script 73,
+   and the maximum sustained cell in Table S3.2). SI Table S3.2 reports the
    median and p99 on **both** bases, raw first and background-corrected in parentheses;
    `54_health_reference_table.R` emits both and filters the raw record exactly as
    `70_table_s31.R` does so its raw columns equal Table S3.1 cell for cell.

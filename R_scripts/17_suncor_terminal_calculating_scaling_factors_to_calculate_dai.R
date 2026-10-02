@@ -217,7 +217,7 @@ plot_bins_full <- merge(
 )
 
 # long format for La Casa bin means
-plot_bins_long <- melt(
+plot_bins_long <- data.table::melt(
   plot_bins_full,
   id.vars = c("wday_num", "hour_of_day", "weekday", "w", "N", "n_lacasa"),
   measure.vars = c("benzene_bin", "toluene_bin", "xylene_bin"),
@@ -239,7 +239,7 @@ sf_plot[, pollutant := factor(
   labels = c("Benzene", "Toluene", "Xylene")
 )]
 
-sf_long <- melt(
+sf_long <- data.table::melt(
   sf_plot,
   id.vars = "pollutant",
   measure.vars = c("lc_mean_all", "lc_mean_mobilelike"),

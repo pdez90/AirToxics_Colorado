@@ -20,16 +20,17 @@
 # so that Figure 2, the block-level risk analysis and these health metrics all
 # rest on one exposure basis:
 #   * background-corrected concentrations (s* columns, script 11)
-#   * MEDIAN of daily medians per 500 m cell            [PRIMARY]
-#   * 24-h temporal scaling (SI S4.1) where a factor exists
-#   * MEAN of daily means per cell                      [SENSITIVITY]
+#   * MEAN of daily means per 500 m cell                [PRIMARY]
+#   * 24-h temporal scaling (SI Figure S4.1) where a factor exists
+#   * MEDIAN of daily medians per cell                  [SUPPLEMENTARY]
 #
 # Note on convention: EPA risk guidance (RAGS Part A) and Chiger et al. use the
 # 95% UCL of the arithmetic mean, since chronic dose is proportional to the
-# time-integrated (mean) concentration. The median of daily medians is more
-# robust to transient on-road plumes and is the metric used throughout this
-# study; because it suppresses episodic peaks that do contribute to long-term
-# dose, it is the more CONSERVATIVE (lower) exposure estimate. Both are
+# time-integrated (mean) concentration, which is why the mean of daily means is
+# the primary metric of this study. The median of daily medians is more robust
+# to transient on-road plumes and is the supplementary metric; because it
+# suppresses episodic peaks that do contribute to long-term
+# dose, it gives the lower exposure estimate. Both are
 # reported so the difference is explicit.
 #
 # Outputs:
@@ -173,8 +174,8 @@ exposure <- rbindlist(lapply(names(POLLS), function(pn) {
   daily <- df[fin, .(dmed = median(get(col)), dmean = mean(get(col))),
               by = .(cell, day)]
   per <- daily[, .(n_days      = .N,
-                   median_ppb  = median(dmed),          # PRIMARY: median of daily medians
-                   mean_ppb    = mean(dmean),           # mean of daily means
+                   median_ppb  = median(dmed),          # SUPPLEMENTARY: median of daily medians
+                   mean_ppb    = mean(dmean),           # PRIMARY: mean of daily means
                    ucl85_ppb   = ucl_of_mean(dmean, 0.85),  # 85% UCL of visit-day means
                    ucl95_ppb   = ucl_of_mean(dmean, 0.95)), # 95% UCL (EPA/Chiger)
                by = cell]
@@ -206,8 +207,8 @@ cmp[, mean_over_median  := round(EC_mean  / pmax(EC_median, 1e-9), 2)]
 cmp[, ucl85_over_median := round(EC_ucl85 / pmax(EC_median, 1e-9), 2)]
 cmp[, ucl95_over_median := round(EC_ucl95 / pmax(EC_median, 1e-9), 2)]
 print(cmp)
-cat("\n[READ] mean_over_median > 1 quantifies how much the plume-suppressing map\n")
-cat("       metric lowers the exposure estimate relative to a mean-based one.\n")
+cat("\n[READ] mean_over_median > 1 quantifies how much the plume-suppressing median\n")
+cat("       metric lowers the exposure estimate relative to the primary mean metric.\n")
 
 # ---------------- HQ / HI ----------------
 hr("Hazard quotients (Chiger Eq 1) and hazard indices (Chiger Eq 2)")
@@ -286,7 +287,7 @@ hq_summary <- exposure[, .(n_cells = .N,
 hq_summary[, rfc_below_mdl := rfc_ppb[pollutant] < mdl_ppb[pollutant]]
 setorder(hq_summary, -HQ_median_max)
 
-hr("HQ by pollutant (PRIMARY = median of daily medians, scaled)")
+hr("HQ by pollutant (columns for both metrics; PRIMARY = mean of daily means, scaled)")
 print(hq_summary)
 hr("HI by target organ system (both exposure metrics)")
 print(hi_summary)
@@ -304,10 +305,10 @@ benz[, risk_high_meanmetric_permil:= EC_mean   * IUR_HIGH * 1e6]
 benz[, risk_high_ucl85_permil     := EC_ucl85  * IUR_HIGH * 1e6]
 benz[, risk_high_ucl95_permil     := EC_ucl95  * IUR_HIGH * 1e6]
 cancer <- data.table(
-  metric = c("cells assessed", "mean EC (ppb)", "max EC (ppb)",
-             "mean risk per million (IUR low)",  "mean risk per million (IUR high)",
-             "max risk per million (IUR low)",   "max risk per million (IUR high)",
-             "cells above 100-in-a-million (IUR high)",
+  metric = c("cells assessed", "mean EC (ppb, median metric)", "max EC (ppb, median metric)",
+             "mean risk per million (IUR low, median metric)",  "mean risk per million (IUR high, median metric)",
+             "max risk per million (IUR low, median metric)",   "max risk per million (IUR high, median metric)",
+             "cells above 100-in-a-million (IUR high, median metric)",
              "mean risk per million (IUR high, MEAN-of-means metric)",
              "mean risk per million (IUR high, 85% UCL metric)",
              "mean risk per million (IUR high, 95% UCL metric)"),
@@ -339,7 +340,7 @@ fwrite(benz[, .(cell, n_days, EC_median, EC_mean, EC_ucl85, EC_ucl95,
        file.path(BASE, "TABLE_cumulative_cancer_risk.csv"))
 fwrite(cancer,     file.path(BASE, "TABLE_cumulative_cancer_summary.csv"))
 
-pl <- hi_summary[metric == "median", .(tos, HI_mean_across_cells, HI_max)]
+pl <- hi_summary[metric == "mean", .(tos, HI_mean_across_cells, HI_max)]
 pl <- data.table::melt(pl, id.vars = "tos", variable.name = "stat", value.name = "HI")
 p <- ggplot2::ggplot(pl, ggplot2::aes(x = stats::reorder(tos, HI), y = pmax(HI, 1e-4),
                                       fill = stat)) +
@@ -348,7 +349,7 @@ p <- ggplot2::ggplot(pl, ggplot2::aes(x = stats::reorder(tos, HI), y = pmax(HI, 
   ggplot2::coord_flip() + ggplot2::scale_y_log10() +
   ggplot2::labs(x = NULL, y = "Hazard index (log scale)",
                 title = "Cumulative non-cancer hazard index by target organ system",
-                subtitle = "Chiger et al. (2025) Eq 1-2; exposure = median of daily medians, 24-h scaled; dashed line HI = 1",
+                subtitle = "Chiger et al. (2025) Eq 1-2; exposure = mean of daily means, B/T/X 24-h scaled; dashed line HI = 1",
                 fill = NULL) +
   ggplot2::theme_bw(base_size = 11)
 dir.create(file.path(BASE, "FinalFig"), showWarnings = FALSE)
