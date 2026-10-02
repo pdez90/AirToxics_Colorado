@@ -24,6 +24,14 @@ df <- df %>% dplyr::rename(
   Trimethylbenzene = Trimethylbenzene_ppb, Xylene = Xylene_ppb,
   H2S = Hydrogen_Sulfide_ppb, HCN = Hydrogen_Cyanide_ppb)
 
+# Correlations pair species row by row, so H2S and HCN use the repeated 1-s
+# bin means (*_ppb_rep); the one-value-per-bin columns (03, section 3d) rarely
+# share a row with the 1-s aromatics.
+if (all(c("Hydrogen_Sulfide_ppb_rep", "Hydrogen_Cyanide_ppb_rep") %in% names(df))) {
+  df$H2S <- df$Hydrogen_Sulfide_ppb_rep
+  df$HCN <- df$Hydrogen_Cyanide_ppb_rep
+}
+
 vars <- c("Benzene","Toluene","Trimethylbenzene","Xylene","H2S","HCN",
           "ws","wd","Temperature_F","Pressure_mb","Relative_Humidity_percent")
 

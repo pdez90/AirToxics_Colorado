@@ -104,7 +104,7 @@ lab_df <- rbind(
              nx = -0.020, ny = -0.007))
 
 p <- ggplot() +
-  annotation_map_tile(type = "cartolight", zoom = 11) +
+  annotation_map_tile(type = Sys.getenv("SUNCOR_TILES", "osm"), zoom = 11) +
   geom_tile(data = grid_cnt, aes(x = clon, y = clat, fill = n),
             width = tile_w, height = tile_h, alpha = 0.85) +
   scale_fill_viridis_c(trans = "log10",
@@ -126,9 +126,10 @@ p <- ggplot() +
              size = 3.4, fontface = "bold", linewidth = 0.25,
              fill = "white", alpha = 0.9) +
   facet_wrap(~Route, ncol = 2) +
+  scale_x_continuous(breaks = seq(-105.1, -104.8, by = 0.1)) +   # 0.05-degree labels collided
   coord_sf(crs = 4326, default_crs = 4326, xlim = xlim, ylim = ylim, expand = FALSE) +
   annotation_scale(location = "bl", width_hint = 0.25) +
-  labs(caption = "Basemap: CARTO Positron. Cells are the 500 m analysis grid; color shows the total number of 1-s measurements collected in each cell over the campaign (log scale).",
+  labs(caption = "Basemap: © OpenStreetMap contributors. Cells are the 500 m analysis grid; color shows the total number of 1-s measurements collected in each cell over the campaign (log scale).",
        x = NULL, y = NULL) +
   theme_bw(base_size = 13) +
   theme(panel.border = element_rect(color = "black", linewidth = 0.8, fill = NA),
@@ -139,6 +140,6 @@ p <- ggplot() +
         panel.grid = element_blank())
 
 out_png <- file.path(BASE, "FinalFig", "Figure1_sampling_density.png")
-ggsave(out_png, p, width = 14, height = 7.2, dpi = 450, bg = "white")
+ggsave(out_png, p, width = 14, height = 5.6, dpi = 450, bg = "white")   # 7.2 in left wide white bands above and below the maps
 message("[Saved] ", out_png)
 print(cnt[, .(cells = uniqueN(cell), total_obs = sum(n)), by = Site])

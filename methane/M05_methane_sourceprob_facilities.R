@@ -21,7 +21,9 @@ suppressPackageStartupMessages({
 })
 
 # ---- settings copied from script 26 (Figure 3) ----
-tile_type <- "cartolight"; tile_zoom <- 11; dpi_out <- 450
+# BASEMAP (2026-09-30): CARTO now serves "API KEY REQUIRED" watermarked tiles without a key;
+# default to key-free OpenStreetMap tiles (as Figure 3 already does). SUNCOR_TILES=<rosm type> overrides.
+tile_type <- Sys.getenv("SUNCOR_TILES", "osm"); tile_zoom <- 11; dpi_out <- 450
 surface_alpha <- 0.75; tri_alpha <- 0.35
 crs_ll <- 4326; crs_m <- 32613
 ray_len_m <- 15000; ray_step_m <- 150

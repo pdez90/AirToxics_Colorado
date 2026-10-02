@@ -72,14 +72,16 @@ POLL[, cf := MW / MOLAR_VOL]
 # primary chronic screen now uses the block median of daily medians, the
 # statistic of the section 3.3 cancer comparison; HAZARD_BASIS=mean_of_daily_mean
 # reproduces the former primary.
-HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "med_of_daily_med")
+# (2026-09-30) primary = mean of daily means; the median basis is supplementary
+# and writes the same tables with a _medianbasis suffix.
+HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "mean_of_daily_mean")
 stopifnot(HAZARD_BASIS %in% c("med_of_daily_med", "mean_of_daily_mean"))
 message("[BASIS] block statistic: ", HAZARD_BASIS)
 # Outputs (2026-09-27): the primary (median) basis writes the SI tables; the
 # secondary basis writes the same tables with a _meanbasis suffix so the Shiny
 # app can offer both statistics without either run overwriting the other.
 #   HAZARD_BASIS=mean_of_daily_mean Rscript R_scripts/77_health_scaling_sensitivity.R
-SUFFIX <- if (HAZARD_BASIS == "med_of_daily_med") "" else "_meanbasis"
+SUFFIX <- if (HAZARD_BASIS == "mean_of_daily_mean") "" else "_medianbasis"
 OUT1  <- file.path(BASE, paste0("TABLE_S7.3_scaling_scenarios", SUFFIX, ".csv"))
 OUT1b <- file.path(BASE, paste0("TABLE_S7.3b_scaling_by_pollutant", SUFFIX, ".csv"))
 OUT2  <- file.path(BASE, paste0("TABLE_S7.4_breakeven_factors", SUFFIX, ".csv"))

@@ -48,7 +48,9 @@ f_mobile <- file.path(in_dir, "mobile_wswd.RData")
 # ----------------------------
 # SETTINGS
 # ----------------------------
-tile_type <- "cartolight"
+# BASEMAP (2026-09-30): CARTO now serves "API KEY REQUIRED" watermarked tiles without a key;
+# default to key-free OpenStreetMap tiles (as Figure 3 already does). SUNCOR_TILES=<rosm type> overrides.
+tile_type <- Sys.getenv("SUNCOR_TILES", "osm")
 tile_zoom_regional <- 11
 
 match_dist_m <- 100

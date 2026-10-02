@@ -70,6 +70,12 @@ df <- df %>%
     Hydrogen_Sulfide_ppb,
     Hydrogen_Cyanide_ppb,
     dplyr::all_of(c("Hydrogen_Sulfide_ppb_raw", "Hydrogen_Cyanide_ppb_raw")),  # raw H2S/HCN for the plume branch
+    # 2026-09-30: the bin means repeated on every delivered second (03 section
+    # 3d). H2S/HCN above hold one value per 5-s / 2-s bin; correlations with
+    # the aromatics (07, FIG_A, tests/audit_manuscript_claims.R) need these
+    # time-matched 1-s rows. Without this line they fell back to the thinned
+    # columns.
+    dplyr::any_of(c("Hydrogen_Sulfide_ppb_rep", "Hydrogen_Cyanide_ppb_rep")),
     AssetSiteDay,
     interpolated
   ) %>%

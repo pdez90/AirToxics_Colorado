@@ -173,7 +173,9 @@ diag_msg(sprintf("  [SANITY] fraction of enhancements < -0.05 ppm: %.2f%% (large
 # the correlation peak sits at lag 0 (uses plume-rich seconds only).
 diag_section("M02-DIAG: CH4 vs H2S lag check (same instrument => peak at 0)")
 if ("Hydrogen_Sulfide_ppb" %in% names(tox)) {
-  h2s <- tox[!is.na(Hydrogen_Sulfide_ppb), .(Asset, date, h2s = Hydrogen_Sulfide_ppb)]
+  # row-by-row pairing across species: use the repeated 1-s bin means (03, 3d)
+  .h2s_col <- if ("Hydrogen_Sulfide_ppb_rep" %in% names(tox)) "Hydrogen_Sulfide_ppb_rep" else "Hydrogen_Sulfide_ppb"
+  h2s <- tox[!is.na(get(.h2s_col)), .(Asset, date, h2s = get(.h2s_col))]
   best <- data.table()
   for (a in unique(ch4$Asset)) {
     cc_by_lag <- sapply(-10:10, function(lag) {

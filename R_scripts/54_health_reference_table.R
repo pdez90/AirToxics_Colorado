@@ -18,6 +18,16 @@
 
 SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(data.table); library(sf) })
+# EXPOSURE BASIS (2026-09-30): the MEAN of daily means is the primary statistic
+# for concentrations, exposure and health (what a long-term reference value and
+# AirToxScreen's annual mean presume); the median of daily medians is the
+# supplementary analysis. EXPOSURE_BASIS=med_of_daily_med runs the supplementary
+# version, written with a _medianbasis suffix so it never overwrites the primary.
+EXPOSURE_BASIS <- Sys.getenv("EXPOSURE_BASIS", "mean_of_daily_mean")
+stopifnot(EXPOSURE_BASIS %in% c("mean_of_daily_mean", "med_of_daily_med"))
+.agg <- if (EXPOSURE_BASIS == "mean_of_daily_mean") mean else stats::median
+.sfx <- if (EXPOSURE_BASIS == "mean_of_daily_mean") "" else "_medianbasis"
+message("[BASIS] ", EXPOSURE_BASIS)
 
 BASE <- SUNCOR_BASE
 message("Loading mobile data + grid...")
@@ -106,8 +116,8 @@ stopifnot(all(POLLS %in% names(df)))
 res <- rbindlist(lapply(names(POLLS), function(pn) {
   col <- POLLS[[pn]]
   v <- df[[col]]; fin <- is.finite(v)
-  daily <- df[fin, .(dmed = median(get(col))), by = .(cell, day)]
-  cellmed <- daily[, .(m = median(dmed), n_days = .N), by = cell]
+  daily <- df[fin, .(dmed = .agg(get(col))), by = .(cell, day)]
+  cellmed <- daily[, .(m = .agg(dmed), n_days = .N), by = cell]
   # (2026-08-20) The "maximum sustained cell" previously took max() over EVERY
   # cell, including cells visited on a single day, which is not a sustained
   # concentration in any sense. 73_cumulative_risk.R requires >= 10 visit-days
@@ -139,7 +149,7 @@ res <- rbindlist(lapply(names(POLLS), function(pn) {
 res <- merge(res, mrl_ppb, by = "pollutant", sort = FALSE)
 res[, exceeds_chronic_mrl := fifelse(is.na(mrl_chronic), NA,
                                      max_cell_median_24h > mrl_chronic)]
-fwrite(res, file.path(BASE, "TABLE_health_reference_HQ.csv"))
+fwrite(res, file.path(BASE, paste0("TABLE_health_reference_HQ", .sfx, ".csv")))
 print(res)
 message("\nHQ_chronic = (highest sustained 500 m cell median, 24-h scaled where ",
         "factors exist) / IRIS RfC. HQ < 1 indicates the sustained ",

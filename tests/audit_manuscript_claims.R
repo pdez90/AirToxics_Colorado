@@ -63,8 +63,14 @@ ok("hourly fractions", frac$pct,
    c(0.1, 2.8, 12.2, 19.3, 21.1, 20.6, 15.4, 6.2, 1.7, 0.6), 0.05)
 
 cat("\n== pairwise correlations (SI S3) ==\n")
+# H2S and HCN are kept as one value per 5-s / 2-s bin (2026-09-27); the
+# correlations with the aromatics need time-matched seconds, so they use the
+# bin means repeated on every delivered second (*_rep), as 07 and FIG_A do.
+if ("Hydrogen_Sulfide_ppb_rep" %in% names(d)) {
+  d[, `:=`(H2S_pair = Hydrogen_Sulfide_ppb_rep, HCN_pair = Hydrogen_Cyanide_ppb_rep)]
+} else d[, `:=`(H2S_pair = Hydrogen_Sulfide_ppb, HCN_pair = Hydrogen_Cyanide_ppb)]
 P <- c("Benzene_ppb","Toluene_ppb","Trimethylbenzene_ppb","Xylene_ppb",
-       "Hydrogen_Sulfide_ppb","Hydrogen_Cyanide_ppb")
+       "H2S_pair","HCN_pair")
 for (s in sort(unique(d$Site))) {
   cr <- cor(as.matrix(d[Site == s, ..P]), use = "pairwise.complete.obs")
   tag <- if (grepl("Suncor", s)) "Suncor" else "Holly "
@@ -91,11 +97,15 @@ if (!file.exists(tf)) {
   s <- fread(tf)
   setkey(s, pollutant)
   ok("benzene below MDL (Results 3.1)",  round(s["Benzene", pct_belowMDL]), 93)
-  ok("H2S below MDL (Results 3.1)",      round(s["H2S",     pct_belowMDL]), 98)
+  ok("H2S below MDL (Results 3.1)",      round(s["H2S",     pct_belowMDL]), 97)
   ok("HCN below MDL (Results 3.1)",      round(s["HCN",     pct_belowMDL]), 96)
   five <- s[pollutant != "HCN"]
-  ok("analysis-set values, 5 pollutants (millions)",
-     round(range(five$analysis) / 1e6, 2), c(1.44, 1.54), 0.005)
+  # One value per acquisition bin (2026-09-27): the aromatics keep one value
+  # per second; H2S counts 5-s bins and HCN 2-s bins.
+  aro <- s[!pollutant %in% c("H2S", "HCN")]
+  ok("analysis-set values, 4 aromatics (millions)",
+     round(range(aro$analysis) / 1e6, 2), c(1.45, 1.54), 0.005)
+  ok("H2S analysis-set values (5-s bins)", s["H2S", analysis], 444552L)
   # H2S now spans 199 days: the 2026-08-22 run retains it across the 2023 inlet
   # window, which affected the Eiger aromatics but not the Picarro. TMB is the
   # floor at 159. If H2S drops back to ~164 the retention has been undone.
@@ -106,7 +116,7 @@ if (!file.exists(tf)) {
   # a re-run tells you exactly which sentences to update instead of just failing.
   # 28-30 May 2025 is excluded as a calibration window, so HCN is 2 days and
   # 27,739 values below the previous run.
-  DOC <- list(hcn_n = 478660L, hcn_days = 39L,
+  DOC <- list(hcn_n = 264327L, hcn_days = 39L,
               hcn_from = "2025-01-22", hcn_to = "2025-06-23")
   cmp <- function(lab, got, doc) {
     same <- isTRUE(all.equal(got, doc, check.attributes = FALSE))

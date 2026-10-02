@@ -22,6 +22,16 @@
 SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({
   library(data.table); library(sf); library(ggplot2); library(scales)
+# EXPOSURE BASIS (2026-09-30): the MEAN of daily means is the primary statistic
+# for concentrations, exposure and health (what a long-term reference value and
+# AirToxScreen's annual mean presume); the median of daily medians is the
+# supplementary analysis. EXPOSURE_BASIS=med_of_daily_med runs the supplementary
+# version, written with a _medianbasis suffix so it never overwrites the primary.
+EXPOSURE_BASIS <- Sys.getenv("EXPOSURE_BASIS", "mean_of_daily_mean")
+stopifnot(EXPOSURE_BASIS %in% c("mean_of_daily_mean", "med_of_daily_med"))
+.agg <- if (EXPOSURE_BASIS == "mean_of_daily_mean") mean else stats::median
+.sfx <- if (EXPOSURE_BASIS == "mean_of_daily_mean") "" else "_medianbasis"
+message("[BASIS] ", EXPOSURE_BASIS)
 })
 
 BASE <- SUNCOR_BASE
@@ -199,8 +209,8 @@ message("  obs inside common blocks: ", format(nrow(bz), big.mark = ","),
 blk <- list()
 for (cs in CASES) {
   bz[, val := substitute_case(Benzene_ppb, below, mdl, cs)]
-  daily <- bz[, .(dmed = median(val)), by = .(block, day)]
-  bmed <- daily[, .(bval = median(dmed)), by = block]
+  daily <- bz[, .(dmed = .agg(val)), by = .(block, day)]
+  bmed <- daily[, .(bval = .agg(dmed)), by = block]
   blk[[cs]] <- bmed[, .(block, bval, case = cs)]
 }
 blk <- rbindlist(blk)
@@ -218,7 +228,7 @@ res <- rbindlist(lapply(CASES, function(cs) {
     median_ratio_vs_ATS = round(median(x / wide$ats, na.rm = TRUE), 2),
     blocks_gt2x_ATS = sum(x / wide$ats > 2, na.rm = TRUE))
 }))
-fwrite(res, file.path(BASE, "TABLE_mdl_sensitivity_blocks.csv"))
+fwrite(res, file.path(BASE, paste0("TABLE_mdl_sensitivity_blocks", .sfx, ".csv")))
 print(res)
 
 # ---- 3) figure ------------------------------------------------
@@ -245,7 +255,7 @@ pB <- ggplot(blk, aes(case_f, bval, fill = case_f)) +
        title = "B) Census-block benzene (median of daily medians, unscaled) by case") +
   theme_bw(base_size = 11)
 library(patchwork)
-ggsave(file.path(BASE, "FinalFig", "FIG_mdl_sensitivity.png"),
+ggsave(file.path(BASE, "FinalFig", paste0("FIG_mdl_sensitivity", .sfx, ".png")),
        pA / pB, width = 9.5, height = 8, dpi = 350, bg = "white")
 message("[Saved] FinalFig/FIG_mdl_sensitivity.png")
 message("DONE.")

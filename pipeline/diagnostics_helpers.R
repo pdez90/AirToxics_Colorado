@@ -245,7 +245,10 @@ REF <- utils::modifyList(REF, list(
 REF <- utils::modifyList(REF, list(
   missing_wind_pct = 0, median_dist_met_km = 4.51,
   p99 = c(Benzene_ppb = 1.8, Toluene_ppb = 3.8, Trimethylbenzene_ppb = 2.14,
-          Xylene_ppb = 2.83, Hydrogen_Sulfide_ppb = 4.8, Hydrogen_Cyanide_ppb = 11),
+          Xylene_ppb = 2.83, Hydrogen_Sulfide_ppb = 5.0, Hydrogen_Cyanide_ppb = 11),
+  # H2S p99 4.8 -> 5.0 (2026-09-27): H2S is now one value per 5-s bin rather
+  # than the bin mean repeated on every delivered second, so each bin counts
+  # once. HCN's p99 is unchanged (11).
   scaling = c(benzene = 1.165, toluene = 1.274, xylene = 1.443),
   n_blocks = 1667, population = 126527,
   risk_mobile = c(0.108, 0.383), risk_ratio = 0.92,

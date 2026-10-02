@@ -237,7 +237,10 @@ HP[, cf := MW / MOLAR_VOL]
 # EXPOSURE BASIS (2026-09-27): same switch as 74/77. The chronic screen's
 # primary block statistic is the median of daily medians (the section 3.3
 # statistic); HAZARD_BASIS=mean_of_daily_mean reproduces the former primary.
-HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "med_of_daily_med")
+# (2026-09-30) primary = mean of daily means (hazard AND the benzene comparison);
+# HAZARD_BASIS=med_of_daily_med writes the supplementary *_medianbasis outputs.
+HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "mean_of_daily_mean")
+.sfx79 <- if (HAZARD_BASIS == "mean_of_daily_mean") "" else "_medianbasis"
 stopifnot(HAZARD_BASIS %in% c("med_of_daily_med", "mean_of_daily_mean"))
 message("[BASIS] hazard block statistic: ", HAZARD_BASIS)
 rfc_ppb <- stats::setNames(
@@ -284,7 +287,7 @@ run_arm <- function(p, half, keep_rows = FALSE) {
 
   # ---- benzene risk on COMMON blocks (script 20) ----
   pop <- suppressWarnings(as.numeric(bdt$POP20))
-  mb  <- bdt$sBenzene_med_of_daily_med_scaled
+  mb  <- bdt[[paste0("sBenzene_", HAZARD_BASIS, "_scaled")]]
   ab  <- bdt$benzene_ppb
   cm  <- is.finite(pop) & pop > 0 & is.finite(ab) & is.finite(mb)
   rk  <- function(x, f) f * sum(x[cm] * pop[cm]) / 1e6
@@ -328,7 +331,10 @@ run_arm <- function(p, half, keep_rows = FALSE) {
     per[, pollutant := pn][]
   }), use.names = TRUE)[n_days >= MIN_VISITS]
   cells[, scale_factor := SCALE_CELL[pollutant]]
-  cells[, EC_median := pmax(fifelse(is.na(scale_factor), median_ppb, median_ppb * scale_factor), 0)]
+  # (2026-09-30) cell statistic follows HAZARD_BASIS (mean of daily means by
+  # default); the column keeps its historical name EC_median.
+  cells[, .ec := if (HAZARD_BASIS == "mean_of_daily_mean") mean_ppb else median_ppb]
+  cells[, EC_median := pmax(fifelse(is.na(scale_factor), .ec, .ec * scale_factor), 0)]
   cells[, HQ_median := EC_median / rfc_ppb[pollutant]]
   cells[, tos := TOS[pollutant]]
   ntos    <- table(TOS)
@@ -343,7 +349,7 @@ run_arm <- function(p, half, keep_rows = FALSE) {
   rows <- if (keep_rows) d[, c(paste0("b_", POLL), paste0("m_", POLL), bg), with = FALSE] else NULL
   set(d, NULL, c(paste0("b_", POLL), paste0("m_", POLL), bg), NULL)
   list(risk = risk, chronic = chronic, HI = HI, cellsum = cellsum, cellhi = cellhi,
-       cellwide = dcast(cells, id ~ pollutant, value.var = "EC_median"), rows = rows)
+       cellwide = data.table::dcast(cells, id ~ pollutant, value.var = "EC_median"), rows = rows)
 }
 
 # ---------------------------------------------------------------------------
@@ -411,9 +417,9 @@ risk <- rbindlist(lapply(seq_len(nrow(G)), function(r)
         arms[[r]]$risk)))
 hi <- rbindlist(lapply(seq_len(nrow(G)), function(r)
   cbind(data.table(arm = names(arms)[r]), arms[[r]]$HI)))
-hiw <- dcast(hi, arm ~ target_organ, value.var = "HI_pwmean")
+hiw <- data.table::dcast(hi, arm ~ target_organ, value.var = "HI_pwmean")
 setnames(hiw, setdiff(names(hiw), "arm"), paste0("HI_pwmean_", setdiff(names(hiw), "arm")))
-hix <- dcast(hi, arm ~ target_organ, value.var = "HI_maxblock")
+hix <- data.table::dcast(hi, arm ~ target_organ, value.var = "HI_maxblock")
 setnames(hix, setdiff(names(hix), "arm"), paste0("HI_maxblock_", setdiff(names(hix), "arm")))
 
 # 500 m benzene cell surface, agreement with the published arm
@@ -432,8 +438,8 @@ agr <- rbindlist(lapply(names(arms), function(nm) {
 TS41 <- Reduce(function(x, y) merge(x, y, by = "arm", sort = FALSE),
                list(risk, hiw, hix, agr))
 setorder(TS41, percentile, window_min)
-fwrite(TS41, file.path(BASE, "TABLE_S4.1_background_sensitivity.csv"))
-message("-> ", file.path(BASE, "TABLE_S4.1_background_sensitivity.csv"))
+fwrite(TS41, file.path(BASE, sub("\\.csv$", paste0(.sfx79, ".csv"), "TABLE_S4.1_background_sensitivity.csv")))
+message("-> ", file.path(BASE, sub("\\.csv$", paste0(.sfx79, ".csv"), "TABLE_S4.1_background_sensitivity.csv")))
 print(TS41[, .(arm, mobile_pw_ppb = round(mobile_pw_ppb, 4),
                cases = sprintf("%.3f-%.3f", mobile_cases_low, mobile_cases_high),
                ratio = round(ratio_mobile_over_airtox, 3),
@@ -449,8 +455,8 @@ cellhi <- rbindlist(lapply(seq_len(nrow(G)), function(r)
   cbind(data.table(arm = names(arms)[r]), arms[[r]]$cellhi)))
 fwrite(merge(cellsum, cellhi, by.x = c("arm", "pollutant"), by.y = c("arm", "tos"),
              all = TRUE, suffixes = c("", "_HI")),
-       file.path(BASE, "TABLE_S4.1b_background_sensitivity_cells.csv"))
-message("-> ", file.path(BASE, "TABLE_S4.1b_background_sensitivity_cells.csv"))
+       file.path(BASE, sub("\\.csv$", paste0(.sfx79, ".csv"), "TABLE_S4.1b_background_sensitivity_cells.csv")))
+message("-> ", file.path(BASE, sub("\\.csv$", paste0(.sfx79, ".csv"), "TABLE_S4.1b_background_sensitivity_cells.csv")))
 
 # ---------------------------------------------------------------------------
 # Figure S4.12
@@ -461,6 +467,11 @@ TS41[, pct_lab := factor(paste0(percentile, "th"), levels = names(PAL))]
 TS41[, win_lab := factor(sprintf("%d min", window_min), levels = c("30 min", "20 min", "10 min"))]
 TS41[, is_base := percentile == BASE_PCT * 100 & window_min == 2 * BASE_HALF / 60]
 airtox_pw <- TS41$airtox_pw_ppb[1]
+# axis ranges from the data (2026-10-01): the fixed 0.1425-0.1655 ppb and 60-100% limits
+# were set for the median basis and dropped every point on the mean basis
+.xa <- range(c(TS41$mobile_pw_ppb, airtox_pw)); .xa <- .xa + c(-1, 1) * 0.12 * diff(.xa)
+.side <- if (airtox_pw < mean(range(TS41$mobile_pw_ppb))) 1 else -1   # label on the open side of the AirToxScreen line
+.xc <- c(floor(min(c(TS41$cells_identical_pct, TS41$cells_within_one_step_pct)) / 10) * 10, 100)
 DW  <- 0.48
 thm <- theme_bw(base_size = 11) +
   theme(panel.grid.minor = element_blank(),
@@ -473,13 +484,13 @@ thm <- theme_bw(base_size = 11) +
 pA <- ggplot(TS41, aes(x = mobile_pw_ppb, y = win_lab, colour = pct_lab)) +
   geom_vline(xintercept = airtox_pw, linetype = "dashed", colour = "#B2182B") +
   geom_point(aes(shape = is_base), size = 3.1, position = position_dodge(width = DW)) +
-  annotate("text", x = airtox_pw - 0.0004, y = 3.42, colour = "#B2182B", hjust = 1,
+  ggplot2::annotate("text", x = airtox_pw + .side * 0.015 * diff(.xa), y = 3.42, colour = "#B2182B", hjust = (1 - .side) / 2,
            size = 3.0, label = sprintf("AirToxScreen  %.3f ppb", airtox_pw)) +
-  annotate("text", x = TS41[is_base == TRUE, mobile_pw_ppb], y = 2.02,
+  ggplot2::annotate("text", x = TS41[is_base == TRUE, mobile_pw_ppb], y = 2.02,
            label = "published setting", size = 2.9, hjust = 1.15, colour = "grey25") +
   scale_colour_manual(values = PAL, name = "Percentile") +
   scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 18), guide = "none") +
-  scale_x_continuous(limits = c(0.1425, 0.1655), breaks = seq(0.145, 0.165, 0.005)) +
+  scale_x_continuous(limits = .xa, breaks = pretty(.xa, 6)) +
   labs(title = "A   Population-weighted benzene across the 1,667 common blocks",
        x = "Benzene (ppb, 24-h basis)", y = "Window") + thm
 
@@ -492,7 +503,7 @@ pB <- ggplot(him, aes(x = HI, y = organ, colour = pct_lab)) +
   geom_vline(xintercept = 1, linetype = "dashed", colour = "#B2182B") +
   geom_point(aes(shape = is_base), size = 2.5, alpha = 0.9,
              position = position_dodge(width = 0.55)) +
-  annotate("text", x = 1.05, y = 0.62, label = "HI = 1", colour = "#B2182B", hjust = 0, size = 3.0) +
+  ggplot2::annotate("text", x = 1.05, y = 0.62, label = "HI = 1", colour = "#B2182B", hjust = 0, size = 3.0) +
   scale_x_log10(breaks = c(0.01, 0.03, 0.1, 0.3, 1, 3), limits = c(0.01, 3.2)) +
   scale_colour_manual(values = PAL, name = "Percentile") +
   scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 18), guide = "none") +
@@ -510,13 +521,13 @@ pC <- ggplot(cc, aes(y = win_lab, colour = pct_lab)) +
   geom_point(aes(x = cells_within_one_step_pct), size = 3.0,
              position = position_dodge(width = DW)) +
   scale_colour_manual(values = PAL, name = "Percentile") +
-  scale_x_continuous(limits = c(60, 100), breaks = seq(60, 100, 10)) +
+  scale_x_continuous(limits = .xc, breaks = pretty(.xc, 5)) +
   labs(title = "C   500 m benzene cells relative to the published surface",
        subtitle = "open marker: identical value    filled marker: within one 0.05 ppb reporting step",
        x = "Share of the 378 mapped cells (%)", y = "Window") +
   thm + theme(plot.subtitle = element_text(size = 8.5, colour = "grey30"))
 
-out_png <- file.path(BASE, "FinalFig", "FIG_S4.12_background_sensitivity.png")
+out_png <- file.path(BASE, "FinalFig", paste0("FIG_S4.12_background_sensitivity", .sfx79, ".png"))
 # NOTE (2026-09-26): the legend is carried by panel C rather than extracted with
 # cowplot::get_legend(). Under ggplot2 >= 3.5 the guide box was renamed and split
 # per position ("guide-box-bottom", "guide-box-left", ...), so get_legend() warns

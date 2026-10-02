@@ -72,10 +72,12 @@ msg("cells_summary.rds: ", nrow(cell_sum), " cell-pollutant rows")
 # campaign-level summary stats (below-MDL fractions from Table S3.1)
 summ <- rbindlist(lapply(names(POLLS), function(pn) {
   col <- POLLS[[pn]]; v <- dt[[col]][is.finite(dt[[col]])]
-  # H2S / HCN are bin-averaged in 03 (5-s / 2-s); their delivered values are
-  # kept in *_raw and summarized alongside (2026-09-27), as in SI Table S3.1.
+  # H2S / HCN are averaged in 03 within 5-s / 2-s bins and kept as ONE value
+  # per bin (2026-09-27), so n counts bins, not seconds. Their delivered
+  # one-second values are kept in *_raw on every delivered row and are
+  # summarized alongside, as in SI Table S3.1.
   rc <- paste0(col, "_raw")
-  vr <- if (rc %in% names(dt)) dt[[rc]][is.finite(dt[[col]]) & is.finite(dt[[rc]])] else numeric(0)
+  vr <- if (rc %in% names(dt)) dt[[rc]][is.finite(dt[[rc]])] else numeric(0)
   data.table(pollutant = pn, n = length(v),
              median = round(median(v), 3), p95 = round(quantile(v, 0.95), 3),
              p99 = round(quantile(v, 0.99), 3), max = round(max(v), 1),
@@ -330,10 +332,12 @@ f72   <- file.path(BASE, "TABLE_S7.2_acute_screen.csv")
 f71c  <- file.path(BASE, "TABLE_S7.1c_basis_comparison.csv")
 fcell <- file.path(BASE, "TABLE_cumulative_HQ_by_cell.csv")
 BASES <- list(
-  med  = list(sfx = "",          tag = "median_of_daily_medians", cellcol = "median_ppb",
-              label = "median of daily medians"),
-  mean = list(sfx = "_meanbasis", tag = "mean_of_daily_means",    cellcol = "mean_ppb",
-              label = "mean of daily means"))
+  # (2026-09-30) primary = mean of daily means (unsuffixed tables); the median
+  # of daily medians is the supplementary basis (_medianbasis tables).
+  mean = list(sfx = "",             tag = "mean_of_daily_means",     cellcol = "mean_ppb",
+              label = "mean of daily means"),
+  med  = list(sfx = "_medianbasis", tag = "median_of_daily_medians", cellcol = "median_ppb",
+              label = "median of daily medians"))
 hq_cells <- if (file.exists(fcell)) fread(fcell) else NULL
 NAMEMAP <- c(Benzene = "Benzene", Toluene = "Toluene", Xylene = "Xylenes",
              Trimethylbenzene = "1,2,4-Trimethylbenzene", H2S = "H2S", HCN = "HCN")
@@ -353,7 +357,7 @@ build_basis <- function(key) {
   if (file.exists(f71c)) {
     hi <- fread(f71c)[basis == B$tag, .(target_organ, pollutants = gsub(" \\+ ", ", ", pollutants),
                                         HI_pwmean, HI_maxblock)]
-  } else if (key == "med" && file.exists(file.path(BASE, "TABLE_S7.1b_hazard_index_by_organ.csv"))) {
+  } else if (key == "mean" && file.exists(file.path(BASE, "TABLE_S7.1b_hazard_index_by_organ.csv"))) {
     hi <- fread(file.path(BASE, "TABLE_S7.1b_hazard_index_by_organ.csv"))[
       , .(target_organ, pollutants = gsub(" \\+ ", ", ", pollutants), HI_pwmean, HI_maxblock)]
   } else stop("TABLE_S7.1c_basis_comparison.csv not found - run 74_health_hazard_screening.R")
@@ -363,7 +367,7 @@ build_basis <- function(key) {
   brk       <- if (file.exists(f74b)) fread(f74b) else NULL
   if (is.null(scen_poll))
     warning(basename(f73b), " not found - run 77_health_scaling_sensitivity.R",
-            if (key == "mean") " with HAZARD_BASIS=mean_of_daily_mean" else "",
+            if (key == "med") " with HAZARD_BASIS=med_of_daily_med" else "",
             "; the '", B$label, "' view will show the unscaled baseline only")
 
   # ---- per-cell hazard indices on the SAME statistic ------------------------
@@ -414,8 +418,8 @@ if (file.exists(f72)) {
   acute <- fread(f72)
   bases <- lapply(names(BASES), build_basis); names(bases) <- names(BASES)
   bases <- Filter(Negate(is.null), bases)
-  stopifnot("med" %in% names(bases))
-  p <- bases$med
+  stopifnot("mean" %in% names(bases))
+  p <- bases$mean
   saveRDS(list(chronic = p$chronic, acute = acute, hi = p$hi, cells = p$cells,
                scen = p$scen, scen_poll = p$scen_poll, breakeven = p$breakeven,
                bases = bases),

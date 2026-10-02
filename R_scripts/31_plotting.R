@@ -83,7 +83,9 @@ pad_m <- 500
 local_pad_m <- 250
 
 # Basemap (EXACT style you provided)
-tile_type <- "cartolight"
+# BASEMAP (2026-09-30): CARTO now serves "API KEY REQUIRED" watermarked tiles without a key;
+# default to key-free OpenStreetMap tiles (as Figure 3 already does). SUNCOR_TILES=<rosm type> overrides.
+tile_type <- Sys.getenv("SUNCOR_TILES", "osm")
 tile_zoom_regional <- 13
 tile_zoom_local    <- 15
 

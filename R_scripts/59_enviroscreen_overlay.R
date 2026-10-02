@@ -14,6 +14,16 @@
 # ==============================================================
 SUNCOR_BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # analysis root; override with the env var
 suppressPackageStartupMessages({ library(data.table); library(sf); library(ggplot2); library(scales) })
+# EXPOSURE BASIS (2026-09-30): the MEAN of daily means is the primary statistic
+# for concentrations, exposure and health (what a long-term reference value and
+# AirToxScreen's annual mean presume); the median of daily medians is the
+# supplementary analysis. EXPOSURE_BASIS=med_of_daily_med runs the supplementary
+# version, written with a _medianbasis suffix so it never overwrites the primary.
+EXPOSURE_BASIS <- Sys.getenv("EXPOSURE_BASIS", "mean_of_daily_mean")
+stopifnot(EXPOSURE_BASIS %in% c("mean_of_daily_mean", "med_of_daily_med"))
+.agg <- if (EXPOSURE_BASIS == "mean_of_daily_mean") mean else stats::median
+.sfx <- if (EXPOSURE_BASIS == "mean_of_daily_mean") "" else "_medianbasis"
+message("[BASIS] ", EXPOSURE_BASIS)
 BASE <- SUNCOR_BASE
 esf <- file.path(BASE, "enviroscreen_v2_blockgroup.csv")
 if (!file.exists(esf)) {
@@ -60,7 +70,7 @@ g <- st_read(file.path(BASE,"censusblocks_suncor_terminal_BINWEIGHTED_AB_COMMONB
 idcol <- grep("GEOID", names(g), value=TRUE)[1]
 d <- as.data.table(st_drop_geometry(g))
 d <- d[, .(block=as.character(get(idcol)), ats=benzene_ppb_airtox,
-           mob=sBenzene_med_of_daily_med_scaled, pop=Population_airtox)]
+           mob=get(paste0("sBenzene_", EXPOSURE_BASIS, "_scaled")), pop=Population_airtox)]
 d[, `:=`(bg = substr(block, 1, 12), ratio = fifelse(ats > 0, mob/ats, NA_real_))]
 d <- merge(d, es, by="bg", all.x=TRUE)
 message("Blocks joined to EnviroScreen: ", sum(!is.na(d$es_pctl)), " of ", nrow(d))
@@ -74,7 +84,7 @@ res <- d[!is.na(grp) & !is.na(es_pctl),
            pct_in_DI = round(100*mean(is_di),1)), by=grp]
 wt <- wilcox.test(es_pctl ~ grp, data=d[!is.na(grp) & !is.na(es_pctl)])
 res[, p_wilcoxon := signif(wt$p.value, 3)]
-fwrite(res, file.path(BASE,"TABLE_ej_overlay.csv")); print(res)
+fwrite(res, file.path(BASE, paste0("TABLE_ej_overlay", .sfx, ".csv"))); print(res)
 print(d[!is.na(grp), .N, by=.(grp, di)][order(grp, -N)])
 p <- ggplot(d[!is.na(grp) & !is.na(es_pctl)], aes(grp, es_pctl, fill=grp)) +
   geom_boxplot(width=0.5, outlier.size=0.6, show.legend=FALSE) +
@@ -83,6 +93,6 @@ p <- ggplot(d[!is.na(grp) & !is.na(es_pctl)], aes(grp, es_pctl, fill=grp)) +
   labs(x=NULL, y="Colorado EnviroScreen v2 percentile (block group)",
        caption=sprintf("Wilcoxon p = %.3g. EnviroScreen percentile: higher = greater cumulative environmental and social burden.", wt$p.value)) +
   theme_bw(base_size=12) + theme(plot.caption=element_text(size=9, hjust=0))
-ggsave(file.path(BASE,"FinalFig","FIG_ej_overlay.png"), p,
+ggsave(file.path(BASE,"FinalFig", paste0("FIG_ej_overlay", .sfx, ".png")), p,
        width=6.8, height=5.2, dpi=400, bg="white")
 message("[Saved] FinalFig/FIG_ej_overlay.png  DONE.")

@@ -93,7 +93,7 @@ for (i in seq_along(POLLS)) {
   if (!all(is.finite(lims)) || lims[1] >= lims[2])
     lims <- range(cm$med, na.rm = TRUE)
   p <- ggplot() +
-    annotation_map_tile(type = "cartolight", zoom = 11) +
+    annotation_map_tile(type = Sys.getenv("SUNCOR_TILES", "osm"), zoom = 11) +
     geom_point(data = cm[(below)], aes(lon, lat), color = "grey55",
                size = 0.55, alpha = 0.8) +
     geom_point(data = cm[!(below)], aes(lon, lat, color = med),
@@ -124,7 +124,7 @@ fig <- (panels[[1]] | panels[[2]] | panels[[3]]) /
                     "concentrations on the 500 m grid. Gray cells fall below the",
                     "predominant audited MDL (CAT lab; CDPHE repository READ-ME",
                     "files; HCN: observation-weighted median over its 2025 record,",
-                    "5 ppb). Basemap: CARTO Positron."),
+                    "5 ppb). Basemap: © OpenStreetMap contributors."),
     theme = theme(plot.caption = element_text(size = 8, hjust = 0)))
 out_png <- file.path(BASE, "FinalFig", "FIG_belowMDL_maps.png")
 ggsave(out_png, fig, width = 13.5, height = 8.6, dpi = 400, bg = "white")

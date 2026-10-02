@@ -17,8 +17,13 @@ suppressPackageStartupMessages({
 })
 
 # choose mobile benzene metric
-mobile_benzene_col <- "sBenzene_med_of_daily_med_scaled"
-# mobile_benzene_col <- "sBenzene_mean_of_daily_mean_scaled"
+# EXPOSURE BASIS (2026-09-30): the block MEAN of daily means is the primary
+# statistic (it is what a lifetime-average unit risk and AirToxScreen's annual
+# mean presume); the median of daily medians is the supplementary one.
+# EXPOSURE_BASIS=med_of_daily_med restores the 2026-09-27 primary.
+EXPOSURE_BASIS <- Sys.getenv("EXPOSURE_BASIS", "mean_of_daily_mean")
+stopifnot(EXPOSURE_BASIS %in% c("mean_of_daily_mean", "med_of_daily_med"))
+mobile_benzene_col <- paste0("sBenzene_", EXPOSURE_BASIS, "_scaled")
 
 stopifnot(exists("block_sf_risk"))
 stopifnot(all(c("benzene_ppb_airtox", "Population_airtox", "GEOID20") %in% names(block_sf_risk)))
@@ -105,7 +110,9 @@ message("Saved COMMON-BLOCKS risk summary CSV: ", out_csv_common)
 # basis mobile benzene exceeds AirToxScreen (ratio ~1.26) rather than sitting
 # just below it (0.92); the difference is the skewed upper tail the median
 # discards. 74/77/79 carry the same primary/secondary pair for the hazard screen.
-mean_col <- sub("_med_of_daily_med_", "_mean_of_daily_mean_", mobile_benzene_col)
+# (2026-09-30) `mean_col` is now simply the OTHER basis (the median when the
+# primary is the mean); the name is kept so the block below is unchanged.
+mean_col <- if (EXPOSURE_BASIS == "mean_of_daily_mean") "sBenzene_med_of_daily_med_scaled" else "sBenzene_mean_of_daily_mean_scaled"
 if (mean_col %in% names(df_common)) {
   ok2 <- is.finite(df_common[[mean_col]])
   d2  <- df_common[ok2, ]
@@ -113,7 +120,7 @@ if (mean_col %in% names(df_common)) {
   results_meanbasis <- data.frame(
     metric = c("AirToxScreen benzene_ppb (COMMON blocks)",
                paste0("Mobile ", mobile_benzene_col, " (COMMON blocks) [primary basis]"),
-               paste0("Mobile ", mean_col, " (COMMON blocks) [secondary basis]")),
+               paste0("Mobile ", mean_col, " (COMMON blocks) [supplementary basis]")),
     n_blocks = nrow(d2),
     total_population_used = sum(d2$Population_airtox, na.rm = TRUE),
     pop_weighted_mean_ppb = c(pw_mean(d2$benzene_ppb_airtox, d2$Population_airtox),

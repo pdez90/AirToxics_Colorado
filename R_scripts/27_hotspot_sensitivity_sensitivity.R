@@ -45,7 +45,9 @@ out_dir  <- file.path(SUNCOR_BASE, "sourceprob_diagnostics")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # Basemap
-tile_type <- "cartolight"
+# BASEMAP (2026-09-30): CARTO now serves "API KEY REQUIRED" watermarked tiles without a key;
+# default to key-free OpenStreetMap tiles (as Figure 3 already does). SUNCOR_TILES=<rosm type> overrides.
+tile_type <- Sys.getenv("SUNCOR_TILES", "osm")
 tile_zoom <- 11
 dpi_out   <- 450
 surface_alpha <- 0.75

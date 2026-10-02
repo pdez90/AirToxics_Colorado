@@ -115,7 +115,7 @@ say("neuro + haem HI ranges",
     else sprintf("index from %s to %s; and the hematological index from %s to %s",
                  rh(g("HI_pwmean_Neurological", min), 3), rh(g("HI_pwmean_Neurological", max), 3), .hh[1], .hh[2]), SI, "")
 say("endocrine share of threshold",
-    sprintf("with the endocrine index at %s-%s of the threshold", rh(g("HI_pwmean_Endocrine", min), 2), rh(g("HI_pwmean_Endocrine", max), 2)), SI, "")
+    sprintf("with the endocrine index at %s-%s", rh(g("HI_pwmean_Endocrine", min), 2), rh(g("HI_pwmean_Endocrine", max), 2)), SI, "")
 say("most-exposed-block HI ranges",
     sprintf("ranging from %s to %s and from %s to %s, respectively",
             rh(g("HI_maxblock_Endocrine", min), 2), rh(g("HI_maxblock_Endocrine", max), 2),

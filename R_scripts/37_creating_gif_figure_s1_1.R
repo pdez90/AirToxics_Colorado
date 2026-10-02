@@ -55,7 +55,9 @@ bb_global <- c(
 tile_zoom <- 13
 
 # Cleaner basemap type
-tile_type <- "cartolight"  # other clean options: "osm", "stamenbw", "stamentoner"
+# BASEMAP (2026-09-30): CARTO now serves "API KEY REQUIRED" watermarked tiles without a key;
+# default to key-free OpenStreetMap tiles (as Figure 3 already does). SUNCOR_TILES=<rosm type> overrides.
+tile_type <- Sys.getenv("SUNCOR_TILES", "osm")  # other clean options: "osm", "stamenbw", "stamentoner"
 
 # ----------------------------
 # 2) Run stats (same as your function)

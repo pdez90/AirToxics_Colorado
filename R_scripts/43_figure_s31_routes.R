@@ -116,7 +116,7 @@ lab_df <- stats[, .(Route,
                 n_runs, med_dur_h, mean_speed_kmh))]
 
 p <- ggplot() +
-  annotation_map_tile(type = "cartolight", zoom = 11) +
+  annotation_map_tile(type = Sys.getenv("SUNCOR_TILES", "osm"), zoom = 11) +
   geom_point(data = pts, aes(Longitude, Latitude),
              size = 0.12, alpha = 0.25, color = "#2166ac") +
   geom_label(data = lab_df, aes(x = x, y = y, label = lab),
@@ -126,7 +126,7 @@ p <- ggplot() +
   coord_sf(crs = 4326, default_crs = 4326, xlim = xlim, ylim = ylim,
            expand = FALSE) +
   annotation_scale(location = "bl", width_hint = 0.25) +
-  labs(caption = "Basemap: CARTO Positron. Blue points are 1-s mobile measurement locations (thinned for display). Run duration and average driving speed computed from consecutive GPS fixes.",
+  labs(caption = "Basemap: © OpenStreetMap contributors. Blue points are 1-s mobile measurement locations (thinned for display). Run duration and average driving speed computed from consecutive GPS fixes.",
        x = NULL, y = NULL) +
   theme_bw(base_size = 13) +
   theme(panel.border = element_rect(color = "black", linewidth = 0.8, fill = NA),

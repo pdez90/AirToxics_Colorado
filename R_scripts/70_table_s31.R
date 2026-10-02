@@ -37,18 +37,22 @@
 #                                laboratory-route-day position grid and carry a
 #                                latitude/longitude (gaps of <= 3 s interpolated,
 #                                longer gaps left empty and the row dropped)
-#   8 Analysis set               03: rows whose delay-corrected position lies
+#   8 Outside HQ                 03: rows whose delay-corrected position lies
 #                                within 300 m of the CDPHE headquarters removed.
-#                                Equals mobile_wswd.RData (Goodrich excluded).
+#   9 Analysis set               03 section 3d (2026-09-27): H2S and HCN keep ONE
+#                                value per 5-s / 2-s acquisition bin (the bin
+#                                mean, on the bin's middle delivered second);
+#                                the aromatics are unchanged. Equals
+#                                mobile_wswd.RData (Goodrich excluded).
 #
 # (Until 2026-09-27 row 5 was an HQ screen on the DELIVERED position of the raw
 # rows, and rows 5-7 were folded silently into the analysis-set row. The
 # delivered-position screen described no step the pipeline takes, and the GPS
 # qualifier filter of 02, which removes 7-10% of each record, was not shown.)
 #
-# The native-cadence averaging of H2S/HCN (03, section 3b) changes values, not
-# row counts, so it is not a row of the funnel. All summary statistics and the
-# below-MDL fraction are computed on the analysis set (row 8).
+# The bin averaging of H2S/HCN (03, section 3b) changes values, not row counts;
+# the one-value-per-bin step (3d) changes counts and is row 9. All summary
+# statistics and the below-MDL fraction are computed on the analysis set.
 # ==============================================================
 suppressPackageStartupMessages({library(data.table)})
 
@@ -196,7 +200,7 @@ stage <- POLL[, .(name)]
 stage[, `:=`(reported = NA_integer_, after_qc = NA_integer_,
              gps = NA_integer_, after_excl = NA_integer_, no_gps_flag = NA_integer_,
              one_per_second = NA_integer_, with_position = NA_integer_,
-             outside_hq = NA_integer_)]
+             outside_hq = NA_integer_, one_per_bin = NA_integer_)]
 for (i in seq_len(nrow(POLL))) {
   v <- raw[[POLL$raw[i]]]; f <- raw[[POLL$flag[i]]]
   keep <- !voided(f); ex <- EXCLUDE(POLL$name[i])
@@ -214,6 +218,15 @@ for (i in seq_len(nrow(POLL))) {
   x <- merge(x, grid, by = c("Asset", "Site", ".sec"), all.x = TRUE)
   stage$with_position[i] <- sum(x$has_pos %in% TRUE)
   stage$outside_hq[i]    <- sum(x$has_pos %in% TRUE & !(x$in_hq %in% TRUE))
+  # one value per acquisition bin (03, 3d): bins on the delivery clock
+  # (delay-corrected second + delay) within laboratory-route-day
+  BIN <- c(btex = 1, h2s = 5, hcn = 2)[[POLL$delay[i]]]
+  y <- x[has_pos %in% TRUE & !(in_hq %in% TRUE)]
+  if (BIN > 1) {
+    y[, .day := as.Date(format(as.POSIXct(.sec, origin = "1970-01-01", tz = "MST"), "%Y-%m-%d"))]
+    y[, .blk := floor((.sec + ifelse(toupper(Asset) == "CAT", dl[["CAT"]], dl[["EMU"]])) / BIN)]
+    stage$one_per_bin[i] <- uniqueN(y, by = c("Asset", "Site", ".day", ".blk"))
+  } else stage$one_per_bin[i] <- nrow(y)
 }
 print(stage)
 message("\ncampaign exclusions (03_checks_flags.R):")
@@ -237,7 +250,8 @@ res <- data.table(pollutant = POLL$name)
 res[, `:=`(reported = stage$reported, after_qc = stage$after_qc,
            gps = stage$gps, after_excl = stage$after_excl,
            no_gps_flag = stage$no_gps_flag, one_per_second = stage$one_per_second,
-           with_position = stage$with_position, outside_hq = stage$outside_hq)]
+           with_position = stage$with_position, outside_hq = stage$outside_hq,
+           one_per_bin = stage$one_per_bin)]
 
 # Step function on the quarter start month. A measurement before the first
 # quarter the packets give for that lab has no audit MDL and is left NA rather
@@ -278,7 +292,7 @@ for (i in seq_len(nrow(POLL))) {
   # species. The aromatics are not averaged, so the columns are NA for them.
   rawc <- paste0(POLL$fin[i], "_raw")
   if (rawc %in% names(d)) {
-    xr <- d[[rawc]]; xr <- xr[ok & is.finite(xr)]
+    xr <- d[[rawc]]; xr <- xr[is.finite(xr)]   # every delivered second (not only the one-per-bin rows)
     qr <- quantile(xr, c(.5, .99, 1), names = FALSE)
     res[i, `:=`(n_delivered = length(xr), median_delivered = qr[1],
                 p99_delivered = qr[2], max_delivered = qr[3])]
@@ -286,8 +300,8 @@ for (i in seq_len(nrow(POLL))) {
 }
 for (.c in c("n_delivered", "median_delivered", "p99_delivered", "max_delivered"))
   if (!.c %in% names(res)) res[, (.c) := NA_real_]
-if (any(is.finite(res$n_delivered) & res$n_delivered != res$analysis))
-  stop("delivered and bin-mean series differ in length for some pollutant")
+if (any(is.finite(res$n_delivered) & res$n_delivered != res$outside_hq))
+  stop("delivered seconds differ from the rows outside HQ for some pollutant")
 
 # most common flag tokens actually present, per pollutant
 flagtop <- character(nrow(POLL))
@@ -300,8 +314,8 @@ for (i in seq_len(nrow(POLL))) {
 res[, most_common_flags := flagtop]
 
 # the funnel must close: the last stage IS the analysis set
-if (!isTRUE(all.equal(res$outside_hq, res$analysis))) {
-  print(res[, .(pollutant, outside_hq, analysis, diff = analysis - outside_hq)])
+if (!isTRUE(all.equal(res$one_per_bin, res$analysis))) {
+  print(res[, .(pollutant, outside_hq, one_per_bin, analysis, diff = analysis - one_per_bin)])
   stop("Table S3.1 funnel does not reproduce the analysis set")
 }
 message("funnel closes: last stage == analysis set for all six pollutants")
@@ -317,7 +331,8 @@ lab <- c("Most common flags"                                = "most_common_flags
          "Without a GPS qualifier flag"                     = "no_gps_flag",
          "One row per delay-corrected second"               = "one_per_second",
          "With a position at that second"                   = "with_position",
-         "Outside 300 m of HQ = analysis set"               = "analysis",
+         "Outside 300 m of HQ"                              = "outside_hq",
+         "One value per acquisition bin = analysis set"     = "analysis",
          "Sampling days represented"                        = "n_days",
          "  distinct values in the analysis set"            = "n_unique",
          "% of analysis set below audit MDL"                = "pct_belowMDL",
@@ -340,7 +355,7 @@ cat(sprintf("%-46s %12s %12s %12s %16s %12s %12s\n", "", res$pollutant[1], res$p
 for (k in names(lab)) {
   col <- lab[[k]]; v <- res[[col]]
   s <- if (is.character(v)) v
-       else if (col %in% c("reported","after_qc","gps","after_excl","no_gps_flag","one_per_second","with_position","outside_hq","analysis","n_unique","n_days","n_no_mdl"))
+       else if (col %in% c("reported","after_qc","gps","after_excl","no_gps_flag","one_per_second","with_position","outside_hq","one_per_bin","analysis","n_unique","n_days","n_no_mdl"))
          format(v, big.mark = ",")
        else if (grepl("^pct", col)) paste0(formatC(v, format = "f", digits = 1), "%")
        else formatC(v, format = "f", digits = 2, big.mark = ",")

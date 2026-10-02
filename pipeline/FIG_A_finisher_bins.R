@@ -1,6 +1,15 @@
 # ==============================================================
-# 07  TimePlot + Timevariation + GGally correlation plots
-# Auto-split from Suncor.Rmd  (section 7 of 40)
+# FIG_A_finisher_bins.R  (2026-09-30)
+# Quick finisher for figure group A after the one-value-per-bin change.
+# Runs the first part of script 07 verbatim, i.e. only:
+#   missingness_by_site.png       Figure S3.2  (delivered values: coverage)
+#   pairs_<Site>.png              Figures S3.3-S3.4 (1-s rows, repeated bin means)
+#   TimePlot_Suncor/Terminal.jpeg Figures S3.5-S3.6 (bin values, drawn as bars)
+#   TimePlot_BothRoutes_Stacked.jpeg
+# The time-variation, trend-level and polar figures of 07 already use the bin
+# values and are not redrawn. Needs mobile_wswd.RData with *_rep (R02 after
+# the 2026-09-30 fix to 06).
+#   Rscript rerun_pipeline/FIG_A_finisher_bins.R
 # ==============================================================
 
 #TimePlot + Timevariation + GGally correlation plots 
@@ -102,7 +111,7 @@ temp <- df %>% dplyr::select(Site,
   H2S = Hydrogen_Sulfide_ppb, HCN = Hydrogen_Cyanide_ppb,
   ws, wd, Temp = Temperature_F, Pressure = Pressure_mb,
   RH = Relative_Humidity_percent)   # by NAME (was positional c(1,7:15,20:21))
-temp1<- data.table::melt(setDT(temp), id.vars = c("Site"), variable.name = "Pollutant")
+temp1<- data.table::melt(data.table::setDT(temp), id.vars = c("Site"), variable.name = "Pollutant")
 temp1<-subset(temp1, temp1$Pollutant!="Temp" & temp1$Pollutant!="Pressure" & temp1$Pollutant!="RH" & temp1$Pollutant!="ws" & temp1$Pollutant!="wd" )
 temp1$Pollutant<-as.character(temp1$Pollutant)
 
@@ -140,7 +149,7 @@ temp <- df %>% dplyr::select(Site,
   H2S = Hydrogen_Sulfide_ppb, HCN = Hydrogen_Cyanide_ppb,
   ws, wd, Temp = Temperature_F, Pressure = Pressure_mb,
   RH = Relative_Humidity_percent)   # by NAME (was positional c(1,7:15,20:21))
-temp1<- data.table::melt(setDT(temp), id.vars = c("Site"), variable.name = "Pollutant")
+temp1<- data.table::melt(data.table::setDT(temp), id.vars = c("Site"), variable.name = "Pollutant")
 temp1<-subset(temp1, temp1$Pollutant=="Temp" | temp1$Pollutant=="Pressure" | temp1$Pollutant=="RH" | temp1$Pollutant=="ws" | temp1$Pollutant=="wd")
 temp1$Pollutant<-as.character(temp1$Pollutant)
 
@@ -285,7 +294,7 @@ for (s in sort(unique(df_corr$Site))) {
 rm(df_cov, df_corr); invisible(gc())
 
 #Time Plot
-df$year<-year(df$date)
+df$year<- lubridate::year(df$date)
 suppressPackageStartupMessages({
   library(dplyr)
   library(lubridate)
@@ -302,7 +311,7 @@ df <- df %>%
     HCN               = Hydrogen_Cyanide_ppb
   )
 # ---- add year
-df$year <- year(df$date)
+df$year <- lubridate::year(df$date)
 # ---- timePlot for Suncor site
 out_file <- file.path(SUNCOR_BASE, "TimePlot_Suncor.jpeg")
 jpeg(out_file, width = 6000, height = 6000, res = 600, quality = 100)
@@ -376,185 +385,5 @@ print(p2, split = c(1, 1, 1, 2), more = FALSE)  # bottom
 
 dev.off()
 
-#Time Variation
-suppressPackageStartupMessages({
-  library(dplyr)
-  library(openair)
-})
 
-# --- shorten site labels for plotting (do NOT overwrite original if you don't want to)
-df_plot <- df %>%
-  dplyr::mutate(
-    Route = recode(
-      Site,
-      "Suncor and Phillips 66 Terminal" = "Route 1",
-      "Holly Energy Partners (Sinclair) Terminal" = "Route 2",
-      .default = Site
-    )
-  )
-# ----------------------------
-# 1) BTEX plot (both routes)
-# ----------------------------
-jpeg(file.path(SUNCOR_BASE, "TimeVariation_BTEX_BothRoutes.jpeg"),
-     width = 8000, height = 6000, res = 600, quality = 100)
-timeVariation(
-  df_plot,
-  pollutant = c("Benzene", "Toluene", "Trimethylbenzene", "Xylene"),
-  type = "Route"
-)
-dev.off()
-
-# ----------------------------
-# 2) H2S + HCN plot (both routes)
-# ----------------------------
-jpeg(file.path(SUNCOR_BASE, "TimeVariation_H2S_HCN_BothRoutes.jpeg"),
-     width = 8000, height = 4500, res = 600, quality = 100)
-timeVariation(
-  df_plot,
-  pollutant = c("H2S", "HCN"),
-  type = "Route"
-)
-dev.off()
-
-#polarPlots
-jpeg(file.path(SUNCOR_BASE, "polarplot_benzene_Suncor.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Benzene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_toluene_Suncor.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Toluene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_trimethylbenzene_Suncor.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Trimethylbenzene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_xylene_Suncor.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Xylene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_h2s_Suncor.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="H2S")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_hcn_Suncor.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="HCN")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_benzene_Terminal.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="Benzene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_toluene_Terminal.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="Toluene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_trimethylbenzene_Terminal.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="Trimethylbenzene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_xylene_Terminal.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="Xylene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_h2s_Terminal.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="H2S")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "polarplot_hcn_Terminal.jpeg"), width=6000, height=6000, res=600)
-polarPlot(df[df$Site=="Holly Energy Partners (Sinclair) Terminal",], pollutant="HCN")
-dev.off()
-
-#Distance from Suncor
-df$suncor_Long<-rep(-104.94847, nrow(df))
-df$suncor_Lat<-rep(39.80456, nrow(df))
-
-df<-df %>%
-  dplyr::mutate(suncor_distance = pmap(list(a = Longitude, 
-                              b = Latitude, 
-                              x = suncor_Long,
-                              y = suncor_Lat), 
-                          ~ geosphere::distGeo( c(..1, ..2), c(..3, ..4))))
-df$suncor_distance<-as.numeric(df$suncor_distance)
-
-# CROSS-SPECIES PAIRING (2026-09-27). From 03 on, H2S and HCN hold ONE value
-# per 5-s / 2-s acquisition bin (on the bin's middle second), so they rarely
-# share a row with each other or with the 1-s aromatics. Analyses that pair
-# species ROW BY ROW - this regression and scatter, and the correlation
-# matrices below - use the repeated 1-s bin means kept in *_ppb_rep. Every
-# single-species statistic in this script (time variation, polar plots, trend
-# levels) uses the one-value-per-bin columns.
-df_pair <- df
-if (all(c("Hydrogen_Sulfide_ppb_rep", "Hydrogen_Cyanide_ppb_rep") %in% names(df_pair))) {
-  df_pair$H2S <- df_pair$Hydrogen_Sulfide_ppb_rep
-  df_pair$HCN <- df_pair$Hydrogen_Cyanide_ppb_rep
-}
-summary(lm(HCN ~ suncor_distance:H2S + H2S, df_pair))
-
-jpeg(file.path(SUNCOR_BASE, "Scatterplot_HCN_H2S_distance.jpeg"), width=10000, height=5000, res=600)
-scatterPlot(df_pair, x = "HCN", y = "H2S", z = "suncor_distance",  y.relation="free")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "Trendlevel_HCN_distance.jpeg"), width=10000, height=5000, res=600)
-trendLevel(df, "HCN", x = "month", y = "suncor_distance")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_HCN.jpeg"), width=10000, height=5000, res=600)
-trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="HCN")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_H2S.jpeg"), width=10000, height=5000, res=600)
-trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="H2S")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_Benzene.jpeg"), width=10000, height=5000, res=600)
-trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Benzene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_Toluene.jpeg"), width=10000, height=5000, res=600)
-trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Toluene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_Trimethylbenzene.jpeg"), width=10000, height=5000, res=600)
-trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Trimethylbenzene")
-dev.off()
-
-jpeg(file.path(SUNCOR_BASE, "Trendlevel_Suncor_Xylene.jpeg"), width=10000, height=5000, res=600)
-trendLevel(df[df$Site=="Suncor and Phillips 66 Terminal",], pollutant="Xylene")
-dev.off()
-
-temp<-df_pair[df_pair$Site=="Suncor and Phillips 66 Terminal",]   # 1-s pairing (see CROSS-SPECIES PAIRING)
-# by NAME (was positional c(7:15) then [,-1] — column order changed after the
-# in-place rename above, so positions grabbed non-numeric columns)
-temp <- temp %>% dplyr::select(dplyr::any_of(c(
-  "Benzene","Toluene","Trimethylbenzene","Xylene","H2S","HCN",
-  "ws","wd","Temperature_F","Pressure_mb","Relative_Humidity_percent")))
-temp <- as.data.frame(temp)   # GUARD: df comes from mobile_wswd.RData where `out` is a
-                              # data.table (script 06 join). On a data.table, the next line's
-                              # logical vector would be evaluated in `j` and RETURN THE VECTOR
-                              # instead of subsetting columns, so cor() then receives a vector
-                              # and fails with "supply both 'x' and 'y' or a matrix-like 'x'".
-temp <- temp[, sapply(temp, is.numeric), drop = FALSE]
-stopifnot(is.data.frame(temp), ncol(temp) >= 2, nrow(temp) > 0)
-jpeg(file.path(SUNCOR_BASE, "Corrplot_Suncor.jpeg"), width=5000, height=5000, res=600)
-ggcorrplot::ggcorrplot(as.matrix(cor(temp, use="pairwise.complete.obs")),  type = "lower",
-   lab = TRUE)
-dev.off()
-
-temp<-df_pair[df_pair$Site=="Holly Energy Partners (Sinclair) Terminal",]   # 1-s pairing
-# by NAME (was positional c(7:15) then [,-1] — column order changed after the
-# in-place rename above, so positions grabbed non-numeric columns)
-temp <- temp %>% dplyr::select(dplyr::any_of(c(
-  "Benzene","Toluene","Trimethylbenzene","Xylene","H2S","HCN",
-  "ws","wd","Temperature_F","Pressure_mb","Relative_Humidity_percent")))
-temp <- as.data.frame(temp)   # GUARD: df comes from mobile_wswd.RData where `out` is a
-                              # data.table (script 06 join). On a data.table, the next line's
-                              # logical vector would be evaluated in `j` and RETURN THE VECTOR
-                              # instead of subsetting columns, so cor() then receives a vector
-                              # and fails with "supply both 'x' and 'y' or a matrix-like 'x'".
-temp <- temp[, sapply(temp, is.numeric), drop = FALSE]
-stopifnot(is.data.frame(temp), ncol(temp) >= 2, nrow(temp) > 0)
-jpeg(file.path(SUNCOR_BASE, "Corrplot_Terminal.jpeg"), width=5000, height=5000, res=600)
-ggcorrplot::ggcorrplot(as.matrix(cor(temp, use="pairwise.complete.obs")),  type = "lower",
-   lab = TRUE)
-dev.off()
+message("FIG_A_finisher_bins: wrote missingness, pairs and time plots")

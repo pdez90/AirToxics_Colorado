@@ -18,8 +18,10 @@
 # (rt() below), because code-generated tables use round(); (ii) table cells
 # are compared after collapsing whitespace, so an empty cell reads "| |".
 #
-# Status 2026-09-27 (night): primary exposure basis for the hazard screen is now the block
-# median of daily medians (74/77/79 HAZARD_BASIS); the mean basis is checked as secondary. Claims whose source is a document rather than code (permit records,
+# Status 2026-09-30: the PRIMARY statistic for the maps (Figure 2), the benzene
+# block comparison and the hazard screen is the MEAN of daily means (script
+# defaults EXPOSURE_BASIS / HAZARD_BASIS = mean); the median of daily medians is
+# the supplementary analysis (SI section S4.7, S7.3; *_medianbasis outputs). Claims whose source is a document rather than code (permit records,
 # literature values, instrument specifications) are listed at the end so the
 # reader can see what this script does NOT vouch for.
 #
@@ -103,7 +105,14 @@ BLK <- file.path(BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.RDat
 if (file.exists(BLK)) {
   suppressPackageStartupMessages(library(sf))
   e <- new.env(); suppressWarnings(load(BLK, envir = e)); d <- sf::st_drop_geometry(get(ls(e)[1], envir = e))
-  m <- d$sBenzene_med_of_daily_med_scaled; a <- d$benzene_ppb; k <- is.finite(m) & is.finite(a); r <- m[k] / a[k]
+  m <- d$sBenzene_mean_of_daily_mean_scaled; a <- d$benzene_ppb; k <- is.finite(m) & is.finite(a); r <- m[k] / a[k]
+  # supplementary basis (S4.7): the same statistics on the block median of daily medians
+  .m2 <- d$sBenzene_med_of_daily_med_scaled; .k2 <- is.finite(.m2) & is.finite(a); .r2 <- .m2[.k2] / a[.k2]
+  say("S4.7: Pearson / Spearman (median basis)", sprintf("(Pearson r = %s, Spearman r = %s)", rh(cor(.m2[.k2], a[.k2]), 2), rh(cor(.m2[.k2], a[.k2], method = "spearman"), 2)), SI)
+  say("S4.7: mobile block maximum (median basis)", sprintf("the mobile blocks reach %s ppb", rh(max(.m2[.k2]), 1)), SI)
+  say("S4.7: blocks > 2x / 5x / max (median basis)", sprintf("exceed AirToxScreen by more than a factor of two in %d of the %s blocks (%s%%), by more than a factor of five in %d and by a factor of %d",
+      sum(.r2 > 2), cm(sum(.k2)), rh(100 * mean(.r2 > 2), 1), sum(.r2 > 5), round(max(.r2))), SI)
+  say("S4.7: blocks below AirToxScreen (median basis)", sprintf("lower than AirToxScreen in %s%% of blocks (median ratio %s)", pc(100 * mean(.r2 < 1)), rh(median(.r2), 2)), SI)
   say("3.3: Pearson / Spearman", sprintf("(Pearson r = %s, Spearman r = %s)", rh(cor(m[k], a[k]), 2), rh(cor(m[k], a[k], method = "spearman"), 2)), MS)
   say("3.3: AirToxScreen block range", sprintf("span only %s-%s ppb across the entire domain - a %s-fold range", rh(min(a[k]), 3), rh(max(a[k]), 3), rh(max(a[k]) / min(a[k]), 1)), MS)
   say("3.3: mobile block maximum", sprintf("reaching %s ppb", rh(max(m[k]), 1)), MS)
@@ -114,12 +123,12 @@ if (file.exists(BLK)) {
   say("2.5.1: block area", sprintf("median of %s km2 (IQR: %s-%s km2), a mean of %s km2, and a range from %s to %s km2",
       rh(median(ar), 4), rh(quantile(ar, .25), 4), rh(quantile(ar, .75), 4), rh(mean(ar), 4), rh(min(ar), 4), rh(max(ar), 2)), MS)
   # neurological most-exposed block (within block) - Table S7.1 / S7.1 prose.
-  # PRIMARY BASIS (2026-09-27): median of daily medians, as in section 3.3; the
-  # mean of daily means is the secondary basis quoted alongside it.
+  # PRIMARY BASIS (2026-09-30): mean of daily means, as in section 3.3; the
+  # median of daily medians is the supplementary basis.
   MV <- 8.314 * 298.15 / 83000 * 1000
   hqb <- function(b) cbind(d[[paste0("sToluene_", b)]] * 92.14 / MV / 5000, d[[paste0("sXylene_", b)]] * 106.16 / MV / 100,
                            d[[paste0("sTrimethylbenzene_", b)]] * 120.19 / MV / 60)
-  hq <- hqb("med_of_daily_med"); ok <- rowSums(!is.finite(hq)) == 0 & is.finite(d$POP20)
+  hq <- hqb("mean_of_daily_mean"); ok <- rowSums(!is.finite(hq)) == 0 & is.finite(d$POP20)
   hqm <- hqb("mean_of_daily_mean"); okm <- rowSums(!is.finite(hqm)) == 0 & is.finite(d$POP20)
   say("S7.1: neurological within-block maximum", sprintf("the largest index within any single block is %s (block %s)", rh(max(rowSums(hq[ok, ])), 3), d$GEOID20[ok][which.max(rowSums(hq[ok, ]))]), SI)
   say("S7.1: eligible blocks (neurological)", sprintf("(%s blocks for the neurological system)", cm(sum(ok))), SI)
@@ -128,10 +137,14 @@ if (file.exists(BLK)) {
   # both bases, benzene comparison (section 3.3 / S4.3) - from the block file itself
   a <- d$benzene_ppb; pw <- function(x) { k <- is.finite(x) & is.finite(a) & is.finite(d$POP20) & d$POP20 > 0; sum(x[k] * d$POP20[k]) / sum(d$POP20[k]) }
   mm <- d$sBenzene_mean_of_daily_mean_scaled; md <- d$sBenzene_med_of_daily_med_scaled; k2 <- is.finite(mm) & is.finite(md) & is.finite(a) & is.finite(d$POP20) & d$POP20 > 0
-  say("3.3 / S4.3: mean-basis benzene", sprintf("a population-weighted mobile benzene of %s ppb, %s-%s excess cases, a mobile-to-AirToxScreen ratio of %s and %d blocks above twice", rh(pw(mm), 3),
-      rh(5.75 * sum(mm[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(mm[k2] * d$POP20[k2]) / 1e6, 3), rh(pw(mm) / pw(a), 2), sum(mm[k2] / a[k2] > 2)), MS)
-  say("S4.3: mean-basis benzene", sprintf("the population-weighted mobile benzene is %s ppb (%s-%s excess cases), the ratio to AirToxScreen is %s, and %d rather than %d blocks exceed twice", rh(pw(mm), 3),
-      rh(5.75 * sum(mm[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(mm[k2] * d$POP20[k2]) / 1e6, 3), rh(pw(mm) / pw(a), 2), sum(mm[k2] / a[k2] > 2), sum(md[k2] / a[k2] > 2)), SI)
+  say("3.3: median-basis benzene (supplementary)", sprintf("the population-weighted mobile benzene is %s ppb, %s-%s excess cases, a mobile-to-AirToxScreen ratio of %s and %d blocks above twice", rh(pw(md), 3),
+      rh(5.75 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(pw(md) / pw(a), 2), sum(md[k2] / a[k2] > 2)), MS)
+  say("S4.3: median-basis benzene", sprintf("the population-weighted mobile benzene is %s ppb (%s-%s excess cases), the ratio to AirToxScreen is %s, and %d rather than %d blocks exceed twice", rh(pw(md), 3),
+      rh(5.75 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(pw(md) / pw(a), 2), sum(md[k2] / a[k2] > 2), sum(mm[k2] / a[k2] > 2)), SI)
+  say("S4.7: median-basis benzene and risk", sprintf("the population-weighted mobile benzene over the %s common blocks is %s ppb against %s ppb for AirToxScreen (ratio %s), and the excess lifetime cancer risk is %s-%s cases against %s-%s cases",
+      cm(sum(k2)), rh(pw(md), 3), rh(pw(a), 3), rh(pw(md) / pw(a), 2), rh(5.75 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(md[k2] * d$POP20[k2]) / 1e6, 3),
+      rh(5.75 * sum(a[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(a[k2] * d$POP20[k2]) / 1e6, 3)), SI)
+  say("S4.7: block mean > median share and factor", sprintf("for benzene the block means exceed the block medians in %s%% of blocks, by a median factor of %s", pc(100 * mean(mm[k2] > md[k2])), rh(median((mm / md)[k2 & md > 0]), 1)), SI)
   say("S7.3: mean > median share and factor", sprintf("The block means exceed the block medians in %s%% of blocks, by a median factor of %s for benzene", pc(100 * mean(mm[k2] > md[k2])), rh(median((mm / md)[k2 & md > 0]), 1)), SI)
 } else skip("block-file checks (3.3, 2.5.1, S7.1)", "censusblocks_..._overlap.RData not present")
 
@@ -141,30 +154,44 @@ SEG <- file.path(BASE, "segment500_summaries_acrossSites.RData")
 if (file.exists(SEG)) {
   suppressPackageStartupMessages(library(sf))
   e <- new.env(); suppressWarnings(load(SEG, envir = e)); pd <- sf::st_drop_geometry(e$seg_wide_sf)
-  cell <- function(p, md = 3) { x <- suppressWarnings(as.numeric(pd[[paste0("bgcorr_", p, "_median_of_daily_medians")]]))
+  cell <- function(p, md = 3, st = "mean_of_daily_means") { x <- suppressWarnings(as.numeric(pd[[paste0("bgcorr_", p, "_", st)]]))
     n <- suppressWarnings(as.numeric(pd[[paste0("bgcorr_", p, "_n_days_any")]])); x[is.finite(x) & is.finite(n) & n >= md] }
-  b <- cell("Benzene")
-  say("3.3: benzene cell range and count", sprintf("ranged from %s to %s ppb across the %d cells sampled on at least three days", rh(min(b), 2), rh(max(b), 2), length(b)), MS)
-  av <- unlist(lapply(c("Benzene", "Toluene", "Trimethylbenzene", "Xylene"), cell))
-  say("3.3: shared aromatic colour scale", sprintf("shared color scale spanning %s to %s ppb", rh(quantile(av, .02), 2), rh(quantile(av, .98), 2)), MS)
-  say("3.3: benzene <= 0.15 ppb share", sprintf("at or below the relatively small value of 0.15 ppb in %s%% of mapped cells", pc(100 * mean(b <= 0.15))), MS)
-  top <- sort(b, decreasing = TRUE)[1:3]
-  say("3.3: three highest benzene cells", sprintf("The three highest cells (%s, %s and %s ppb)", rh(top[3], 2), rh(top[2], 2), rh(top[1], 2)), MS)
-  say("3.3: toluene maximum", sprintf("(maximum %s ppb)", rh(max(cell("Toluene")), 2)), MS)
-  say("3.3: TMB and xylene maxima", sprintf("Trimethylbenzene (maximum %s ppb) and xylene (maximum %s ppb)", rh(max(cell("Trimethylbenzene")), 2), rh(max(cell("Xylene")), 2)), MS)
-  h <- cell("H2S")
-  say("3.3: H2S cell range and count", sprintf("ranged from %s to %s ppb across the %d cells", rh(min(h), 2), rh(max(h), 2), length(h)), MS)
-  say("3.3: H2S share >= 1 ppb", sprintf("the %s%% of mapped cells at or above 1 ppb", pc(100 * mean(h >= 1))), MS)
-  say("Figure 2 caption: H2S / benzene minima", sprintf("extend to %s ppb, well below the aromatics' minimum of %s ppb", rh(min(h), 2), rh(min(b), 2)), MS)
-  hc <- cell("HCN")
-  say("3.3: HCN median, count, max, >= 1.2 ppb", sprintf("median value of %s ppb across %d cells", rh(median(hc), 2), length(hc)), MS)
-  say("3.3: HCN maximum and top cells", sprintf("(maximum %s ppb; %d of %d cells, under 1%%, at or above 1.2 ppb)", rh(max(hc), 2), sum(hc >= 1.2), length(hc)), MS)
+  ARO <- c("Benzene", "Toluene", "Trimethylbenzene", "Xylene")
+  # primary: Figure 2 / section 3.3 on the mean of daily means; supplementary: Figure S4.13 / S4.7 on the median of daily medians
+  for (.b in list(list(st = "mean_of_daily_means", doc = MS, tag = "3.3"), list(st = "median_of_daily_medians", doc = SI, tag = "S4.7"))) {
+    cl <- function(p, md = 3) cell(p, md, .b$st); T <- .b$tag; D <- .b$doc
+    b <- cl("Benzene"); av <- unlist(lapply(ARO, cl)); h <- cl("H2S"); hc <- cl("HCN")
+    say(paste0(T, ": benzene cell range and count"), sprintf("from %s to %s ppb across the %d cells sampled on at least three days", rh(min(b), 2), rh(max(b), 2), length(b)), D)
+    say(paste0(T, ": shared aromatic colour scale"), sprintf("color scale spanning %s to %s ppb", rh(quantile(av, .02), 2), rh(quantile(av, .98), 2)), D)
+    top <- sort(b, decreasing = TRUE)[1:3]
+    say(paste0(T, ": three highest benzene cells"), sprintf("three highest cells (%s, %s and %s ppb)", rh(top[3], 2), rh(top[2], 2), rh(top[1], 2)), D)
+    say(paste0(T, ": H2S cell range and count"), sprintf("from %s to %s ppb across the %d cells", rh(min(h), 2), rh(max(h), 2), length(h)), D)
+    say(paste0(T, ": H2S display scale"), sprintf("%s to %s ppb", rh(quantile(h, .02), 2), rh(quantile(h, .98), 2)), D)
+    say(paste0(T, ": HCN median and count"), sprintf("median value of %s ppb across %d cells", rh(median(hc), 2), length(hc)), D)
+    say(paste0(T, ": HCN display scale"), sprintf("%s to %s ppb", rh(quantile(hc, .02), 2), rh(quantile(hc, .98), 2)), D)
+    .hs <- 100 * sum(hc >= 1.2) / length(hc)
+    say(paste0(T, ": HCN maximum and >= 1.2 ppb"), sprintf("(maximum %s ppb; %d of %d cells, %s, at or above 1.2 ppb)", rh(max(hc), 2), sum(hc >= 1.2), length(hc),
+        if (.hs < 1) "under 1%" else paste0(rh(.hs, 1), "%")), D)
+    say(paste0(if (T == "3.3") "Figure 2" else "Figure S4.13", " caption: H2S / benzene minima"), sprintf("extend to %s ppb, well below the aromatics' minimum of %s ppb", rh(min(h), 2), rh(min(b), 2)), D)
+    if (T == "3.3") {
+      say("3.3: benzene <= 0.15 ppb share", sprintf("at or below the relatively small value of 0.15 ppb in %s%% of mapped cells", pc(100 * mean(b <= 0.15))), MS)
+      say("3.3: toluene maximum", sprintf("(maximum %s ppb)", rh(max(cl("Toluene")), 2)), MS)
+      say("3.3: TMB and xylene maxima", sprintf("Trimethylbenzene (maximum %s ppb) and xylene (maximum %s ppb)", rh(max(cl("Trimethylbenzene")), 2), rh(max(cl("Xylene")), 2)), MS)
+      say("3.3: cells > 0.8 ppb (T, TMB, X)", sprintf("(%d, %d and %d cells for toluene, trimethylbenzene and xylene)", sum(cl("Toluene") > 0.8), sum(cl("Trimethylbenzene") > 0.8), sum(cl("Xylene") > 0.8)), MS)
+      say("3.3: H2S share >= 1 ppb", sprintf("the %s%% of mapped cells at or above 1 ppb", pc(100 * mean(h >= 1))), MS)
+      say("3.3: HCN cells >= 2 ppb", sprintf("the %d cells at or above 2 ppb", sum(hc >= 2)), MS)
+    } else {
+      say("S4.7: benzene <= 0.15 ppb share", sprintf("%s%% of cells are at or below 0.15 ppb", pc(100 * mean(b <= 0.15))), SI)
+      say("S4.7: aromatic maxima", sprintf("The maxima are %s ppb for toluene, %s ppb for trimethylbenzene and %s ppb for xylene", rh(max(cl("Toluene")), 2), rh(max(cl("Trimethylbenzene")), 2), rh(max(cl("Xylene")), 2)), SI)
+      say("S4.7: H2S share >= 1 ppb", sprintf("with %s%% of cells at or above 1 ppb", pc(100 * mean(h >= 1))), SI)
+    }
+  }
   # Table S3.2 sustained maxima: >= 10 sampled days, 24-h scaled for benzene/toluene/xylene
   sfF <- file.path(BASE, "lacasa_scaling_factors_option1_binweighted.RData")
   if (file.exists(sfF)) {
     e2 <- new.env(); load(sfF, envir = e2); o <- get(ls(e2)[1], envir = e2)
     fac <- setNames(as.numeric(o$ratio_all_over_mobilelike), tolower(o$pollutant))
-    mx <- function(p, f = 1) max(cell(p, 10)) * f
+    mx <- function(p, f = 1, st = "mean_of_daily_means") max(cell(p, 10, st)) * f
     SIrow <- rows(SI)
     say("Table S3.2: benzene sustained max (>=10 d, scaled)", sprintf("| %s |", rh(mx("Benzene", fac["benzene"]), 2)), SIrow)
     say("Table S3.2: toluene sustained max", sprintf("| %s |", rh(mx("Toluene", fac["toluene"]), 2)), SIrow)
@@ -172,6 +199,9 @@ if (file.exists(SEG)) {
     say("Table S3.2: xylene sustained max", sprintf("| %s |", rh(mx("Xylene", fac["xylene"]), 2)), SIrow)
     say("Table S3.2: H2S sustained max (unscaled)", sprintf("| %s (unscaled) |", rh(mx("H2S"), 2)), SIrow)
     say("Table S3.2: HCN sustained max (unscaled)", sprintf("| %s (unscaled) |", rh(mx("HCN"), 1)), SIrow)
+    md2 <- function(p, f = 1) mx(p, f, "median_of_daily_medians")
+    sayx("S4.7: Table S3.2 sustained maxima (median basis)", sprintf(rxq("are %s ppb for benzene, %s ppb for toluene, %s ppb for trimethylbenzene, %s ppb for xylene, %s ppb for H2S and %s ppb for HCN"),
+        rt(md2("Benzene", fac["benzene"]), 2), rt(md2("Toluene", fac["toluene"]), 2), rt(md2("Trimethylbenzene"), 2), rt(md2("Xylene", fac["xylene"]), 2), rt(md2("H2S"), 2), rt(md2("HCN"), 1)), SI)
   }
 } else skip("Figure 2 cell checks (3.3, Table S3.2)", "segment500_summaries_acrossSites.RData not present")
 
@@ -193,10 +223,10 @@ say("S1.4: negatives retained", sprintf("%s of them for benzene and %s for H2S",
 say("Table S3.1: analysis-set counts", sprintf("| %s | %s | %s | %s | %s | %s |", cm(s31$analysis[1]), cm(s31$analysis[2]), cm(s31$analysis[3]), cm(s31$analysis[4]), cm(s31$analysis[5]), cm(s31$analysis[6])),
     rows(SI))
 # Table S3.1 funnel (round 6): each stage row in processing order, and the funnel must close
-for (.st in c("no_gps_flag", "one_per_second", "with_position")) if (.st %in% names(s31))
+for (.st in c("no_gps_flag", "one_per_second", "with_position", "outside_hq")) if (.st %in% names(s31))
   say(sprintf("Table S3.1: stage %s", .st), paste0("| ", paste(cm(s31[[.st]]), collapse = " | "), " |"), rows(SI))
 if ("outside_hq" %in% names(s31)) cat(sprintf("  [%s] %-46s last funnel stage == analysis set\n",
-    if (all(s31$outside_hq == s31$analysis)) "OK  " else "FAIL", "Table S3.1: funnel closes"))
+    if (all((if ("one_per_bin" %in% names(s31)) s31$one_per_bin else s31$outside_hq) == s31$analysis)) "OK  " else "FAIL", "Table S3.1: funnel closes"))
 say("2.1.1: HCN funnel", sprintf("the HCN record comprises %s delivered rows, of which %s remain in the analysis set", cm(s31[pollutant == "HCN", after_excl]), cm(s31[pollutant == "HCN", analysis])), MS)
 if ("no_gps_flag" %in% names(s31)) { .gp <- 100 * (1 - s31$no_gps_flag / s31$after_excl)
   say("S1.4: GPS-flag share", sprintf("which removes %s-%s%% of each pollutant's record after the campaign exclusions", rh(min(.gp), 1), rh(max(.gp), 1)), SI) }
@@ -229,6 +259,23 @@ say("S3.1: block count", sprintf("for the %s blocks that retain a valid value", 
 say("S3.1: correlations by case", sprintf("falls to %s for substitution with 0, %s for MDL/2, and %s for full-MDL substitution", rh(mb[case == "zero", r_vs_raw], 2), rh(mb[case == "half", r_vs_raw], 2), rh(mb[case == "full", r_vs_raw], 2)), SI)
 say("S3.1: block/ATS ratios by case", sprintf("from %s for the raw, unscaled values to %s for MDL/2 substitution and %s for MDL substitution", rh(mb[case == "raw", median_ratio_vs_ATS], 2), rh(mb[case == "half", median_ratio_vs_ATS], 2), rh(mb[case == "full", median_ratio_vs_ATS], 2)), SI)
 say("3.8: correlations after substitution", sprintf("falls to %s and %s, respectively", rh(mb[case == "half", r_vs_raw], 2), rh(mb[case == "full", r_vs_raw], 2)), MS)
+
+if (have("TABLE_mdl_sensitivity_blocks_medianbasis.csv")) { mbm <- need("TABLE_mdl_sensitivity_blocks_medianbasis.csv")
+  say("S4.7: MDL substitution on the median basis", sprintf("to %s (zero), %s (MDL/2) and %s (MDL), and raises the median block-to-AirToxScreen ratio from %s to %s and %s",
+      rh(mbm[case == "zero", r_vs_raw], 2), rh(mbm[case == "half", r_vs_raw], 2), rh(mbm[case == "full", r_vs_raw], 2),
+      rh(mbm[case == "raw", median_ratio_vs_ATS], 2), rh(mbm[case == "half", median_ratio_vs_ATS], 2), rh(mbm[case == "full", median_ratio_vs_ATS], 2)), SI)
+} else skip("S4.7: MDL substitution (median basis)", "TABLE_mdl_sensitivity_blocks_medianbasis.csv not present")
+if (have("TABLE_S4.1_background_sensitivity_medianbasis.csv") && have("TABLE_S4.1b_background_sensitivity_cells_medianbasis.csv")) {
+  t41m <- need("TABLE_S4.1_background_sensitivity_medianbasis.csv"); t41bm <- need("TABLE_S4.1b_background_sensitivity_cells_medianbasis.csv")
+  .en <- t41bm[pollutant == "Endocrine" & is.finite(pct_HI_gt1), pct_HI_gt1]
+  say("S4.7: background settings on the median basis", sprintf("the mobile-to-AirToxScreen ratio ranges from %s to %s and the community endocrine index from %s to %s; and the share of 500 m cells with an endocrine hazard index above 1 ranges from %s%% to %s%%",
+      rh(min(t41m$ratio_mobile_over_airtox), 2), rh(max(t41m$ratio_mobile_over_airtox), 2), rh(min(t41m$HI_pwmean_Endocrine), 3), rh(max(t41m$HI_pwmean_Endocrine), 3), rh(min(.en), 0), rh(max(.en), 0)), SI)
+  say("S4.6: median-basis ratio and endocrine ranges", sprintf("On the supplementary median basis (section S4.7) the ratio ranged from %s to %s.", rh(min(t41m$ratio_mobile_over_airtox), 2), rh(max(t41m$ratio_mobile_over_airtox), 2)), SI)
+  say("S4.6: median-basis endocrine range", sprintf("the community endocrine range was %s-%s, below 1 throughout", rh(min(t41m$HI_pwmean_Endocrine), 3), rh(max(t41m$HI_pwmean_Endocrine), 3)), SI)
+  .nb <- t41m[!(percentile == 20 & window_min == 20)]
+  say("S4.6: median-basis identical cells", sprintf("%s-%s%% of cells retained exactly the same value", rh(min(.nb$cells_identical_pct), 0), rh(max(.nb$cells_identical_pct), 0)), SI)
+  say("S4.6: median-basis cell endocrine share", sprintf("On the supplementary median basis it varied substantially, from %s%% to %s%%", rh(min(.en), 0), rh(max(.en), 0)), SI)
+}
 
 # ==========================================================================
 hdr("F. La Casa  <- lacasa metrics, TABLE_lacasa_daynight_ratios.csv, scaling factors")
@@ -264,6 +311,13 @@ say("2.5.3: HCN threshold", sprintf("S; n = %s and %d days for HCN)", rh(tv("hyd
 say("2.5.3: initial clusters", sprintf("yielded %s initial clusters across the six pollutants (%d benzene, %d toluene, %d trimethylbenzene, %d xylene, %d H",
     cm(sum(th$n_clusters_all)), tv("benzene")$n_clusters_all, tv("toluene")$n_clusters_all, tv("trimethylbenzene")$n_clusters_all, tv("xylene")$n_clusters_all, tv("hydrogen_sulfide")$n_clusters_all), MS)
 say("2.5.3: HCN clusters", sprintf("S and %d HCN)", tv("hydrogen_cyanide")$n_clusters_all), MS)
+# (2026-09-30) H2S event threshold on the 5-s bin values, retained clusters, grouping counts
+say("2.5.3: H2S event threshold", sprintf("; %s ppb for H", rh(tv("hydrogen_sulfide")$b99_ppb, 1)), MS)
+say("2.5.3: retained clusters", sprintf("retaining %s clusters", paste(paste(th$n_persistent_clusters[1:5], collapse = ", "), "and", th$n_persistent_clusters[6])), MS)
+.ssg <- need("summary_stats_persistent.csv")
+say("2.5.3: grouping counts", sprintf("These %d persistent single-pollutant clusters were then spatially grouped across pollutants into %d candidate hotspot groups. Of these, %d contained at least two pollutants, %d contained three or more, and %d contained four or more",
+    sum(th$n_persistent_clusters), .ssg$n_groups, .ssg$n_groups_2plus_pollutants, .ssg$n_groups_3plus_pollutants, .ssg$n_groups_4plus_pollutants), MS)
+say("2.5.3: largest mixture", sprintf("within a single group was %s", c("three","four","five","six")[.ssg$max_pollutants_in_group - 2]), MS)
 say("2.5.3: kernel weight at 15 km", sprintf("(~%s%% of near-field weight at 15 km)", pc(100 * exp(-15000 / 12000))), MS)
 ss <- need("summary_stats_persistent.csv")
 say("3.4: 14 persistent groups", sprintf("Regional map of %d persistent hotspot groups", ss$n_groups_3plus_pollutants), MS)
@@ -276,17 +330,23 @@ say("3.4.2: composition counts", sprintf("Benzene was present in %d of the %d gr
 say("3.4.2: H2S / HCN membership", sprintf("with H2S in %s and HCN in %s", c("four","five","six")[sum(sapply(tok, function(t) "h2s" %in% t)) - 3], c("three","four","five")[sum(sapply(tok, function(t) "hcn" %in% t)) - 2]), MS)
 gm <- function(id) M[group_id == id]; g5 <- function(id) S5[group_id == id]
 say("3.4.2: group 4", sprintf("was above the campaign 99th percentile within 100 m on %d days, and its toluene cluster registered exceedances on %d distinct days", g5(4)$toluene, gm(4)$max_n_days), MS)
-say("3.4.2: group 4 TRI distance", sprintf("It lies %s km from the Phillips 66 terminal", rh(gm(4)$tri_dist_km, 2)), MS)
+say("3.4.2: group 4 TRI distance", sprintf("lies %s km from the Phillips 66 terminal", rh(gm(4)$tri_dist_km, 2)), MS)
 say("3.4.2: groups 40 and 43", sprintf("at %s km (Owens Corning Roofing and Asphalt) and %s km (KBP Coil Coaters)", rh(gm(40)$tri_dist_km, 2), rh(gm(43)$tri_dist_km, 2)), MS)
 say("3.4.2: groups 22 and 29", sprintf("with %d and %d measurements within 100 m", g5(22)$n_rows_100m, g5(29)$n_rows_100m), MS)
 say("3.4.2: group 13 TRI distance", sprintf("Group 13, %s km from a glass-container plant", rh(gm(13)$tri_dist_km, 2)), MS)
 say("3.4.2: group 11", sprintf("with %s mobile measurements within 100 m, and its benzene cluster registered exceedances on %d distinct days (the group persistence metric", cm(g5(11)$n_rows_100m), gm(11)$max_n_days), MS)
 say("3.4.2: group 60", sprintf("%s km from the Sinclair Denver products terminal, and is persistent for HCN, trimethylbenzene and xylene; its xylene cluster registered exceedances on %d distinct days", rh(gm(60)$tri_dist_km, 2), gm(60)$max_n_days), MS)
-say("3.4.2: group 28", sprintf("its xylene cluster registering exceedances on %d distinct days (the group persistence metric)", gm(28)$max_n_days), MS)
+say("3.4.2: groups 12 and 28", sprintf("their xylene clusters registering exceedances on %d and %d distinct days (the group persistence metric)", gm(12)$max_n_days, gm(28)$max_n_days), MS)
+say("3.4.2: group 9", sprintf("Group 9 lies closer to a TRI facility than any other group in the study, %s km from the Sinclair Denver products terminal", rh(gm(9)$tri_dist_km, 2)), MS)
+if (gm(9)$tri_dist_km != min(M$tri_dist_km, na.rm = TRUE)) cat("  [FAIL] 3.4.2: Group 9 is no longer the group nearest a TRI facility\n")
 # SI Table S5.1 rows: per-group days and TRI distance
 SIrow <- rows(SI)
 for (i in seq_len(nrow(S5))) { r <- S5[i]
-  say(sprintf("Table S5.1: group %s days", r$group_id), sprintf("benzene %d; toluene %d; trimethylbenzene %d; xylene %d; H", r$benzene, r$toluene, r$trimethylbenzene, r$xylene), SI)
+  # the full day list; pollutants with no day are omitted from the caption (2026-09-30)
+  .dd <- c(benzene = r$benzene, toluene = r$toluene, trimethylbenzene = r$trimethylbenzene, xylene = r$xylene, H2S = r$H2S, HCN = r$HCN)
+  .dd <- .dd[.dd > 0]
+  say(sprintf("Table S5.1: group %s days", r$group_id), paste0("Days above the campaign 99th percentile within 100 m: ",
+      paste(sprintf("%s %d", sub("H2S", "H2S", names(.dd)), .dd), collapse = "; "), "."), SI)
   say(sprintf("Table S5.1: group %s TRI distance", r$group_id), sprintf("(%s km)", rh(r$tri_dist_km, 2)), SI) }
 
 # DBSCAN sensitivity
@@ -302,8 +362,8 @@ say("S5.3: single-step and combined", sprintf("but recovery is %s%% for the larg
     pc(100 * min(one$recovery_of_baseline)), .r1(0.99, 200, 0.95)), SI)
 say("S5.3: groups range", sprintf("ranges from %d (coarsest eps with strictest persistence) to %d (finest eps with loosest persistence)", min(ds$groups_3plus), max(ds$groups_3plus)), SI)
 mod <- ds[eps_m %in% c(50, 100) & pers_pctl %in% c(0.85, 0.90)]
-say("S5.3: moderate-perturbation recovery", sprintf("%s-%s%% of the 14 baseline locations are recovered for eps of 50-100 m with persistence p85-p90", pc(100 * min(mod$recovery_of_baseline)), pc(100 * max(mod$recovery_of_baseline))), SI)
-say("S5.3: single-step minimum", sprintf("recovery falls to %s%% (%d of 14)", pc(100 * min(one$recovery_of_baseline)), round(14 * min(one$recovery_of_baseline))), SI)
+say("S5.3: moderate-perturbation recovery", sprintf("%s-%s%% of the %d baseline locations are recovered for eps of 50-100 m with persistence p85-p90", pc(100 * min(mod$recovery_of_baseline)), pc(100 * max(mod$recovery_of_baseline)), b$groups_3plus), SI)
+say("S5.3: single-step minimum", sprintf("recovery falls to %s%% (%d of %d)", pc(100 * min(one$recovery_of_baseline)), round(b$groups_3plus * min(one$recovery_of_baseline)), b$groups_3plus), SI)
 say("S5.3: baseline reproduces 14", sprintf("the same %d groups persistent in three or more pollutants", b$groups_3plus), SI)
 # split-sample and sufficiency
 sp <- need("TABLE_split_sample_hotspots.csv"); oe <- sp[split == "odd_even"]; ca <- sp[split == "calendar"]
@@ -313,8 +373,9 @@ say("S5.5: calendar halves", sprintf("identified %d (2023-2024) and %d (2025) gr
     ca$groups3_A, ca$groups3_B, pc(100 * ca$frac_base_near_A), pc(100 * ca$frac_base_near_B), pc(100 * ca$frac_A_near_B), pc(100 * ca$frac_B_near_A)), SI)
 su <- need("TABLE_sampling_sufficiency.csv"); sk <- function(k, c) su[k_days == k][[c]]
 say("S5.6: map correlations", sprintf("reached %s with 40 sampling days, %s with 80, %s with 160, and %s with 200", rh(sk(40, "map_cor_median"), 2), rh(sk(80, "map_cor_median"), 2), rh(sk(160, "map_cor_median"), 2), rh(sk(200, "map_cor_median"), 2)), SI)
-say("S5.6: hotspot recovery", sprintf("from %s%% at 10 days to %s-%s%% at 60-80 days, %s%% at 120 days, %s%% at 160 days, and %s%% at 200 days",
-    pc(100 * sk(10, "recovery_median")), pc(100 * min(sk(60, "recovery_median"), sk(80, "recovery_median"))), pc(100 * max(sk(60, "recovery_median"), sk(80, "recovery_median"))),
+.r6080 <- unique(c(pc(100 * min(sk(60, "recovery_median"), sk(80, "recovery_median"))), pc(100 * max(sk(60, "recovery_median"), sk(80, "recovery_median")))))
+say("S5.6: hotspot recovery", sprintf("from %s%% at 10 days to %s%% at 60-80 days, %s%% at 120 days, %s%% at 160 days, and %s%% at 200 days",
+    pc(100 * sk(10, "recovery_median")), paste(.r6080, collapse = "-"),
     pc(100 * sk(120, "recovery_median")), pc(100 * sk(160, "recovery_median")), pc(100 * sk(200, "recovery_median"))), SI)
 
 # ==========================================================================
@@ -391,7 +452,25 @@ if (file.exists(HR)) {
 } else skip("3.8 wind disagreement", "mobile_hrrr.RData not present")
 WS <- file.path(BASE, "mobile_wswd.RData")
 if (file.exists(WS)) { e <- new.env(); suppressWarnings(load(WS, envir = e)); o <- get(ls(e)[1], envir = e)
-  say("2.3: median station distance", sprintf("nearest meteorological monitoring station used was %s km", rh(median(o$dist_km, na.rm = TRUE), 1)), MS); rm(o, e); invisible(gc())
+  say("2.3: median station distance", sprintf("nearest meteorological monitoring station used was %s km", rh(median(o$dist_km, na.rm = TRUE), 1)), MS)
+  # (2026-09-30) one value per acquisition bin: counts, per-lab weighting, bin vs delivered statistics
+  if ("Hydrogen_Sulfide_ppb_raw" %in% names(o)) { o <- data.table::as.data.table(o)[Site != "Goodrich Corporation (Collins Aerospace)"]
+    hb <- o[is.finite(Hydrogen_Sulfide_ppb)]; hr_ <- o[is.finite(Hydrogen_Sulfide_ppb_raw)]
+    cb <- o[is.finite(Hydrogen_Cyanide_ppb)]; cr <- o[is.finite(Hydrogen_Cyanide_ppb_raw)]
+    frag <- sprintf("the %s delivered H2S seconds that pass the screens described below form %s 5-s bins (%s seconds per bin), the %s HCN seconds form %s 2-s bins (%s)",
+      cm(nrow(hr_)), cm(nrow(hb)), rh(nrow(hr_) / nrow(hb), 2), cm(nrow(cr)), cm(nrow(cb)), rh(nrow(cr) / nrow(cb), 2))
+    say("2.1.1: bins", gsub("H2S", "H2S", frag), MS)
+    say("S1.4: bins per lab", sprintf("form %s 5-s bins (%s seconds per bin: %s for the CAT laboratory and %s for the EMU", cm(nrow(hb)), rh(nrow(hr_) / nrow(hb), 2),
+      rh(nrow(hr_[Asset == "CAT"]) / nrow(hb[Asset == "CAT"]), 2), rh(nrow(hr_[Asset == "EMU"]) / nrow(hb[Asset == "EMU"]), 2)), SI)
+    .cat <- sprintf("the CAT laboratory supplied %s%% of the H2S values, against %s%% of the bins", pc(100 * mean(hr_$Asset == "CAT")), pc(100 * mean(hb$Asset == "CAT")))
+    say("2.1.1: CAT weighting", .cat, MS)
+    say("S1.4: CAT weighting", sprintf("the CAT laboratory supplied %s%% of the delivered H2S seconds but supplies %s%% of the bins", pc(100 * mean(hr_$Asset == "CAT")), pc(100 * mean(hb$Asset == "CAT"))), SI)
+    say("S1.4: bin vs delivered H2S", sprintf("For H2S the median is %s ppb against %s ppb for the delivered seconds, the mean %s against %s ppb",
+      rh(median(hb$Hydrogen_Sulfide_ppb), 2), pc(median(hr_$Hydrogen_Sulfide_ppb_raw)), rh(mean(hb$Hydrogen_Sulfide_ppb), 2), rh(mean(hr_$Hydrogen_Sulfide_ppb_raw), 2)), SI)
+    if (all(c("Hydrogen_Sulfide_ppb_rep", "Hydrogen_Cyanide_ppb_rep") %in% names(o))) cat("  [OK  ] mobile_wswd carries the repeated 1-s bin means (*_rep) for the correlations\n") else
+      cat("  [FAIL] mobile_wswd lacks *_rep: the correlation figures fell back to the one-per-bin columns (re-run R02)\n")
+  }
+  rm(o, e); invisible(gc())
 } else skip("2.3 station distance", "mobile_wswd.RData not present")
 
 # ==========================================================================
@@ -429,12 +508,12 @@ se_ <- need("TABLE_seasonal.csv"); sz <- function(p, s) se_[pollutant == p & sea
 say("S3.3: benzene by season", sprintf("benzene %s ppb in DJF vs %s ppb in other seasons", rh(sz("Benzene","DJF"), 2), rh(sz("Benzene","MAM"), 2)), SI)
 tl <- c(sz("Toluene","MAM"), sz("Toluene","JJA"), sz("Toluene","SON"))
 say("S3.3: toluene by season", sprintf("toluene %s vs %s-%s ppb", rh(sz("Toluene","DJF"), 2), rh(min(tl), 2), rh(max(tl), 2)), SI)
-say("S3.3: H2S by season", sprintf("(%s ppb in DJF, %s in MAM and JJA, %s in SON)", rh(sz("H2S","DJF"), 2), rh(sz("H2S","MAM"), 2), rh(sz("H2S","SON"), 2)), SI)
+say("S3.3: H2S by season", sprintf("(%s ppb in DJF, %s in MAM, %s in JJA and SON)", rh(sz("H2S","DJF"), 2), rh(sz("H2S","MAM"), 2), rh(sz("H2S","JJA"), 2)), SI)
+if (rh(sz("H2S","JJA"), 2) != rh(sz("H2S","SON"), 2)) cat("  [FAIL] S3.3: H2S JJA and SON medians differ; the sentence pairs them\n")
 say("S3.3: HCN by season", sprintf("a winter median of %s ppb falling to %s-%s ppb", rh(sz("HCN","DJF"), 2), rh(min(sz("HCN","MAM"), sz("HCN","JJA")), 1), rh(max(sz("HCN","MAM"), sz("HCN","JJA")), 0)), SI)
 
 # ==========================================================================
 hdr("L. Bootstrap  <- TABLE_bootstrap_ratio.csv, TABLE_bootstrap_blocks.csv")
-br <- need("TABLE_bootstrap_ratio.csv"); bb <- need("TABLE_bootstrap_blocks.csv")
 # Table S4.1 hazard-index columns (median basis after the 79 re-run)
 if (have("TABLE_S4.1_background_sensitivity.csv")) {
   t41 <- need("TABLE_S4.1_background_sensitivity.csv")
@@ -442,27 +521,50 @@ if (have("TABLE_S4.1_background_sensitivity.csv")) {
     sprintf("| %s | %s | %s | %s |", rh(t41$HI_pwmean_Endocrine[r], 3), rh(t41$HI_pwmean_Respiratory[r], 3), rh(t41$HI_pwmean_Neurological[r], 3), rh(t41$HI_pwmean_Hematological[r], 3)), rows(SI))
   say("S4.6: max-block ranges", sprintf("ranging from %s to %s and from %s to %s, respectively", rh(min(t41$HI_maxblock_Endocrine), 2), rh(max(t41$HI_maxblock_Endocrine), 2), rh(min(t41$HI_maxblock_Respiratory), 2), rh(max(t41$HI_maxblock_Respiratory), 2)), SI)
 }
-say("S4.5: aggregate ratio and CI", sprintf("The aggregate ratio is %s with a 95%% bootstrap interval of %s-%s", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), SI)
-say("4: CI in the manuscript", sprintf("(risk ratio %s, 95%% CI: %s, %s)", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), MS)
-if ("n_gt2_min" %in% names(br)) say("S4.5: upper tail per replicate", sprintf("every one of the %d replicates has at least %d blocks above twice AirToxScreen (median %s; 95%% interval %s-%s)",
-    br$B, br$n_gt2_min, rh(br$n_gt2_med, 0), rh(br$n_gt2_lo, 0), rh(br$n_gt2_hi, 0)), SI)
-say("S4.5: block counts", sprintf("of the %d blocks whose point estimate exceeds twice the AirToxScreen value in this construction, %d remain above 2x in at least 80%% of bootstrap replicates and %d in at least 95%%", nrow(bb), sum(bb$pr_gt2 >= 0.8), sum(bb$pr_gt2 >= 0.95)), SI)
-
-# The bootstrap (58) must re-aggregate the SAME block surface as section 3.3 (18/20).
-# Until 2026-09-27 it rounded coordinates to 5 dp before the point-in-block join;
-# roads are block boundaries, so 1.4% of points moved block and 100 -> 95.
-if (exists("d") && "sBenzene_med_of_daily_med_scaled" %in% names(d) && have("TABLE_bootstrap_blocks.csv")) {
-  bb <- fread(file.path(BASE, "TABLE_bootstrap_blocks.csv"), colClasses = list(character = "block"))
-  m <- d$sBenzene_med_of_daily_med_scaled; a <- d$benzene_ppb; k <- is.finite(m) & is.finite(a)
-  gt2 <- as.character(d$GEOID20[k][m[k] / a[k] > 2])
-  same <- length(gt2) == nrow(bb) && setequal(gt2, bb$block)
-  if (same) n_ok <<- n_ok + 1L else n_fail <<- n_fail + 1L
-  cat(sprintf("  [%s] %-46s bootstrap >2x set (%d blocks) %s section 3.3's (%d)\n", if (same) "OK  " else "FAIL",
-              "S4.5: bootstrap reproduces the >2x block set", nrow(bb), if (same) "==" else "!=", length(gt2)))
-  if (!same) cat("         re-run R_scripts/58_bootstrap_blocks.R (exact st_join, 2026-09-27), then update S4.5 / section 4 CI text\n")
+for (.bs in list(list(f = "", doc = SI, tag = "S4.5", col = "sBenzene_mean_of_daily_mean_scaled"), list(f = "_medianbasis", doc = SI, tag = "S4.7", col = "sBenzene_med_of_daily_med_scaled"))) {
+  if (!have(paste0("TABLE_bootstrap_ratio", .bs$f, ".csv"))) { skip(paste0(.bs$tag, ": bootstrap"), paste0("TABLE_bootstrap_ratio", .bs$f, ".csv not present (run 58)")); next }
+  br <- need(paste0("TABLE_bootstrap_ratio", .bs$f, ".csv")); bb <- fread(file.path(BASE, paste0("TABLE_bootstrap_blocks", .bs$f, ".csv")), colClasses = list(character = "block"))
+  if (.bs$tag == "S4.5") {
+    say("S4.5: aggregate ratio and CI", sprintf("The aggregate ratio is %s with a 95%% bootstrap interval of %s-%s", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), SI)
+    say("4: CI in the manuscript", sprintf("(risk ratio %s, 95%% CI: %s, %s)", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), MS)
+    if ("n_gt2_min" %in% names(br)) say("S4.5: upper tail per replicate", sprintf("every one of the %d replicates has at least %d blocks above twice AirToxScreen (median %s; 95%% interval %s-%s)",
+        br$B, br$n_gt2_min, rh(br$n_gt2_med, 0), rh(br$n_gt2_lo, 0), rh(br$n_gt2_hi, 0)), SI)
+    say("S4.5: block counts", sprintf("of the %d blocks whose point estimate exceeds twice the AirToxScreen value in this construction, %d remain above 2x in at least 80%% of bootstrap replicates and %d in at least 95%%", nrow(bb), sum(bb$pr_gt2 >= 0.8), sum(bb$pr_gt2 >= 0.95)), SI)
+  } else {
+    say("S4.7: bootstrap ratio and CI (median basis)", sprintf("gives an aggregate ratio of %s with a 95%% bootstrap interval of %s-%s", rh(br$ratio_point, 2), rh(br$ci_lo, 2), rh(br$ci_hi, 2)), SI)
+    say("S4.7: bootstrap block counts (median basis)", sprintf("of the %d blocks above twice AirToxScreen, %d remain so in at least 80%% of replicates and %d in at least 95%%",
+        nrow(bb), sum(bb$pr_gt2 >= 0.8), sum(bb$pr_gt2 >= 0.95)), SI)
+    if ("n_gt2_min" %in% names(br)) say("S4.7: bootstrap upper tail (median basis)", sprintf("every replicate has at least %d such blocks (median %s; 95%% interval %s-%s)",
+        br$n_gt2_min, rh(br$n_gt2_med, 0), rh(br$n_gt2_lo, 0), rh(br$n_gt2_hi, 0)), SI)
+  }
+  # the bootstrap (58) must re-aggregate the SAME block surface as section 3.3 / S4.7
+  if (exists("d") && .bs$col %in% names(d)) {
+    m <- d[[.bs$col]]; a <- d$benzene_ppb; k <- is.finite(m) & is.finite(a)
+    gt2 <- as.character(d$GEOID20[k][m[k] / a[k] > 2])
+    same <- length(gt2) == nrow(bb) && setequal(gt2, bb$block)
+    if (same) n_ok <<- n_ok + 1L else n_fail <<- n_fail + 1L
+    cat(sprintf("  [%s] %-46s bootstrap >2x set (%d blocks) %s the block file's (%d)\n", if (same) "OK  " else "FAIL",
+                paste0(.bs$tag, ": bootstrap reproduces the >2x block set"), nrow(bb), if (same) "==" else "!=", length(gt2)))
+  }
+}
+# ==========================================================================
+if (have("TABLE_scaling_sensitivity_risk.csv")) {
+  ss <- need("TABLE_scaling_sensitivity_risk.csv")
+  say("S4.3: scaling ratio range (mean basis)", sprintf("the resulting aggregate risk ratio ranges from %s (median-based construction) to %s (baseline), with mobile risk ranges of %s-%s excess cases",
+      rh(min(ss$ratio_vs_ATS), 2), rh(ss[construction == "A_binweighted", ratio_vs_ATS], 2), sprintf("%.3f", min(ss$risk_lo)), sprintf("%.3f", max(ss$risk_hi))), SI)
+  if (min(ss$ratio_vs_ATS) <= 1) cat("  [FAIL] S4.3: a scaling construction puts the mean-basis ratio at or below 1; the text says every one exceeds AirToxScreen\n")
 }
 
-# ==========================================================================
+if (have("TABLE_bin_location_error.csv")) {
+  bl <- need("TABLE_bin_location_error.csv"); g_ <- function(p, s, c) bl[pollutant == p & subset == s][[c]]; H_ <- "bins >= campaign p99"
+  say("S5: binned-event positional uncertainty", sprintf("lies a median of %s m and a 95th percentile of %s m from the assigned position for H2S (%s and %s m for HCN); only %d of the %s high H2S bins, and %s of the %s high HCN bins, extend beyond 100 m, and in 95%% of high bins the assigned position is within %s m (H2S) and %s m (HCN)",
+      rh(g_("H2S", H_, "max_off_p50"), 0), rh(g_("H2S", H_, "max_off_p95"), 0), rh(g_("HCN", H_, "max_off_p50"), 0), rh(g_("HCN", H_, "max_off_p95"), 0),
+      g_("H2S", H_, "n_max_off_gt100"), cm(g_("H2S", H_, "n_bins")), if (g_("HCN", H_, "n_max_off_gt100") == 0) "none" else g_("HCN", H_, "n_max_off_gt100"), cm(g_("HCN", H_, "n_bins")),
+      rh(g_("H2S", H_, "cen_off_p95"), 0), rh(g_("HCN", H_, "cen_off_p95"), 0)), SI)
+  say("S5: median driving speed in the bins", sprintf("about %s m per second at the median driving speed (%s km/h)", rh(g_("H2S", "all bins", "speed_kmh_p50") / 3.6, 0), rh(g_("H2S", "all bins", "speed_kmh_p50"), 0)), SI)
+  say("S5: high-bin counts match the event thresholds", sprintf("of the %s high H2S bins", cm(g_("H2S", H_, "n_bins"))), SI)
+} else skip("S5: binned-event positional uncertainty", "TABLE_bin_location_error.csv not present (run 80)")
+
 hdr("M. Hazard screen  <- TABLE_S7.1(b), S7.2, S7.3, S7.4")
 h1 <- need("TABLE_S7.1b_hazard_index_by_organ.csv"); h7 <- need("TABLE_S7.1_chronic_hazard.csv"); h3 <- need("TABLE_S7.3_scaling_scenarios.csv"); h4 <- need("TABLE_S7.4_breakeven_factors.csv"); h2 <- need("TABLE_S7.2_acute_screen.csv")
 SIrow <- rows(SI); ho <- function(o, c) h1[target_organ == o][[c]]
@@ -486,23 +588,43 @@ say("S7.1: aromatic scaling effect", sprintf("raises the population-weighted neu
 # both bases side by side (TABLE_S7.1c) -> S7.2 / S7.3 / 3.3 prose
 if (have("TABLE_S7.1c_basis_comparison.csv")) {
   hc <- need("TABLE_S7.1c_basis_comparison.csv"); g <- function(b, o, c) hc[basis == b & target_organ == o][[c]]
-  say("S7.2: mean basis stated", sprintf("the community endocrine index is %s and the respiratory index %s, with most-exposed-block values of %s and %s", rh(g("mean_of_daily_means","Endocrine","HI_pwmean"), 2), rh(g("mean_of_daily_means","Respiratory","HI_pwmean"), 2), rh(g("mean_of_daily_means","Endocrine","HI_maxblock"), 2), rh(g("mean_of_daily_means","Respiratory","HI_maxblock"), 2)), SI)
-  say("S7.3: community indices on both bases", sprintf("the community indices are %s (endocrine), %s (respiratory), %s (neurological) and %s (hematological), against %s, %s, %s and %s on the median basis", rh(g("mean_of_daily_means","Endocrine","HI_pwmean"), 2), rh(g("mean_of_daily_means","Respiratory","HI_pwmean"), 2), rh(g("mean_of_daily_means","Neurological","HI_pwmean"), 3), rh(g("mean_of_daily_means","Hematological","HI_pwmean"), 3), rh(g("median_of_daily_medians","Endocrine","HI_pwmean"), 2), rh(g("median_of_daily_medians","Respiratory","HI_pwmean"), 2), rh(g("median_of_daily_medians","Neurological","HI_pwmean"), 3), rh(g("median_of_daily_medians","Hematological","HI_pwmean"), 3)), SI)
-  say("S7.3: most-exposed-block indices on both bases", sprintf("the most-exposed-block values are %s, %s, %s and %s against %s, %s, %s and %s", rh(g("mean_of_daily_means","Endocrine","HI_maxblock"), 2), rh(g("mean_of_daily_means","Respiratory","HI_maxblock"), 2), rh(g("mean_of_daily_means","Neurological","HI_maxblock"), 2), rh(g("mean_of_daily_means","Hematological","HI_maxblock"), 2), rh(g("median_of_daily_medians","Endocrine","HI_maxblock"), 2), rh(g("median_of_daily_medians","Respiratory","HI_maxblock"), 2), rh(g("median_of_daily_medians","Neurological","HI_maxblock"), 2), rh(g("median_of_daily_medians","Hematological","HI_maxblock"), 2)), SI)
-  say("3.3: hazard indices, median basis", sprintf("population-weighted hazard indices of %s for endocrine effects (driven by HCN) and %s for respiratory effects", rh(g("median_of_daily_medians","Endocrine","HI_pwmean"), 2), rh(g("median_of_daily_medians","Respiratory","HI_pwmean"), 2)), MS)
-  say("3.3: hazard indices, mean basis", sprintf("On the block mean of daily means the community endocrine index is %s and the respiratory index %s, with most-exposed-block values of %s and %s", rh(g("mean_of_daily_means","Endocrine","HI_pwmean"), 2), rh(g("mean_of_daily_means","Respiratory","HI_pwmean"), 2), rh(g("mean_of_daily_means","Endocrine","HI_maxblock"), 2), rh(g("mean_of_daily_means","Respiratory","HI_maxblock"), 2)), MS)
-  say("4: hazard conclusion on both bases", sprintf("at the community average the endocrine index is %s on the median-of-daily-medians basis used for the benzene comparison and %s on the mean-of-daily-means basis", rh(g("median_of_daily_medians","Endocrine","HI_pwmean"), 2), rh(g("mean_of_daily_means","Endocrine","HI_pwmean"), 2)), MS)
+  M_ <- "mean_of_daily_means"; D_ <- "median_of_daily_medians"
+  say("S7.2 / 3.3 / S4.7: median basis stated", sprintf("the community endocrine index is %s and the respiratory index %s, with most-exposed-block values of %s and %s", rh(g(D_,"Endocrine","HI_pwmean"), 2), rh(g(D_,"Respiratory","HI_pwmean"), 2), rh(g(D_,"Endocrine","HI_maxblock"), 2), rh(g(D_,"Respiratory","HI_maxblock"), 2)), SI)
+  say("S7.3: community indices on both bases", sprintf("the community indices are %s (endocrine), %s (respiratory), %s (neurological) and %s (hematological), against %s, %s, %s and %s on the mean basis", rh(g(D_,"Endocrine","HI_pwmean"), 2), rh(g(D_,"Respiratory","HI_pwmean"), 2), rh(g(D_,"Neurological","HI_pwmean"), 3), rh(g(D_,"Hematological","HI_pwmean"), 3), rh(g(M_,"Endocrine","HI_pwmean"), 2), rh(g(M_,"Respiratory","HI_pwmean"), 2), rh(g(M_,"Neurological","HI_pwmean"), 3), rh(g(M_,"Hematological","HI_pwmean"), 3)), SI)
+  say("S7.3: most-exposed-block indices on both bases", sprintf("the most-exposed-block values are %s, %s, %s and %s against %s, %s, %s and %s", rh(g(D_,"Endocrine","HI_maxblock"), 2), rh(g(D_,"Respiratory","HI_maxblock"), 2), rh(g(D_,"Neurological","HI_maxblock"), 2), rh(g(D_,"Hematological","HI_maxblock"), 2), rh(g(M_,"Endocrine","HI_maxblock"), 2), rh(g(M_,"Respiratory","HI_maxblock"), 2), rh(g(M_,"Neurological","HI_maxblock"), 2), rh(g(M_,"Hematological","HI_maxblock"), 2)), SI)
+  .pc <- function(o) { a <- g(M_, o, "HI_maxblock"); b <- g(D_, o, "HI_maxblock"); v <- round(100 * (b / a - 1)); paste0(if (v > 0) "+" else "", v, "%") }
+  say("S7.3: most-exposed-block changes, mean -> median", sprintf("endocrine %s to %s, %s; respiratory %s to %s, %s; neurological %s to %s, %s; hematological %s to %s, %s",
+      rh(g(M_,"Endocrine","HI_maxblock"), 2), rh(g(D_,"Endocrine","HI_maxblock"), 2), .pc("Endocrine"), rh(g(M_,"Respiratory","HI_maxblock"), 2), rh(g(D_,"Respiratory","HI_maxblock"), 2), .pc("Respiratory"),
+      rh(g(M_,"Neurological","HI_maxblock"), 3), rh(g(D_,"Neurological","HI_maxblock"), 3), .pc("Neurological"), rh(g(M_,"Hematological","HI_maxblock"), 3), rh(g(D_,"Hematological","HI_maxblock"), 3), .pc("Hematological")), SI)
+  say("3.3: hazard indices, mean basis (primary)", sprintf("population-weighted hazard indices of %s for endocrine effects (driven by HCN) and %s for respiratory effects (driven by H2S), rising to %s and %s in the most-exposed block, whereas neurological (%s) and hematological (%s)",
+      rh(g(M_,"Endocrine","HI_pwmean"), 2), rh(g(M_,"Respiratory","HI_pwmean"), 2), rh(g(M_,"Endocrine","HI_maxblock"), 2), rh(g(M_,"Respiratory","HI_maxblock"), 2), rh(g(M_,"Neurological","HI_pwmean"), 2), rh(g(M_,"Hematological","HI_pwmean"), 2)), MS)
+  say("3.3: hazard indices, median basis", sprintf("On the supplementary block median of daily medians the community endocrine index is %s and the respiratory index %s, with most-exposed-block values of %s and %s", rh(g(D_,"Endocrine","HI_pwmean"), 2), rh(g(D_,"Respiratory","HI_pwmean"), 2), rh(g(D_,"Endocrine","HI_maxblock"), 2), rh(g(D_,"Respiratory","HI_maxblock"), 2)), MS)
+  say("S7.2: mean-basis results", sprintf("hazard index of %s at the community average and %s in the most-exposed block. Hydrogen sulfide gives a respiratory hazard index of %s at the community average but %s in the most-exposed block",
+      rh(g(M_,"Endocrine","HI_pwmean"), 2), rh(g(M_,"Endocrine","HI_maxblock"), 2), rh(g(M_,"Respiratory","HI_pwmean"), 2), rh(g(M_,"Respiratory","HI_maxblock"), 2)), SI)
+  say("S7.2: neurological / hematological", sprintf("reaches only %s at the community average and %s at the most-exposed block, and the hematological index for benzene reaches %s and %s respectively",
+      rh(g(M_,"Neurological","HI_pwmean"), 3), rh(g(M_,"Neurological","HI_maxblock"), 2), rh(g(M_,"Hematological","HI_pwmean"), 3), rh(g(M_,"Hematological","HI_maxblock"), 2)), SI)
+  say("4: hazard conclusion on both bases", sprintf("at the community average the endocrine index is %s on the mean-of-daily-means basis used for the benzene comparison and %s on the supplementary median-of-daily-medians basis", rh(g(M_,"Endocrine","HI_pwmean"), 2), rh(g(D_,"Endocrine","HI_pwmean"), 2)), MS)
 } else skip("S7 basis comparison", "TABLE_S7.1c_basis_comparison.csv not present (run 74)")
 if (have("TABLE_cumulative_HI_summary.csv")) {
   cu <- need("TABLE_cumulative_HI_summary.csv"); cg <- function(t, m, c) cu[tos == t & metric == m][[c]]
-  say("S7.3: cell-level median metric", sprintf("on the cell median the endocrine index exceeds 1 in %s%% of cells (maximum %s) and the respiratory index in one cell (maximum %s)", pc(cg("Endocrine","median","pct_cells_HI_gt1")), rh(cg("Endocrine","median","HI_max"), 2), rh(cg("Respiratory","median","HI_max"), 2)), SI)
+  say("S7.3: cell-level median metric", sprintf("on the cell median the endocrine index exceeds 1 in %s%% of cells (maximum %s) and the respiratory index in %s (maximum %s)", pc(cg("Endocrine","median","pct_cells_HI_gt1")), rh(cg("Endocrine","median","HI_max"), 2),
+      c("no cell", "one cell", "two cells", "three cells", "four cells")[min(cg("Respiratory","median","n_cells_HI_gt1"), 4) + 1], rh(cg("Respiratory","median","HI_max"), 2)), SI)
   say("S7.3: cell-level mean metric", sprintf("on the cell mean the endocrine index exceeds 1 in %s%% of cells (maximum %s) and the respiratory index in the most-exposed cells (maximum %s)", pc(cg("Endocrine","mean","pct_cells_HI_gt1")), rh(cg("Endocrine","mean","HI_max"), 2), rh(cg("Respiratory","mean","HI_max"), 2)), SI)
 }
 say("S7.4: community endocrine under C and D", sprintf("from %s (A, B) to %s and %s (C, D)", rh(s3("A_none","Endocrine","HI_pwmean"), 2), rh(s3("C_borrowed","Endocrine","HI_pwmean"), 2), rh(s3("D_upper","Endocrine","HI_pwmean"), 2)), SI)
 b4 <- function(o, c) h4[organ == o][[c]]
-say("S7.4: break-even factors (pw)", sprintf("the endocrine index reaches 1 at an HCN factor of %s, and the respiratory index at an H", rh(b4("Endocrine","f_breakeven_pwmean"), 2)), SI)
-say("S7.4: break-even respiratory (pw)", sprintf("S factor of %s.", rh(b4("Respiratory","f_breakeven_pwmean"), 2)), SI)
-say("S7.4: neurological break-even (max block)", sprintf("for the neurological system this gives %s, and it need not be", rh(b4("Neurological","f_breakeven_maxblock"), 2)), SI)
+say("S7.4: break-even factors (pw)", sprintf("would fall to 1 only at an HCN factor of %s, and the respiratory index reaches 1 at an H", rh(b4("Endocrine","f_breakeven_pwmean"), 2)), SI)
+say("S7.4: break-even respiratory (pw)", sprintf("S factor of %s; the respiratory index stays below 1 for any factor up to %s.", rh(b4("Respiratory","f_breakeven_pwmean"), 2), rh(b4("Respiratory","f_breakeven_pwmean"), 2)), SI)
+if (have("TABLE_S7.4_breakeven_factors_medianbasis.csv") && have("TABLE_S7.3_scaling_scenarios_medianbasis.csv")) {
+  h4m <- need("TABLE_S7.4_breakeven_factors_medianbasis.csv"); b4m <- function(o, c) h4m[organ == o][[c]]
+  h3m <- need("TABLE_S7.3_scaling_scenarios_medianbasis.csv"); s3m <- function(sc, o, c) h3m[scenario == sc & organ == o][[c]]
+  say("S7.4: neurological break-even (max block), both", sprintf("for the neurological system this gives %s (%s on the median basis), and it need not be", rh(b4("Neurological","f_breakeven_maxblock"), 2), rh(b4m("Neurological","f_breakeven_maxblock"), 2)), SI)
+  say("S7.4: median-basis endocrine break-even", sprintf("On the supplementary median basis the endocrine index reaches 1 at an HCN factor of %s", rh(b4m("Endocrine","f_breakeven_pwmean"), 2)), SI)
+  say("S7.4: median-basis respiratory break-even", sprintf("and the respiratory break-even factor is %s.", rh(b4m("Respiratory","f_breakeven_pwmean"), 2)), SI)
+  say("S7.4: median-basis max-block thresholds", sprintf("(%s and %s on the median basis)", rh(b4m("Endocrine","f_breakeven_maxblock"), 2), rh(b4m("Respiratory","f_breakeven_maxblock"), 2)), SI)
+  say("S7.3: median-basis break-even factors", sprintf("on the median basis the community break-even factors are %s for HCN and %s for H", rh(b4m("Endocrine","f_breakeven_pwmean"), 2), rh(b4m("Respiratory","f_breakeven_pwmean"), 2)), SI)
+  say("S7.4: median-basis community endocrine under C and D", sprintf("from %s (A, B) to %s and %s (C, D)", rh(s3m("A_none","Endocrine","HI_pwmean"), 2), rh(s3m("C_borrowed","Endocrine","HI_pwmean"), 2), rh(s3m("D_upper","Endocrine","HI_pwmean"), 2)), SI)
+} else skip("S7.4 median basis", "*_medianbasis S7.3/S7.4 tables not present (run 77 with HAZARD_BASIS=med_of_daily_med)")
 say("S7.3: OEHHA chronic re-anchoring", sprintf("raise the most-exposed-block hazard quotients to %s (benzene, hematological) and %s (1,2,4-trimethylbenzene, neurological)", rh(h7[pollutant == "Benzene", maxblock_ugm3] / 3, 2), rh(h7[pollutant == "1,2,4-Trimethylbenzene", maxblock_ugm3] / 4, 2)), SI)
 say("S7.4: break-even (max block)", sprintf("the corresponding thresholds are %s for HCN and %s for H", rh(b4("Endocrine","f_breakeven_maxblock"), 2), rh(b4("Respiratory","f_breakeven_maxblock"), 2)), SI)
 say("Table S7.4: neurological row", sprintf("| %s / %s | %s / %s |", rh(b4("Neurological","HI_pwmean_unscaled"), 3), rh(b4("Neurological","HI_maxblock_unscaled"), 2), rh(b4("Neurological","f_breakeven_pwmean"), 2), rh(b4("Neurological","f_breakeven_maxblock"), 2)), SIrow)
@@ -535,6 +657,11 @@ if (have("tri_inside_outside_1km_stats.csv")) { ti <- need("tri_inside_outside_1
   say("3.3: TRI medians (aromatics)", sprintf("toluene (%s vs %s ppb), xylene (%s vs %s ppb), trimethylbenzene (%s vs %s ppb)",
       rh(tm("Toluene","med_in"),2), rh(tm("Toluene","med_out"),2), rh(tm("Xylene","med_in"),2), rh(tm("Xylene","med_out"),2),
       rh(tm("Trimethylbenzene","med_in"),2), rh(tm("Trimethylbenzene","med_out"),2)), MS)
+  # equal medians are stated as "equal for ... (x ppb in both" (2026-09-30)
+  if (rh(tm("HCN","med_in"),2) == rh(tm("HCN","med_out"),2)) {
+    say("3.3: TRI medians (H2S)", sprintf("S (%s vs %s ppb), and equal for benzene", rh(tm("H2S","med_in"),2), rh(tm("H2S","med_out"),2)), MS)
+    say("3.3: TRI medians (HCN equal)", sprintf("and HCN (%s ppb in both", rh(tm("HCN","med_in"),2)), MS)
+  } else
   say("3.3: TRI medians (H2S)", sprintf("S (%s vs %s ppb) and HCN (%s vs %s ppb)", rh(tm("H2S","med_in"),2), rh(tm("H2S","med_out"),2), rh(tm("HCN","med_in"),2), rh(tm("HCN","med_out"),2)), MS)
   say("3.3: TRI benzene medians equal", sprintf("and equal for benzene (%s ppb in both", rh(tm("Benzene","med_in"),2)), MS)
   if (tm("Benzene","med_in") != tm("Benzene","med_out")) cat("  [FAIL] benzene inside/outside medians differ\n") }

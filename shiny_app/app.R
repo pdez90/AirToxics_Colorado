@@ -21,12 +21,13 @@ blocks  <- readRDS(file.path(DATA, "blocks.rds"))
 plumes  <- readRDS(file.path(DATA, "plumes.rds"))
 hs      <- readRDS(file.path(DATA, "hotspots.rds"))
 # ---- two exposure statistics (2026-09-27) ---------------------------------
-# The paper's primary block statistic is the median of daily medians; the mean
-# of daily means is reported alongside it (section 3.3, SI S4.3, S7.3). Every
+# (2026-09-30) The paper's primary statistic is the mean of daily means (maps,
+# benzene risk, hazard screen); the median of daily medians is the SI's
+# supplementary analysis. Every
 # number quoted on pages 2 and 8 is computed here from the block table or read
 # from the written SI tables for the basis selected, never typed.
-BASIS_CHOICES <- c("Median of daily medians (the paper's primary statistic)" = "med",
-                   "Mean of daily means (reported alongside it)"             = "mean")
+BASIS_CHOICES <- c("Mean of daily means (the paper's primary statistic)"            = "mean",
+                   "Median of daily medians (supplementary analysis in the SI)"     = "med")
 BASIS_SHORT <- c(med = "median of daily medians", mean = "mean of daily means")
 .bdf <- sf::st_drop_geometry(blocks)
 MOB_COL <- c(med = "sBenzene_med_of_daily_med_scaled", mean = "sBenzene_mean_of_daily_mean_scaled")
@@ -50,7 +51,7 @@ block_stats <- function(b) {
 BSTAT <- list(med = block_stats("med"), mean = block_stats("mean"))
 BSTAT$med$ratio <- BSTAT$med$pw_mob / BSTAT$med$pw_ats
 BSTAT$mean$ratio <- BSTAT$mean$pw_mob / BSTAT$mean$pw_ats
-.pw_mob <- BSTAT$med$pw_mob; .pw_ats <- BSTAT$med$pw_ats
+.pw_mob <- BSTAT$mean$pw_mob; .pw_ats <- BSTAT$mean$pw_ats
 ctx     <- readRDS(file.path(DATA, "context.rds"))
 camp    <- if (file.exists(file.path(DATA, "campaign.rds")))
              readRDS(file.path(DATA, "campaign.rds")) else NULL
@@ -85,16 +86,17 @@ BASIS_EXPLAIN <- tags$div(
     "daytimes. Both statistics first summarize every sampling day, so a day with ",
     "many measurements does not outweigh a day with few."),
   tags$ul(style = "margin:4px 0 0 0;padding-left:18px",
-    tags$li(tags$b("Median of daily medians"), " (the paper's primary statistic) takes ",
-            "the typical day. It is robust to the one or two unusually high days a block ",
-            "may happen to have been visited on, and to short plume spikes, but by ",
-            "construction it discards the episodic upper tail."),
-    tags$li(tags$b("Mean of daily means"), " keeps those high days and plumes. It is ",
-            "the statistic a lifetime-average risk estimate, a chronic reference ",
-            "concentration and AirToxScreen's annual-average model presume, but with few ",
-            "visits per block it depends strongly on which days were sampled.")),
+    tags$li(tags$b("Mean of daily means"), " (the paper's primary statistic) keeps the ",
+            "high days and plumes. It is the statistic a lifetime-average risk estimate, a ",
+            "chronic reference concentration and AirToxScreen's annual-average model ",
+            "presume, but with few visits per block it depends strongly on which days ",
+            "were sampled."),
+    tags$li(tags$b("Median of daily medians"), " (a supplementary analysis in the SI) ",
+            "takes the typical day. It is robust to the one or two unusually high days a ",
+            "block may happen to have been visited on, and to short plume spikes, but by ",
+            "construction it discards the episodic upper tail.")),
   tags$p(style = "margin:6px 0 0 0",
-    "Neither is uniquely correct, so the paper reports both. ",
+    "The paper leads with the mean and reports the median as a supplementary analysis. ",
     sprintf(paste0("For benzene the population-weighted mobile concentration is %.3f ppb ",
                    "on the median basis and %.3f ppb on the mean basis, against %.3f ppb ",
                    "from AirToxScreen (ratios %.2f and %.2f; %d and %d blocks above twice ",
@@ -369,8 +371,8 @@ ui <- navbarPage(
       sidebarPanel(width = 3,
         selectInput("p1_poll", "Pollutant", POLLS, selected = "Benzene"),
         radioButtons("p1_stat", "Cell statistic",
-                     c("Median of daily medians" = "dmedmed",
-                       "Mean of daily means" = "dmeanmean",
+                     c("Mean of daily means (primary)" = "dmeanmean",
+                       "Median of daily medians" = "dmedmed",
                        "Median of all measurements" = "median",
                        "95th percentile" = "p95",
                        "Maximum" = "max", "Number of measurements" = "n")),
@@ -421,14 +423,16 @@ ui <- navbarPage(
                  "identified in the delivered files. After the delay ",
                  "correction, HCN is therefore averaged within fixed 2-s bins ",
                  "and H2S and methane within fixed 5-s bins of the delivery ",
-                 "clock; each bin mean is written back to every row in the ",
-                 "bin, so the number of rows is unchanged and rows within a bin ",
-                 "are not independent measurements. This smooths toward the ",
-                 "instruments' cadence rather than reconstructing individual ",
-                 "acquisitions; the aromatics are not averaged. Plume detection ",
-                 "(page 3) is the one exception and uses the as-delivered H2S ",
-                 "series, whose shape is resolved at the acquisition cadence ",
-                 "and coarser."),
+                 "clock, and each bin contributes ONE value (placed at its ",
+                 "middle delivered second) to every map, statistic and health ",
+                 "estimate, so repeated seconds are not counted as separate ",
+                 "measurements. This smooths toward the instruments' cadence ",
+                 "rather than reconstructing individual acquisitions; the ",
+                 "aromatics are not averaged. Two analyses keep one-second ",
+                 "rows: correlations of H2S and HCN with the aromatics, which ",
+                 "need time-matched rows (the bin mean is repeated on each ",
+                 "delivered second there), and plume detection (page 3), which ",
+                 "uses the as-delivered H2S series."),
         helpText("Measurements taken within 300 m of CDPHE's ATOPs ",
                  "headquarters in Wheat Ridge are excluded throughout. The ",
                  "vehicles are garaged there and run start-up and shut-down ",
@@ -831,7 +835,7 @@ server <- function(input, output, session) {
       addRectangles(d$lon - 0.00292, d$lat - 0.00226, d$lon + 0.00292,
                     d$lat + 0.00226, fillColor = col, fillOpacity = 0.65,
                     weight = 0, popup = sprintf(
-                      "n = %s rows on %s days<br>median of daily medians = %s<br>mean of daily means = %s<br>median of all rows = %s %s<br>p95 = %s<br>max = %s",
+                      "n = %s values on %s days<br>median of daily medians = %s<br>mean of daily means = %s<br>median of all values = %s %s<br>p95 = %s<br>max = %s",
                       format(d$n, big.mark = ","),
                       if ("n_days" %in% names(d)) d$n_days else "?",
                       if ("dmedmed" %in% names(d)) d$dmedmed else "n/a",
@@ -855,7 +859,10 @@ server <- function(input, output, session) {
   output$p1_summary <- renderTable({
     s <- summ[pollutant == input$p1_poll]
     if (nrow(s) == 0) return(data.frame(note = "campaign stats: see manuscript"))
-    out <- data.frame(Metric = c("One-second rows (analysis set)", "% below audit MDL",
+    n_lab <- if (input$p1_poll %in% c("H2S", "HCN"))
+      sprintf("Values (one per %s bin; analysis set)", if (input$p1_poll == "H2S") "5-s" else "2-s")
+      else "One-second values (analysis set)"
+    out <- data.frame(Metric = c(n_lab, "% below audit MDL",
                                  "Median", "p95", "p99", "Max"),
                       Value = c(format(s$n, big.mark = ","),
                                 paste0(s$pct_below_mdl, "%"), s$median, s$p95, s$p99, s$max))
@@ -915,7 +922,7 @@ server <- function(input, output, session) {
     updateRadioButtons(session, "p7_basis", selected = input$p2_basis), ignoreInit = TRUE)
   observeEvent(input$p7_basis, if (!identical(input$p7_basis, input$p2_basis))
     updateRadioButtons(session, "p2_basis", selected = input$p7_basis), ignoreInit = TRUE)
-  p2_b <- reactive(if (is.null(input$p2_basis)) "med" else input$p2_basis)
+  p2_b <- reactive(if (is.null(input$p2_basis)) "mean" else input$p2_basis)
 
   output$p2_map <- renderLeaflet({
     b <- blocks
@@ -1226,16 +1233,16 @@ server <- function(input, output, session) {
   # hazard.rds predates 77_health_scaling_sensitivity.R, so an app deployed
   # against older data still runs - it just shows scenario A with no toggle.
   p7_scen <- reactive(if (is.null(input$p7_scen)) "A_none" else input$p7_scen)
-  # Which exposure statistic is live (median of daily medians is the primary).
-  p7_b <- reactive(if (is.null(input$p7_basis)) "med" else input$p7_basis)
+  # Which exposure statistic is live (mean of daily means is the primary).
+  p7_b <- reactive(if (is.null(input$p7_basis)) "mean" else input$p7_basis)
   hb   <- reactive(haz_basis(p7_b()))
   output$p7_window <- renderUI({
     txt <- scale_window_txt(p7_b())
     if (is.null(txt)) {
-      if (p7_b() == "mean" && (is.null(hb()$scen_poll) || identical(hb(), haz)))
-        return(helpText("Scaling scenarios on the mean of daily means are not in this ",
+      if (p7_b() == "med" && (is.null(hb()$scen_poll) || identical(hb(), haz)))
+        return(helpText("Scaling scenarios on the median of daily medians are not in this ",
                         "build: run 77_health_scaling_sensitivity.R with ",
-                        "HAZARD_BASIS=mean_of_daily_mean, then prep_app_data.R."))
+                        "HAZARD_BASIS=med_of_daily_med, then prep_app_data.R."))
       return(NULL)
     }
     helpText(txt)

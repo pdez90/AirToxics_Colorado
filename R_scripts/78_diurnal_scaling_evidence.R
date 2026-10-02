@@ -182,7 +182,7 @@ setorder(out_rat, -aft_morn)
 fwrite(out_rat, file.path(BASE, "TABLE_S7.6_afternoon_ratio.csv"))
 
 cat("\n== within-cell hour effect, relative to the all-hour level ==\n")
-print(dcast(prof, hr ~ pollutant, value.var = "rel")[, lapply(.SD, function(x) round(x, 3))],
+print(data.table::dcast(prof, hr ~ pollutant, value.var = "rel")[, lapply(.SD, function(x) round(x, 3))],
       row.names = FALSE)
 cat("\n== afternoon (13-14) : morning (09-10), location-controlled vs pooled ==\n")
 print(out_rat[, .(pollutant, cells, aft_morn = round(aft_morn, 3),

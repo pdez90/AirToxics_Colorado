@@ -206,8 +206,14 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
    `70_table_s31.R` does so its raw columns equal Table S3.1 cell for cell.
 
 7. **Cadence**: native-cadence averaging (H2S 5 s, HCN 2 s, CH4 5 s), block mean assigned only
-   to seconds that already held a value, applied after delay correction. Plume detection is
-   exempt and uses the delivered `*_raw` signal.
+   to seconds that already held a value, applied after delay correction. **One value per bin
+   (2026-09-30):** after the 300 m HQ screen each bin keeps its mean on its middle delivered
+   second only (`03_checks_flags.R` section 3d; `M01` for CH4), so every statistic, map,
+   source-probability surface, hotspot analysis, block surface and hazard index counts a bin
+   once (H2S 1,443,413 delivered seconds -> 444,552 bins; HCN 478,660 -> 264,327; CH4
+   1,810,015 -> 506,614). Correlations of H2S/HCN with the aromatics use the repeated 1-s bin
+   means (`*_rep`, carried through `06_merge_with_wind.R`); plume detection is exempt and uses
+   the delivered `*_raw` signal.
 
 ## What the 2026-08-21/22 re-run changed
 

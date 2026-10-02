@@ -50,7 +50,7 @@ for (i in seq_along(days)) {
   d <- days[i]
   sub <- df[day == d]
   p <- ggplot() +
-    annotation_map_tile(type = "cartolight", zoom = 11, cachedir = CACHE) +
+    annotation_map_tile(type = Sys.getenv("SUNCOR_TILES", "osm"), zoom = 11, cachedir = CACHE) +
     geom_point(data = sub, aes(Longitude, Latitude, color = Route),
                size = 0.35, alpha = 0.5) +
     scale_color_manual(values = route_cols, drop = FALSE,
@@ -62,7 +62,7 @@ for (i in seq_along(days)) {
          subtitle = sprintf("%s 1-s measurements",
                             comma(nrow(sub))),
          x = NULL, y = NULL, color = NULL,
-         caption = "Basemap: CARTO Positron") +
+         caption = "Basemap: © OpenStreetMap contributors") +
     theme_bw(base_size = 12) +
     theme(legend.position = "bottom",
           panel.grid = element_blank(),

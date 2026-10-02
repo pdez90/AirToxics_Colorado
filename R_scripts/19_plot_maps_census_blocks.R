@@ -28,25 +28,43 @@ suppressPackageStartupMessages({
 # ----------------------------
 # USER SETTINGS
 # ----------------------------
-out_dir <- file.path(SUNCOR_BASE, "FinalFig/block_maps_airtox_vs_mobile_scaled_polygons_medofdailymed_ROBUST")
+# EXPOSURE BASIS (2026-09-30): the MEAN of daily means is the primary statistic
+# for concentrations, exposure and health (what a long-term reference value and
+# AirToxScreen's annual mean presume); the median of daily medians is the
+# supplementary analysis. EXPOSURE_BASIS=med_of_daily_med runs the supplementary
+# version, written with a _medianbasis suffix so it never overwrites the primary.
+EXPOSURE_BASIS <- Sys.getenv("EXPOSURE_BASIS", "mean_of_daily_mean")
+stopifnot(EXPOSURE_BASIS %in% c("mean_of_daily_mean", "med_of_daily_med"))
+.agg <- if (EXPOSURE_BASIS == "mean_of_daily_mean") mean else stats::median
+.sfx <- if (EXPOSURE_BASIS == "mean_of_daily_mean") "" else "_medianbasis"
+message("[BASIS] ", EXPOSURE_BASIS)
+out_dir <- file.path(SUNCOR_BASE, if (EXPOSURE_BASIS == "mean_of_daily_mean")
+  "FinalFig/block_maps_airtox_vs_mobile_scaled_polygons_meanofdailymean_ROBUST" else
+  "FinalFig/block_maps_airtox_vs_mobile_scaled_polygons_medofdailymed_ROBUST")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 dpi_out   <- 450
-tile_type <- "cartolight"
+# BASEMAP (2026-09-30): CARTO now serves "API KEY REQUIRED" watermarked tiles without a key;
+# default to key-free OpenStreetMap tiles (as Figure 3 already does). SUNCOR_TILES=<rosm type> overrides.
+tile_type <- Sys.getenv("SUNCOR_TILES", "osm")
 tile_zoom <- 11
 
 # Map fill scaling:
 USE_LOG_FILL <- TRUE      # <-- set FALSE if you want linear colors
 LOG_EPS      <- 1e-6      # floor for log scale (avoids log(0))
 
+# standalone run (e.g. EXPOSURE_BASIS=med_of_daily_med Rscript ...): load the
+# overlap blocks that 18 saved, instead of requiring them in the session
+if (!exists("block_sf_overlap"))
+  load(file.path(SUNCOR_BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.RData"))
 stopifnot(exists("block_sf_overlap"))
 
 # ----------------------------
 # 0) Column names (Mobile = MEDIAN-OF-DAILY-MEDIANS SCALED)
 # ----------------------------
-mob_benz <- "sBenzene_med_of_daily_med_scaled"
-mob_tol  <- "sToluene_med_of_daily_med_scaled"
-mob_xyl  <- "sXylene_med_of_daily_med_scaled"
+mob_benz <- paste0("sBenzene_", EXPOSURE_BASIS, "_scaled")
+mob_tol  <- paste0("sToluene_", EXPOSURE_BASIS, "_scaled")
+mob_xyl  <- paste0("sXylene_", EXPOSURE_BASIS, "_scaled")
 
 air_benz <- "benzene_ppb"
 air_tol  <- "toluene_ppb"

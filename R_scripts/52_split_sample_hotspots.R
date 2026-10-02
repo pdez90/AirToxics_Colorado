@@ -121,7 +121,7 @@ ll <- st_coordinates(st_transform(st_as_sf(
 md[, `:=`(lon = ll[, 1], lat = ll[, 2])]
 mll <- data.table(lon = master$Longitude, lat = master$Latitude)
 p <- ggplot() +
-  annotation_map_tile(type = "cartolight", zoom = 11) +
+  annotation_map_tile(type = Sys.getenv("SUNCOR_TILES", "osm"), zoom = 11) +
   geom_point(data = md, aes(lon, lat, color = half), size = 3, alpha = 0.85) +
   geom_point(data = mll, aes(lon, lat), shape = 4, size = 3.4, stroke = 1.2,
              color = "black") +
@@ -133,7 +133,7 @@ p <- ggplot() +
            xlim = range(c(md$lon, mll$lon)) + c(-0.01, 0.01),
            ylim = range(c(md$lat, mll$lat)) + c(-0.01, 0.01), expand = FALSE) +
   labs(x = NULL, y = NULL,
-       caption = sprintf("X symbols: the %d full-campaign persistent multi-pollutant groups. Colored points: groups identified independently within each half using identical parameters (p99 within-half, eps 100 m, persistence p90). Basemap: CARTO Positron.", nrow(master))) +
+       caption = sprintf("X symbols: the %d full-campaign persistent multi-pollutant groups. Colored points: groups identified independently within each half using identical parameters (p99 within-half, eps 100 m, persistence p90). Basemap: © OpenStreetMap contributors.", nrow(master))) +
   theme_bw(base_size = 11) +
   theme(legend.position = "bottom", panel.grid = element_blank(),
         axis.text = element_blank(), axis.ticks = element_blank(),

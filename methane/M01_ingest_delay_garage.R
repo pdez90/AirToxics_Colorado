@@ -341,6 +341,28 @@ if (CH4_NATIVE_CADENCE) {
                    quantile(ch4_1s$ch4_ppm_raw, 0.99, na.rm = TRUE),
                    quantile(ch4_1s$ch4_ppm,     0.99, na.rm = TRUE)))
   stopifnot(n_before == n_after)
+
+  # ONE VALUE PER 5-s BIN (2026-09-27), exactly as 03_checks_flags.R section
+  # 3d does for H2S: the bin mean is kept on the bin's middle delivered second
+  # and blanked on its other rows, so each acquisition bin counts once in the
+  # hotspot, map and source-probability analyses (M02-M06). The repeated 1-s
+  # bin means are kept as ch4_ppm_rep for any row-by-row pairing with other
+  # species; the delivered values stay in ch4_ppm_raw for the plume cross-check.
+  CH4_THIN_TO_BINS <- TRUE
+  if (CH4_THIN_TO_BINS) {
+    ch4_1s[, ch4_ppm_rep := ch4_ppm]
+    ch4_1s[, `:=`(.row = .I, .day = as.Date(date),
+                  .blk = floor((as.numeric(date) +
+                                fifelse(toupper(trimws(Asset)) == "CAT", 21, 17)) / CH4_INTERVAL_S))]
+    setorder(ch4_1s, Asset, .day, .blk, date)
+    ch4_1s[!is.na(ch4_ppm), `:=`(.k = seq_len(.N), .n = .N), by = .(Asset, .day, .blk)]
+    ch4_1s[!is.na(ch4_ppm) & .k != ceiling(.n / 2), ch4_ppm := NA_real_]
+    setorder(ch4_1s, .row)
+    ch4_1s[, c(".row", ".day", ".blk", ".k", ".n") := NULL]
+    diag_msg(sprintf("  [BINS] CH4 %s delivered seconds -> %s bins of %d s (%.2f rows per bin)",
+                     format(n_after, big.mark = ","), format(sum(is.finite(ch4_1s$ch4_ppm)), big.mark = ","),
+                     CH4_INTERVAL_S, n_after / sum(is.finite(ch4_1s$ch4_ppm))))
+  }
 }
 
 df_ch4 <- as.data.frame(ch4_1s)

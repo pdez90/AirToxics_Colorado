@@ -28,6 +28,16 @@ BASE <- path.expand(Sys.getenv("SUNCOR_BASE", "~/Downloads/Suncor"))  # was hard
   if (length(r) != 1L || !is.finite(r)) fallback else r
 }
 B <- 500; SCALE <- .sf_get("benzene", 1.149)
+# EXPOSURE BASIS (2026-09-30): the MEAN of daily means is the primary statistic
+# for concentrations, exposure and health (what a long-term reference value and
+# AirToxScreen's annual mean presume); the median of daily medians is the
+# supplementary analysis. EXPOSURE_BASIS=med_of_daily_med runs the supplementary
+# version, written with a _medianbasis suffix so it never overwrites the primary.
+EXPOSURE_BASIS <- Sys.getenv("EXPOSURE_BASIS", "mean_of_daily_mean")
+stopifnot(EXPOSURE_BASIS %in% c("mean_of_daily_mean", "med_of_daily_med"))
+.agg <- if (EXPOSURE_BASIS == "mean_of_daily_mean") mean else stats::median
+.sfx <- if (EXPOSURE_BASIS == "mean_of_daily_mean") "" else "_medianbasis"
+message("[BASIS] ", EXPOSURE_BASIS)
 message(sprintf("[SCALING] benzene factor %.4f", SCALE))
 # BUGFIX (2026-08-20): this loaded mobile_wswd.RData (raw *_ppb) and
 # bootstrapped a RAW-benzene block statistic, while the point estimate it is
@@ -63,14 +73,14 @@ j <- as.data.table(st_drop_geometry(j))[, .(row_id, block = get(idcol))]
 df[, row_id := .I]
 df <- merge(df, j, by = "row_id", allow.cartesian = TRUE)[!is.na(block)]
 rm(pts, j); gc()
-daily <- df[, .(dmed = median(sBenzene)), by=.(block, day)]
+daily <- df[, .(dmed = .agg(sBenzene)), by=.(block, day)]
 days <- sort(unique(daily$day))
 message(uniqueN(daily$block), " blocks | ", length(days), " days | ",
         nrow(daily), " block-day rows")
 ats <- as.data.table(st_drop_geometry(gll))
 ats <- ats[, .(block=get(idcol), ats=benzene_ppb_airtox, pop=Population_airtox)]
 
-full <- daily[, .(bval = median(dmed)), by=block]
+full <- daily[, .(bval = .agg(dmed)), by=block]
 full <- merge(full, ats, by="block")
 # BUGFIX (2026-08-20): the ratio applied na.rm = TRUE independently to the
 # numerator and the denominator. `bval` is a median and is never NA, but `ats`
@@ -99,7 +109,7 @@ t0 <- Sys.time()
 for (b in seq_len(B)) {
   sel <- data.table(day = sample(days, replace=TRUE))
   dd <- daily[sel, on="day", allow.cartesian=TRUE]
-  bs <- dd[, .(bval = median(dmed)), by=block]
+  bs <- dd[, .(bval = .agg(dmed)), by=block]
   bs <- merge(bs, ats, by="block")
   bs <- bs[is.finite(bval) & is.finite(ats) & is.finite(pop) & pop > 0]   # see BUGFIX above
   ratios[b] <- with(bs, sum(pop*bval*SCALE)/sum(pop*ats))
@@ -116,10 +126,10 @@ out1 <- data.table(ratio_point=round(ratio_full,3),
                    n_gt2_point = length(gt2_full),
                    n_gt2_lo = ci_n[1], n_gt2_med = ci_n[2], n_gt2_hi = ci_n[3],
                    n_gt2_min = min(n_gt2_rep))
-fwrite(out1, file.path(BASE,"TABLE_bootstrap_ratio.csv")); print(out1)
+fwrite(out1, file.path(BASE, paste0("TABLE_bootstrap_ratio", .sfx, ".csv"))); print(out1)
 out2 <- data.table(block=names(gt2_count),
                    pr_gt2 = round(gt2_count/B, 3))[order(-pr_gt2)]
-fwrite(out2, file.path(BASE,"TABLE_bootstrap_blocks.csv"))
+fwrite(out2, file.path(BASE, paste0("TABLE_bootstrap_blocks", .sfx, ".csv")))
 message("Blocks >2x with bootstrap Pr>=0.95: ", sum(out2$pr_gt2 >= 0.95),
         " | >=0.80: ", sum(out2$pr_gt2 >= 0.80), " | of ", nrow(out2))
 pA <- ggplot(data.frame(r=ratios), aes(r)) +
@@ -136,6 +146,6 @@ pB <- ggplot(out2, aes(pr_gt2)) +
        x="Bootstrap probability the block remains >2x", y="Blocks") +
   theme_bw(base_size=11)
 library(patchwork)
-ggsave(file.path(BASE,"FinalFig","FIG_bootstrap_blocks.png"), pA/pB,
+ggsave(file.path(BASE,"FinalFig", paste0("FIG_bootstrap_blocks", .sfx, ".png")), pA/pB,
        width=8.5, height=7, dpi=400, bg="white")
 message("[Saved] FinalFig/FIG_bootstrap_blocks.png  DONE.")

@@ -720,6 +720,54 @@ if (HQ_EXCLUDE) {
 }
 
 # ----------------------------
+# 3d) ONE VALUE PER ACQUISITION BIN (2026-09-27)
+# ----------------------------
+# Section 3b writes each 5-s (H2S) / 2-s (HCN) bin mean back to EVERY delivered
+# row of the bin, so a bin counts once per delivered second. That weights bins
+# by the delivery spacing, not by the measurement: EMU delivers every second
+# (about five rows per H2S bin) while CAT in 2023-2024 delivers every two
+# seconds (two or three rows), so the 1-s record gave EMU roughly twice CAT's
+# weight for H2S, and it inflated every row count. From here on each bin
+# contributes ONE value: the bin mean is kept on the middle delivered second of
+# the bin (its position, wind and aromatics are untouched) and blanked on the
+# bin's other rows. Every downstream statistic, map, threshold, hotspot,
+# block surface and hazard index therefore counts each acquisition bin once.
+#
+# The repeated 1-s version is kept in *_ppb_rep. It is used ONLY where H2S or
+# HCN is paired with the 1-s aromatics row by row (the correlation matrices of
+# 07 / FIG_A); the delivered values stay in *_ppb_raw for the plume branch.
+# The bins are the same delivery-clock bins as section 3b. Set
+# THIN_TO_BINS <- FALSE to reproduce the repeated 1-s record.
+THIN_TO_BINS <- TRUE
+if (NATIVE_CADENCE && THIN_TO_BINS) {
+  .dt <- data.table::as.data.table(df_out)
+  .dt[, `:=`(Hydrogen_Sulfide_ppb_rep = Hydrogen_Sulfide_ppb,
+             Hydrogen_Cyanide_ppb_rep = Hydrogen_Cyanide_ppb,
+             .row = .I, .epoch = as.numeric(date), .day = as.Date(date))]
+  .thin <- function(col, species, B) {
+    n0 <- sum(!is.na(.dt[[col]]))
+    .dt[, .blk := floor((.epoch + .asset_delay(Asset, species)) / B)]
+    data.table::setorder(.dt, Asset, Site, .day, .blk, .epoch)
+    .dt[!is.na(get(col)), .k := seq_len(.N), by = .(Asset, Site, .day, .blk)]
+    .dt[!is.na(get(col)), .n := .N, by = .(Asset, Site, .day, .blk)]
+    .dt[!is.na(get(col)) & .k != ceiling(.n / 2), (col) := NA_real_]
+    .dt[, c(".blk", ".k", ".n") := NULL]
+    n1 <- sum(!is.na(.dt[[col]]))
+    message(sprintf("[BINS] %-22s %s delivered seconds -> %s bins of %d s (%.2f rows per bin)",
+                    col, format(n0, big.mark = ","), format(n1, big.mark = ","), B, n0 / n1))
+  }
+  .thin("Hydrogen_Sulfide_ppb", "h2s", H2S_INTERVAL_S)
+  .thin("Hydrogen_Cyanide_ppb", "hcn", HCN_INTERVAL_S)
+  data.table::setorder(.dt, .row)
+  # guard: the thinned value always equals the repeated bin mean on its row
+  stopifnot(isTRUE(all.equal(.dt$Hydrogen_Sulfide_ppb[!is.na(.dt$Hydrogen_Sulfide_ppb)],
+                             .dt$Hydrogen_Sulfide_ppb_rep[!is.na(.dt$Hydrogen_Sulfide_ppb)])))
+  .dt[, c(".row", ".epoch", ".day") := NULL]
+  df_out <- as.data.frame(.dt)
+  rm(.dt, .thin)
+}
+
+# ----------------------------
 # 4) Save outputs + counts
 # ----------------------------
 write.csv(df_out, file.path(SUNCOR_BASE, "mobile.csv"), row.names = FALSE)

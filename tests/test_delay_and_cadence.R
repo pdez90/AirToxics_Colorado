@@ -17,7 +17,8 @@
 #      the van's delay, value for value
 #   3  native cadence: H2S is constant within 5-s blocks and HCN within 2-s
 #      blocks anchored on the instrument's own delivery clock, and each block
-#      value is the mean of the delivered readings in it
+#      value is the mean of the delivered readings in it (on *_rep); the
+#      analysis column keeps exactly one value per block
 #   4  no gap filling: a second that had no delivered value still has none
 #   5  interpolation touches position/met only, never a concentration
 # Exits non-zero if any check fails.
@@ -118,12 +119,18 @@ for (asset in c("CAT", "EMU")) {
   for (info in list(list(sp = "h2s", B = 5, col = "Hydrogen_Sulfide_ppb",  deliv = "Hydrogen_Sulfide"),
                     list(sp = "hcn", B = 2, col = "Hydrogen_Cyanide_ppb", deliv = "Hydrogen_Cyanide"))) {
     L <- DELAY[[asset]][[info$sp]]
-    q <- proc[Asset == asset & is.finite(get(info$col))]
+    # One value per bin (2026-09-27): the analysis column keeps only the
+    # bin's middle delivered second; the bin mean repeated on every delivered
+    # second is in *_rep. (a)-(c) test the averaging on *_rep; (d) tests the
+    # thinning.
+    rep_col <- paste0(info$col, "_rep")
+    if (!rep_col %in% names(proc)) rep_col <- info$col
+    q <- proc[Asset == asset & is.finite(get(rep_col))]
     if (nrow(q) < 500) { skip(sprintf("%s %s native cadence", asset, info$sp),
                               "this van/species has no data in the months tested"); next }
     q[, blk := floor((as.numeric(date) + L) / info$B)]
     # (a) one value per block
-    s1 <- q[, .(nuniq = uniqueN(round(get(info$col), 10))), by = .(Site, d = as.Date(date), blk)]
+    s1 <- q[, .(nuniq = uniqueN(round(get(rep_col), 10))), by = .(Site, d = as.Date(date), blk)]
     chk(sprintf("%s %s constant within its %d s block", asset, info$sp, info$B),
         all(s1$nuniq == 1L),
         sprintf("%s blocks, %d with more than one value",
@@ -132,7 +139,7 @@ for (asset in c("CAT", "EMU")) {
     #     the readings in the block (blocks only partly present - a second with
     #     no position, or a second removed by the 300 m headquarters exclusion,
     #     which is applied after the averaging - are skipped)
-    s2 <- q[, .(n = .N, v = get(info$col)[1], m = mean(get(paste0(info$col, "_raw")), na.rm = TRUE)),
+    s2 <- q[, .(n = .N, v = get(rep_col)[1], m = mean(get(paste0(info$col, "_raw")), na.rm = TRUE)),
             by = .(Site, d = as.Date(date), blk)][n == info$B]
     chk(sprintf("%s %s block value = mean of the readings in the block", asset, info$sp),
         nrow(s2) > 100 && max(abs(s2$v - s2$m)) < 1e-9,
@@ -143,7 +150,7 @@ for (asset in c("CAT", "EMU")) {
     #     acquisition intervals: on the post-delay clock the blocks would
     #     straddle two delivered readings
     q[, blk_wrong := floor(as.numeric(date) / info$B)]
-    s3 <- q[, .(nuniq = uniqueN(round(get(info$col), 10))), by = .(Site, d = as.Date(date), blk_wrong)]
+    s3 <- q[, .(nuniq = uniqueN(round(get(rep_col), 10))), by = .(Site, d = as.Date(date), blk_wrong)]
     straddle <- mean(s3$nuniq > 1L)
     if (L %% info$B == 0) {
       chk(sprintf("%s %s: delay %d s is a whole number of %d s intervals, so both anchors agree",
@@ -155,12 +162,28 @@ for (asset in c("CAT", "EMU")) {
           sprintf("delay %d s leaves a remainder of %d s; under the shifted-clock anchor %.0f%% of blocks would straddle two readings",
                   L, L %% info$B, 100 * straddle))
     }
+    # (d) one value per bin: the analysis column holds exactly one value per
+    #     block, on a delivered second of that block, equal to the block mean
+    if (rep_col != info$col) {
+      s4 <- q[, .(nv = sum(is.finite(get(info$col))),
+                  dv = max(abs(get(info$col) - get(rep_col)), na.rm = TRUE)),
+              by = .(Site, d = as.Date(date), blk)]
+      chk(sprintf("%s %s: exactly one analysis value per %d s bin, equal to the bin mean",
+                  asset, info$sp, info$B),
+          all(s4$nv == 1L) && max(s4$dv) < 1e-9 &&
+            sum(is.finite(proc[Asset == asset][[info$col]])) == nrow(s4),
+          sprintf("%s bins, %d with other than one value",
+                  format(nrow(s4), big.mark = ","), sum(s4$nv != 1L)))
+    }
   }
 }
 
 cat("\n4. no gap filling, and interpolation touches position/met only\n")
 for (info in list(c(col = "Hydrogen_Sulfide_ppb", raw = "Hydrogen_Sulfide_ppb_raw"),
                   c(col = "Hydrogen_Cyanide_ppb", raw = "Hydrogen_Cyanide_ppb_raw"))) {
+  # compare the repeated bin means (*_rep), since the analysis column is
+  # thinned to one value per bin by design
+  if (paste0(info[["col"]], "_rep") %in% names(proc)) info[["col"]] <- paste0(info[["col"]], "_rep")
   a <- sum(!is.na(proc[[info["col"]]])); b <- sum(!is.na(proc[[info["raw"]]]))
   chk(sprintf("%s: averaging changed no second from empty to filled", info["col"]),
       a == b, sprintf("%s values before, %s after", format(b, big.mark = ","),

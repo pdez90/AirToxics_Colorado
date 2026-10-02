@@ -68,7 +68,9 @@ lon_pad <- 1.0
 lat_pad <- 1.0
 
 # basemap style for ggplot
-tile_type <- "cartolight"
+# BASEMAP (2026-09-30): CARTO now serves "API KEY REQUIRED" watermarked tiles without a key;
+# default to key-free OpenStreetMap tiles (as Figure 3 already does). SUNCOR_TILES=<rosm type> overrides.
+tile_type <- Sys.getenv("SUNCOR_TILES", "osm")
 
 # ----------------------------
 # 0) Load cleanly
@@ -245,7 +247,7 @@ traj_df <- traj_df %>%
   dplyr::left_join(pal_df, by = "traj_id")
 
 m <- leaflet::leaflet() %>%
-  leaflet::addProviderTiles("CartoDB.Positron")
+  leaflet::addProviderTiles("OpenStreetMap")
 
 for (i in traj_ids) {
   tr_i <- traj_df %>% dplyr::filter(.data$traj_id == i)

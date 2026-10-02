@@ -1,7 +1,7 @@
 # ==============================================================
 # 55  FIGURE 2 REBUILD — SHARED AROMATIC COLOR SCALE
-# Rebuilds the six-panel Figure 2 (bg-corrected median of daily
-# medians per 500 m segment, script-15 styling) with ONE shared
+# Rebuilds the six-panel Figure 2 (bg-corrected mean of daily means,
+# and the SI median-of-daily-medians version, per 500 m segment, script-15 styling) with ONE shared
 # color scale for the four aromatics (pooled 2-98% limits);
 # H2S and HCN keep their own scales. Panels tagged (a)-(f).
 # Output: FinalFig/Figure2_sharedscale.png
@@ -33,12 +33,14 @@ stopifnot(exists("seg_wide_sf"))
 stopifnot(!anyDuplicated(seg_wide_sf$id))
 message("Figure 2 input: ", nrow(seg_wide_sf), " unique 500 m cells (across-route aggregation)")
 
-V <- c(Benzene = "bgcorr_Benzene_median_of_daily_medians",
-       Toluene = "bgcorr_Toluene_median_of_daily_medians",
-       Trimethylbenzene = "bgcorr_Trimethylbenzene_median_of_daily_medians",
-       Xylene = "bgcorr_Xylene_median_of_daily_medians",
-       H2S = "bgcorr_H2S_median_of_daily_medians",
-       HCN = "bgcorr_HCN_median_of_daily_medians")
+# EXPOSURE BASIS (2026-09-30): Figure 2 now shows the cell MEAN of daily means
+# (FinalFig/Figure2_sharedscale.png, manuscript); the median of daily medians is
+# drawn as the SI supplementary figure (FinalFig/Figure2_sharedscale_median.png).
+for (.basis in c("mean_of_daily_means", "median_of_daily_medians")) {
+.lab <- if (.basis == "mean_of_daily_means") "mean of daily means" else "median of daily medians"
+message("[FIG2] basis: ", .lab)
+V <- setNames(paste0("bgcorr_", c("Benzene", "Toluene", "Trimethylbenzene", "Xylene", "H2S", "HCN"), "_", .basis),
+              c("Benzene", "Toluene", "Trimethylbenzene", "Xylene", "H2S", "HCN"))
 missing <- setdiff(unname(V), names(seg_wide_sf))
 if (length(missing)) stop("columns missing: ", paste(missing, collapse = ", "),
                           "\nAvailable: ", paste(names(seg_wide_sf)[1:30], collapse = ", "))
@@ -66,7 +68,7 @@ ylim <- bl + c(-1, 1) * max(diff(bl) * 0.06, 0.01)
 MIN_DAYS_MAP <- 3
 
 .map_vals <- function(v) {
-  ndcol <- sub("_median_of_daily_medians$", "_n_days_any", v)
+  ndcol <- sub("_(median_of_daily_medians|mean_of_daily_means)$", "_n_days_any", v)
   x  <- suppressWarnings(as.numeric(pd[[v]]))
   nd <- if (ndcol %in% names(pd)) suppressWarnings(as.numeric(pd[[ndcol]])) else rep(Inf, length(x))
   keep <- is.finite(x) & is.finite(nd) & nd >= MIN_DAYS_MAP
@@ -127,9 +129,9 @@ panel <- function(varname, title_txt, tag, lims) {
   # title_txt may be a plotmath expression (H2S subscript) or a string
   ttl <- if (is.expression(title_txt) || is.call(title_txt)) title_txt else paste0(tag, " ", title_txt)
   ggplot() +
-    annotation_map_tile(type = "cartolight", zoom = 12) +
+    {if (Sys.getenv("SUNCOR_TILES") != "none") annotation_map_tile(type = Sys.getenv("SUNCOR_TILES", "osm"), zoom = 12)} +   # SUNCOR_TILES=none: no basemap (offline test)
     geom_point(data = dfv, aes(Lon, Lat, color = val), size = 1.2, alpha = 0.95) +
-    {if (.empty) annotate("text", x = mean(xlim), y = mean(ylim),
+    {if (.empty) ggplot2::annotate("text", x = mean(xlim), y = mean(ylim),
                           label = paste0("no cell sampled on >= ", MIN_DAYS_MAP, " days"),
                           size = 4, fontface = "italic", colour = "grey30") } +
     coord_sf(crs = 4326, xlim = xlim, ylim = ylim, expand = FALSE) +
@@ -164,26 +166,27 @@ lims_h2s <- .panel_lims("H2S")
 lims_hcn <- .panel_lims("HCN")
 message(sprintf("H2S limits (2-98%% of displayed cells): %.3f to %.3f ppb", lims_h2s[1], lims_h2s[2]))
 message(sprintf("HCN limits (2-98%% of displayed cells): %.3f to %.3f ppb", lims_hcn[1], lims_hcn[2]))
-p <- (panel(V["Benzene"], "Benzene (bg-corrected) - median of daily medians",
+p <- (panel(V["Benzene"], paste0("Benzene (bg-corrected) - ", .lab),
             "(a)", arom_lims) |
-      panel(V["Toluene"], "Toluene (bg-corrected) - median of daily medians",
+      panel(V["Toluene"], paste0("Toluene (bg-corrected) - ", .lab),
             "(b)", arom_lims)) /
      (panel(V["Trimethylbenzene"],
-            "Trimethylbenzene (bg-corrected) - median of daily medians",
+            paste0("Trimethylbenzene (bg-corrected) - ", .lab),
             "(c)", arom_lims) |
-      panel(V["Xylene"], "Xylene (bg-corrected) - median of daily medians",
+      panel(V["Xylene"], paste0("Xylene (bg-corrected) - ", .lab),
             "(d)", arom_lims)) /
-     (panel(V["H2S"], expression(bold("(e) H"[2]*"S (bg-corrected) - median of daily medians")),
+     (panel(V["H2S"], bquote(bold("(e) H"[2]*"S (bg-corrected) - "*.(.lab))),
             "(e)", lims_h2s) |
-      panel(V["HCN"], "HCN (bg-corrected) - median of daily medians",
+      panel(V["HCN"], paste0("HCN (bg-corrected) - ", .lab),
             "(f)", lims_hcn)) +
   plot_annotation(caption = paste(
     "Panels (a)-(d) share a single color scale (pooled 2nd-98th percentiles",
     "across the four aromatics); H\u2082S and HCN use their own scales.",
-    "Basemap: CARTO Positron."),
+    "Basemap: © OpenStreetMap contributors."),
     theme = theme(plot.caption = element_text(size = 9, hjust = 0)))
 
-out <- file.path(BASE, "FinalFig", "Figure2_sharedscale.png")
+out <- file.path(BASE, "FinalFig", if (.basis == "mean_of_daily_means") "Figure2_sharedscale.png" else "Figure2_sharedscale_median.png")
 ggsave(out, p, width = 12, height = 15, dpi = 400, bg = "white")
 message("[Saved] ", out)
+}
 message("DONE.")

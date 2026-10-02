@@ -97,7 +97,11 @@ OUT2  <- file.path(BASE, "TABLE_S7.2_acute_screen.csv")
 # the exposure-relevant (but outlier-sensitive) alternative. On the mean basis
 # the community endocrine index is 1.61; on the median basis it is 0.90.
 # Override with HAZARD_BASIS=mean_of_daily_mean to reproduce the old primary.
-HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "med_of_daily_med")
+# (2026-09-30) The primary basis is the block MEAN of daily means again, now for
+# the whole paper (hazard screen, benzene cancer comparison and the maps); the
+# median of daily medians is the supplementary analysis (_medianbasis files and
+# TABLE_S7.1c). HAZARD_BASIS=med_of_daily_med swaps them.
+HAZARD_BASIS <- Sys.getenv("HAZARD_BASIS", "mean_of_daily_mean")
 stopifnot(HAZARD_BASIS %in% c("med_of_daily_med", "mean_of_daily_mean"))
 OTHER_BASIS  <- setdiff(c("med_of_daily_med", "mean_of_daily_mean"), HAZARD_BASIS)
 message("[BASIS] primary block statistic: ", HAZARD_BASIS, "  (secondary: ", OTHER_BASIS, ")")
@@ -254,14 +258,14 @@ ck <- function(lab, got, claim, tol = 0.01) {
               format(signif(got, 4)), format(claim)))
 }
 gHI <- function(org, which) HI[target_organ == org][[which]]
-ck("endocrine HI, pop-weighted mean (HCN)",  gHI("Endocrine","HI_pwmean"),   0.895)
-ck("endocrine HI, most-exposed block",       gHI("Endocrine","HI_maxblock"), 9.62)
-ck("respiratory HI, pop-weighted mean (H2S)",gHI("Respiratory","HI_pwmean"), 0.363)
-ck("respiratory HI, most-exposed block",     gHI("Respiratory","HI_maxblock"),3.42)
-ck("neurological HI, pop-weighted mean",     gHI("Neurological","HI_pwmean"), 0.021)
-ck("neurological HI, most-exposed block",    gHI("Neurological","HI_maxblock"),0.282)  # within-block (median basis; 0.509 on the mean basis)
-ck("hematological HI, pop-weighted mean",    gHI("Hematological","HI_pwmean"),0.011)
-ck("hematological HI, most-exposed block",   gHI("Hematological","HI_maxblock"),0.174)
+ck("endocrine HI, pop-weighted mean (HCN)",  gHI("Endocrine","HI_pwmean"),   1.619)
+ck("endocrine HI, most-exposed block",       gHI("Endocrine","HI_maxblock"), 9.24)
+ck("respiratory HI, pop-weighted mean (H2S)",gHI("Respiratory","HI_pwmean"), 0.356)
+ck("respiratory HI, most-exposed block",     gHI("Respiratory","HI_maxblock"),4.82)
+ck("neurological HI, pop-weighted mean",     gHI("Neurological","HI_pwmean"), 0.031)
+ck("neurological HI, most-exposed block",    gHI("Neurological","HI_maxblock"),0.509)  # within-block (mean basis; 0.282 on the median basis)
+ck("hematological HI, pop-weighted mean",    gHI("Hematological","HI_pwmean"),0.015)
+ck("hematological HI, most-exposed block",   gHI("Hematological","HI_maxblock"),0.237)
 ck("acute HQ, benzene at campaign max",      acute[pollutant=="Benzene", HQ_max], 55.0, 0.02)
 ck("acute HQ, H2S at campaign max",          acute[pollutant=="H2S",     HQ_max], 9.39, 0.02)
 ck("acute HQ, toluene at campaign max",      acute[pollutant=="Toluene", HQ_max], 1.77, 0.02)
