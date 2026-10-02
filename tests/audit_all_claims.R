@@ -97,7 +97,7 @@ say("abstract: mobile vs AirToxScreen cases",
             cm(mob$total_population_used), rh(ats$risk_5_75, 3), rh(ats$risk_20_40, 3)), MS)
 say("2.1: common blocks and residents", sprintf("%s blocks housing %s residents", cm(mob$n_blocks), cm(mob$total_population_used)), MS)
 say("3.3: pop-weighted means", sprintf("were %s and %s ppb, respectively", rh(mob$pop_weighted_mean_ppb, 3), rh(ats$pop_weighted_mean_ppb, 3)), MS)
-say("3.3: residents across common blocks", sprintf("there were %s residents across the %s census blocks", cm(mob$total_population_used), cm(mob$n_blocks)), MS)
+say("3.3: residents across common blocks", sprintf("The %s census blocks in which both AirToxScreen and mobile monitoring benzene concentrations were available house %s residents", cm(mob$n_blocks), cm(mob$total_population_used)), MS)
 say("3.3: cancer cases", sprintf("was %s-%s cases", rh(mob$risk_5_75, 3), rh(mob$risk_20_40, 3)), MS)
 say("4: risk ratio", sprintf("risk ratio %s", rh(mob$pop_weighted_mean_ppb / ats$pop_weighted_mean_ppb, 2)), MS)
 
@@ -169,21 +169,21 @@ if (file.exists(SEG)) {
     say(paste0(T, ": H2S display scale"), sprintf("%s to %s ppb", rh(quantile(h, .02), 2), rh(quantile(h, .98), 2)), D)
     say(paste0(T, ": HCN median and count"), sprintf("median value of %s ppb across %d cells", rh(median(hc), 2), length(hc)), D)
     say(paste0(T, ": HCN display scale"), sprintf("%s to %s ppb", rh(quantile(hc, .02), 2), rh(quantile(hc, .98), 2)), D)
-    .hs <- 100 * sum(hc >= 1.2) / length(hc)
-    say(paste0(T, ": HCN maximum and >= 1.2 ppb"), sprintf("(maximum %s ppb; %d of %d cells, %s, at or above 1.2 ppb)", rh(max(hc), 2), sum(hc >= 1.2), length(hc),
+    .hs <- 100 * sum(hc >= 1.2 - 1e-9) / length(hc)
+    say(paste0(T, ": HCN maximum and >= 1.2 ppb"), sprintf("(maximum %s ppb; %d of %d cells, %s, at or above 1.2 ppb)", rh(max(hc), 2), sum(hc >= 1.2 - 1e-9), length(hc),
         if (.hs < 1) "under 1%" else paste0(rh(.hs, 1), "%")), D)
     say(paste0(if (T == "3.3") "Figure 2" else "Figure S4.13", " caption: H2S / benzene minima"), sprintf("extend to %s ppb, well below the aromatics' minimum of %s ppb", rh(min(h), 2), rh(min(b), 2)), D)
     if (T == "3.3") {
-      say("3.3: benzene <= 0.15 ppb share", sprintf("at or below the relatively small value of 0.15 ppb in %s%% of mapped cells", pc(100 * mean(b <= 0.15))), MS)
+      say("3.3: benzene <= 0.15 ppb share", sprintf("at or below the relatively small value of 0.15 ppb in %s%% of mapped cells", pc(100 * mean(b <= 0.15 + 1e-9))), MS)
       say("3.3: toluene maximum", sprintf("(maximum %s ppb)", rh(max(cl("Toluene")), 2)), MS)
       say("3.3: TMB and xylene maxima", sprintf("Trimethylbenzene (maximum %s ppb) and xylene (maximum %s ppb)", rh(max(cl("Trimethylbenzene")), 2), rh(max(cl("Xylene")), 2)), MS)
-      say("3.3: cells > 0.8 ppb (T, TMB, X)", sprintf("(%d, %d and %d cells for toluene, trimethylbenzene and xylene)", sum(cl("Toluene") > 0.8), sum(cl("Trimethylbenzene") > 0.8), sum(cl("Xylene") > 0.8)), MS)
-      say("3.3: H2S share >= 1 ppb", sprintf("the %s%% of mapped cells at or above 1 ppb", pc(100 * mean(h >= 1))), MS)
-      say("3.3: HCN cells >= 2 ppb", sprintf("the %d cells at or above 2 ppb", sum(hc >= 2)), MS)
+      say("3.3: cells > 0.8 ppb (T, TMB, X)", sprintf("(%d, %d and %d cells for toluene, trimethylbenzene and xylene)", sum(cl("Toluene") > 0.8 + 1e-9), sum(cl("Trimethylbenzene") > 0.8 + 1e-9), sum(cl("Xylene") > 0.8 + 1e-9)), MS)
+      say("3.3: H2S share >= 1 ppb", sprintf("the %s%% of mapped cells at or above 1 ppb", pc(100 * mean(h >= 1 - 1e-9))), MS)
+      say("3.3: HCN cells >= 2 ppb", sprintf("the %d cells at or above 2 ppb", sum(hc >= 2 - 1e-9)), MS)
     } else {
-      say("S4.7: benzene <= 0.15 ppb share", sprintf("%s%% of cells are at or below 0.15 ppb", pc(100 * mean(b <= 0.15))), SI)
+      say("S4.7: benzene <= 0.15 ppb share", sprintf("%s%% of cells are at or below 0.15 ppb", pc(100 * mean(b <= 0.15 + 1e-9))), SI)
       say("S4.7: aromatic maxima", sprintf("The maxima are %s ppb for toluene, %s ppb for trimethylbenzene and %s ppb for xylene", rh(max(cl("Toluene")), 2), rh(max(cl("Trimethylbenzene")), 2), rh(max(cl("Xylene")), 2)), SI)
-      say("S4.7: H2S share >= 1 ppb", sprintf("with %s%% of cells at or above 1 ppb", pc(100 * mean(h >= 1))), SI)
+      say("S4.7: H2S share >= 1 ppb", sprintf("with %s%% of cells at or above 1 ppb", pc(100 * mean(h >= 1 - 1e-9))), SI)
     }
   }
   # Table S3.2 sustained maxima: >= 10 sampled days, 24-h scaled for benzene/toluene/xylene
@@ -307,7 +307,7 @@ say("2.5.3: persistence thresholds", sprintf("(n = %s and %d days for benzene; n
     rh(tv("benzene")$n_cutoff_p90, 1), tv("benzene")$n_days_cutoff_p90, rh(tv("toluene")$n_cutoff_p90, 1), tv("toluene")$n_days_cutoff_p90,
     rh(tv("trimethylbenzene")$n_cutoff_p90, 1), tv("trimethylbenzene")$n_days_cutoff_p90, rh(tv("xylene")$n_cutoff_p90, 0), tv("xylene")$n_days_cutoff_p90,
     rh(tv("hydrogen_sulfide")$n_cutoff_p90, 0), tv("hydrogen_sulfide")$n_days_cutoff_p90), MS)
-say("2.5.3: HCN threshold", sprintf("S; n = %s and %d days for HCN)", rh(tv("hydrogen_cyanide")$n_cutoff_p90, 1), tv("hydrogen_cyanide")$n_days_cutoff_p90), MS)
+say("2.5.3: HCN threshold", sprintf("S; n = %s and %d days for HCN)", rh(tv("hydrogen_cyanide")$n_cutoff_p90, 0), tv("hydrogen_cyanide")$n_days_cutoff_p90), MS)
 say("2.5.3: initial clusters", sprintf("yielded %s initial clusters across the six pollutants (%d benzene, %d toluene, %d trimethylbenzene, %d xylene, %d H",
     cm(sum(th$n_clusters_all)), tv("benzene")$n_clusters_all, tv("toluene")$n_clusters_all, tv("trimethylbenzene")$n_clusters_all, tv("xylene")$n_clusters_all, tv("hydrogen_sulfide")$n_clusters_all), MS)
 say("2.5.3: HCN clusters", sprintf("S and %d HCN)", tv("hydrogen_cyanide")$n_clusters_all), MS)
@@ -338,6 +338,28 @@ say("3.4.2: group 11", sprintf("with %s mobile measurements within 100 m, and it
 say("3.4.2: group 60", sprintf("%s km from the Sinclair Denver products terminal, and is persistent for HCN, trimethylbenzene and xylene; its xylene cluster registered exceedances on %d distinct days", rh(gm(60)$tri_dist_km, 2), gm(60)$max_n_days), MS)
 say("3.4.2: groups 12 and 28", sprintf("their xylene clusters registering exceedances on %d and %d distinct days (the group persistence metric)", gm(12)$max_n_days, gm(28)$max_n_days), MS)
 say("3.4.2: group 9", sprintf("Group 9 lies closer to a TRI facility than any other group in the study, %s km from the Sinclair Denver products terminal", rh(gm(9)$tri_dist_km, 2)), MS)
+# Figure 4D: median ratios within 100 m (34_fancy_plots_of_hotspots.R) and the composition classes
+RA <- dcast(need("hotspot_source_fingerprint_outputs/hotspot_ratio_summary_ALL.csv"), group_id ~ ratio, value.var = "median")
+o_tb <- RA[order(-T_B)]$group_id; o_tmb <- RA[order(-TMB_B)]$group_id
+stopifnot(o_tb[1] == 4, o_tmb[1] == 13, setequal(o_tb[2:3], c(40, 43)), setequal(o_tmb[2:3], c(40, 43)))
+say("3.4.1: Figure 4D ratio leaders", "the aromatics-only Groups 40 and 43 have the second- and third-highest toluene/benzene and trimethylbenzene/benzene ratios, behind Group 4 for toluene/benzene and Group 13 for trimethylbenzene/benzene", MS)
+rest <- RA[!group_id %in% c(4, 13, 40, 43)]
+say("3.4.1: Figure 4D remaining range", sprintf("the remaining %s groups lie within toluene/benzene ratios of %s to %s and trimethylbenzene/benzene ratios of %s to %s",
+    c("ten","eleven","twelve")[nrow(rest) - 9], rh(min(rest$T_B), 1), rh(max(rest$T_B), 1), rh(min(rest$TMB_B), 2), rh(max(rest$TMB_B), 2)), MS)
+say("3.4.2: group 13 TMB/B", sprintf("highest trimethylbenzene/benzene ratio of any group (%s; Figure 4D)", rh(RA[group_id == 13]$TMB_B, 2)), MS)
+cls <- ifelse(grepl("h2s|hcn", M$pollutants), "R", ifelse(grepl("trimethylbenzene", M$pollutants), "P", "B"))
+say("3.4.2: petroleum VOC class", sprintf("Petroleum VOC hotspots (Groups %s)", paste(sort(M$group_id[cls == "P"]), collapse = ", ")), MS)
+say("3.4.2: reduced-species class", sprintf("Reduced-species hotspots (Groups %s)", paste(sort(M$group_id[cls == "R"]), collapse = ", ")), MS)
+say("3.4.2: BTEX class", sprintf("BTEX-dominated hotspots (Groups %s)", paste(sort(M$group_id[cls == "B"]), collapse = ", ")), MS)
+# Group 13 headquarters diagnostic (81_group13_hq_annulus.R)
+G13 <- need("TABLE_group13_hq_annulus.csv"); ar <- G13[aromatic == TRUE]
+say("3.4.2: group 13 HQ distance/bearing", sprintf("Its centroid lies %d m from the CDPHE mobile-laboratory headquarters whose 300 m surround was excluded (section 2.1.1), and the headquarters sits at a bearing of %d degrees from the group",
+    round(G13$group13_dist_to_hq_m[1]), round(G13$bearing_group13_to_hq_deg[1])), MS)
+hc <- G13[pollutant == "HCN"]
+say("3.4.2: group 13 annuli", sprintf("Among retained measurements of the four aromatics, the fraction exceeding the pollutant-specific 99th percentile is %s to %s%% in the 300 to 400 m annulus, which is nearer the headquarters, against %s to %s%% in the 400 to 500 m annulus that contains the group (HCN, for which the group is also persistent: %s%% and %s%%)",
+    rh(min(ar$pct_above_300_400), 1), rh(max(ar$pct_above_300_400), 1), rh(min(ar$pct_above_400_500), 1), rh(max(ar$pct_above_400_500), 1),
+    rh(hc$pct_above_300_400, 1), rh(hc$pct_above_400_500, 1)), MS)
+say("3.4.2: campaign-wide rate", sprintf("a campaign-wide rate of about %s%%", rh(max(G13$pct_above_campaign), 0)), MS)
 if (gm(9)$tri_dist_km != min(M$tri_dist_km, na.rm = TRUE)) cat("  [FAIL] 3.4.2: Group 9 is no longer the group nearest a TRI facility\n")
 # SI Table S5.1 rows: per-group days and TRI distance
 SIrow <- rows(SI)
@@ -367,8 +389,9 @@ say("S5.3: single-step minimum", sprintf("recovery falls to %s%% (%d of %d)", pc
 say("S5.3: baseline reproduces 14", sprintf("the same %d groups persistent in three or more pollutants", b$groups_3plus), SI)
 # split-sample and sufficiency
 sp <- need("TABLE_split_sample_hotspots.csv"); oe <- sp[split == "odd_even"]; ca <- sp[split == "calendar"]
-say("S5.5: odd/even groups and agreement", sprintf("identified %d and %d groups persistent in three or more pollutants, respectively; %s%% and %s%% of one half's groups lie within 300 m of the other's, and the halves recover %s%% and %s%%",
-    oe$groups3_A, oe$groups3_B, pc(100 * oe$frac_A_near_B), pc(100 * oe$frac_B_near_A), pc(100 * oe$frac_base_near_A), pc(100 * oe$frac_base_near_B)), SI)
+say("S5.5: odd/even groups and agreement", sprintf("%s groups persistent in three or more pollutants%s; %s%% and %s%% of one half's groups lie within 300 m of the other's, and the halves recover %s%% and %s%%",
+    if (oe$groups3_A == oe$groups3_B) paste("each identified", oe$groups3_A) else sprintf("identified %d and %d", oe$groups3_A, oe$groups3_B),
+    if (oe$groups3_A == oe$groups3_B) "" else ", respectively", pc(100 * oe$frac_A_near_B), pc(100 * oe$frac_B_near_A), pc(100 * oe$frac_base_near_A), pc(100 * oe$frac_base_near_B)), SI)
 say("S5.5: calendar halves", sprintf("identified %d (2023-2024) and %d (2025) groups, recovering %s%% and %s%% of the full-campaign locations, with cross-half agreement of %s%% and %s%%",
     ca$groups3_A, ca$groups3_B, pc(100 * ca$frac_base_near_A), pc(100 * ca$frac_base_near_B), pc(100 * ca$frac_A_near_B), pc(100 * ca$frac_B_near_A)), SI)
 su <- need("TABLE_sampling_sufficiency.csv"); sk <- function(k, c) su[k_days == k][[c]]
@@ -431,8 +454,9 @@ if (have("WWTP_H2S_receptor_height_check.csv")) {
   say("S6.4: sigma_z and mixing-depth ranges", sprintf("(σz of %s-%s m at %s-%s km; mixing depths of %s-%s m)", cm(min(rz$sigma_z_m)), cm(max(rz$sigma_z_m)), rh(min(rz$x_km), 2), rh(max(rz$x_km), 2), cm(min(rz$hpbl_m)), cm(max(rz$hpbl_m))), SI)
 } else skip("S6.4 receptor-height check", "WWTP_H2S_receptor_height_check.csv not present (run plume_scripts/P11_plume_geometry_checks.R)")
 MV_site <- 83000 / (8.314 * 298.15); MV_std <- 101325 / (8.314 * 273.15)   # mol/m3 at 25 C / 830 hPa and at 0 C / 1013 hPa
-say("S6.4: air-density ratio, standard vs site", sprintf("(%s mol/m3) would give rates %s%% higher (%s/%s = %s)", rh(MV_std, 2), rh(100 * (MV_std / MV_site - 1), 0), rh(MV_std, 2), rh(MV_site, 2), rh(MV_std / MV_site, 2)), SI)
-say("S6.4: sea-level 25 C ratio", sprintf("and one at 25 °C and sea-level pressure %s%% higher", rh(100 * (101325 / 83000 - 1), 0)), SI)
+.inv <- need("FinalFig/WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv")[sens_group == "baseline"]
+say("S6.4: measured air density at the intercepts", sprintf("(%s-%s mol/m3 for the four retained plumes; %s mol/m3", rh(min(.inv$mol_m3), 1), rh(max(.inv$mol_m3), 1), rh(MV_site, 2)), SI)
+say("S6.4: standard-conditions ratio", sprintf("(%s mol/m3) would give rates %s-%s%% higher", rh(MV_std, 2), rh(100 * (MV_std / max(.inv$mol_m3) - 1), 0), rh(100 * (MV_std / min(.inv$mol_m3) - 1), 0)), SI)
 say("S6.6: Qmin under D at 3.2 m/s", sprintf("is approximately %s t/yr at 0.5 km, %s t/yr at 1 km, and %s t/yr at 2 km", cm(qq(0.5,"D",3.2)), cm(qq(1,"D",3.2)), cm(qq(2,"D",3.2))), SI)
 say("S6.6: Qmin under B at 2 km", sprintf("to approximately %s t/yr at 2 km", cm(round(qq(2,"B",3.2), -1))), SI)
 say("S6.6: Qmin at 0.5 km across speeds", sprintf("roughly %s-%s t/yr at 0.5 km under D stability", cm(qq(0.5,"D",2)), cm(qq(0.5,"D",5))), SI)
@@ -464,7 +488,7 @@ if (file.exists(WS)) { e <- new.env(); suppressWarnings(load(WS, envir = e)); o 
       rh(nrow(hr_[Asset == "CAT"]) / nrow(hb[Asset == "CAT"]), 2), rh(nrow(hr_[Asset == "EMU"]) / nrow(hb[Asset == "EMU"]), 2)), SI)
     .cat <- sprintf("the CAT laboratory supplied %s%% of the H2S values, against %s%% of the bins", pc(100 * mean(hr_$Asset == "CAT")), pc(100 * mean(hb$Asset == "CAT")))
     say("2.1.1: CAT weighting", .cat, MS)
-    say("S1.4: CAT weighting", sprintf("the CAT laboratory supplied %s%% of the delivered H2S seconds but supplies %s%% of the bins", pc(100 * mean(hr_$Asset == "CAT")), pc(100 * mean(hb$Asset == "CAT"))), SI)
+    say("S1.4: CAT weighting", sprintf("the CAT laboratory supplies %s%% of the delivered H2S seconds but %s%% of the bins", pc(100 * mean(hr_$Asset == "CAT")), pc(100 * mean(hb$Asset == "CAT"))), SI)
     say("S1.4: bin vs delivered H2S", sprintf("For H2S the median is %s ppb against %s ppb for the delivered seconds, the mean %s against %s ppb",
       rh(median(hb$Hydrogen_Sulfide_ppb), 2), pc(median(hr_$Hydrogen_Sulfide_ppb_raw)), rh(mean(hb$Hydrogen_Sulfide_ppb), 2), rh(mean(hr_$Hydrogen_Sulfide_ppb_raw), 2)), SI)
     if (all(c("Hydrogen_Sulfide_ppb_rep", "Hydrogen_Cyanide_ppb_rep") %in% names(o))) cat("  [OK  ] mobile_wswd carries the repeated 1-s bin means (*_rep) for the correlations\n") else
@@ -479,8 +503,8 @@ mh <- need("methane_hotspot_summary.csv"); mc <- need("cent_out_methane_persiste
 say("3.7: p99, clusters", sprintf("(≥ 99th percentile, %s ppm) into %d spatial clusters, of which two", rh(mh$p99, 2), mh$n_clusters), MS)
 say("S8: p99 / p95 / events / days / clusters", sprintf("campaign-wide 99th percentile (%s ppm; the 95th percentile was %s ppm). The %s high-methane events (observed on %d of 193 days) grouped into %d spatial clusters", rh(mh$p99, 3), rh(mh$p95, 3), cm(mh$n_high_events), mh$n_days_high, mh$n_clusters), SI)
 c1 <- mc[cluster == 1]; c2 <- mc[cluster == 2]
-say("3.7: largest methane hotspot", sprintf("(%s° N, %s° W; events on %d of 193 days, maximum %s ppm)", rh(c1$lat, 3), rh(-c1$lon, 3), c1$n_days, rh(c1$ch4_max, 1)), MS)
-say("3.7: second methane hotspot", sprintf("(%s° N, %s° W; %d days)", rh(c2$lat, 3), rh(-c2$lon, 3), c2$n_days), MS)
+say("3.7: largest methane hotspot", sprintf("(%s° N, %s° W; %s events on %d of 193 days, maximum %s ppm)", rh(c1$lat, 3), rh(-c1$lon, 3), cm(c1$n_events), c1$n_days, rh(c1$ch4_max, 1)), MS)
+say("3.7: second methane hotspot", sprintf("(%s° N, %s° W; %s events on %d days)", rh(c2$lat, 3), rh(-c2$lon, 3), cm(c2$n_events), c2$n_days), MS)
 say("S8: largest methane hotspot", sprintf("(%s° N, %s° W; %s events on %d days; maximum %s ppm)", rh(c1$lat, 4), rh(-c1$lon, 4), cm(c1$n_events), c1$n_days, rh(c1$ch4_max, 1)), SI)
 hav <- function(la, lo, LA, LO) { R <- 6371008.8; p_ <- pi/180; a <- sin((LA-la)*p_/2)^2 + cos(la*p_)*cos(LA*p_)*sin((LO-lo)*p_/2)^2; 2*R*asin(pmin(1, sqrt(a))) }
 M <- need("MASTER_hotspot_group_index.csv")
@@ -488,14 +512,15 @@ d40 <- hav(c2$lat, c2$lon, M[group_id == 40, Latitude], M[group_id == 40, Longit
 say("3.7: distances to groups 40 and 29", sprintf("The second lies %s km from air-toxics Group 40 and the largest %s km from Group 29", rh(d40, 1), rh(d29, 1)), MS)
 say("3.7: co-elevation range", sprintf("ranged from %s%% to %s%%", rh(min(ma$pct_ge_p95), 1), rh(max(ma$pct_ge_p95), 1)), MS)
 t34 <- ma[group_id == 34]; t40 <- ma[group_id == 40]
-say("3.7: groups 34 and 40", sprintf("strongest at Group 34 (%s%%) and Group 40 (%s%%, with high-methane events on %s sampling days)", rh(t34$pct_ge_p95, 1), rh(t40$pct_ge_p95, 1), c("one","two","three","four","five","six","seven")[t40$days_with_high]), MS)
+.nw <- c("one","two","three","four","five","six","seven")
+say("3.7: groups 34 and 40", sprintf("strongest at Group 34 (%s%%, with high-methane events on %s sampling day%s) and Group 40 (%s%%, on %s days)", rh(t34$pct_ge_p95, 1), .nw[t34$days_with_high], if (t34$days_with_high == 1) "" else "s", rh(t40$pct_ge_p95, 1), .nw[t40$days_with_high]), MS)
 say("3.7: groups below 5%", sprintf("whereas %d of the %d groups", sum(ma$pct_ge_p95 < 5), nrow(ma)), MS)
 MP <- file.path(BASE, "methane_sourceprob.RData")
 if (file.exists(MP)) { e <- new.env(); load(MP, envir = e); s <- e$sourceprob_ch4; M_ <- s$M; i <- which(M_ == max(M_), arr.ind = TRUE)[1, ]
   xs <- seq(s$xr[1], s$xr[2], length.out = ncol(M_)); ys <- seq(s$yr[1], s$yr[2], length.out = nrow(M_))
   lat <- s$center["lat"] + ys[i[1]] / 111320; lon <- s$center["lon"] + xs[i[2]] / (111320 * cos(s$center["lat"] * pi / 180))
   say("3.7 / S8: methane source-probability maximum", sprintf("(maximum at %s° N, %s° W", rh(lat, 3), rh(-lon, 3)), BOTH)
-  say("S8: same maximum in the SI", sprintf("(maximum at %s° N, %s° W)", rh(lat, 3), rh(-lon, 3)), SI)
+  say("S8: same maximum in the SI", sprintf("(maximum at %s° N, %s° W, about", rh(lat, 3), rh(-lon, 3)), SI)
 } else skip("3.7 methane source maximum", "methane_sourceprob.RData not present")
 
 # ==========================================================================
@@ -556,13 +581,14 @@ if (have("TABLE_scaling_sensitivity_risk.csv")) {
 }
 
 if (have("TABLE_bin_location_error.csv")) {
-  bl <- need("TABLE_bin_location_error.csv"); g_ <- function(p, s, c) bl[pollutant == p & subset == s][[c]]; H_ <- "bins >= campaign p99"
-  say("S5: binned-event positional uncertainty", sprintf("lies a median of %s m and a 95th percentile of %s m from the assigned position for H2S (%s and %s m for HCN); only %d of the %s high H2S bins, and %s of the %s high HCN bins, extend beyond 100 m, and in 95%% of high bins the assigned position is within %s m (H2S) and %s m (HCN)",
+  bl <- need("TABLE_bin_location_error.csv"); g_ <- function(p, s, c) bl[pollutant == p & subset == s][[c]]; H_ <- "bins > campaign p99 (hotspot events)"
+  .nh <- g_("H2S", H_, "n_max_off_gt100"); .nc <- g_("HCN", H_, "n_max_off_gt100")
+  say("S5: binned-event positional uncertainty", sprintf("lies a median of %s m and a 95th percentile of %s m from the assigned position for H2S (%s and %s m for HCN); only %d of the %s H2S events, and %s of the %s HCN events, %s beyond 100 m, and in 95%% of events the assigned position is within %s m (H2S) and %s m (HCN)",
       rh(g_("H2S", H_, "max_off_p50"), 0), rh(g_("H2S", H_, "max_off_p95"), 0), rh(g_("HCN", H_, "max_off_p50"), 0), rh(g_("HCN", H_, "max_off_p95"), 0),
-      g_("H2S", H_, "n_max_off_gt100"), cm(g_("H2S", H_, "n_bins")), if (g_("HCN", H_, "n_max_off_gt100") == 0) "none" else g_("HCN", H_, "n_max_off_gt100"), cm(g_("HCN", H_, "n_bins")),
+      .nh, cm(g_("H2S", H_, "n_bins")), if (.nc == 0) "none" else .nc, cm(g_("HCN", H_, "n_bins")), if (.nh == 1) "extends" else "extend",
       rh(g_("H2S", H_, "cen_off_p95"), 0), rh(g_("HCN", H_, "cen_off_p95"), 0)), SI)
   say("S5: median driving speed in the bins", sprintf("about %s m per second at the median driving speed (%s km/h)", rh(g_("H2S", "all bins", "speed_kmh_p50") / 3.6, 0), rh(g_("H2S", "all bins", "speed_kmh_p50"), 0)), SI)
-  say("S5: high-bin counts match the event thresholds", sprintf("of the %s high H2S bins", cm(g_("H2S", H_, "n_bins"))), SI)
+  say("S5: event counts match the hotspot events", sprintf("of the %s H2S events", cm(g_("H2S", H_, "n_bins"))), SI)
 } else skip("S5: binned-event positional uncertainty", "TABLE_bin_location_error.csv not present (run 80)")
 
 hdr("M. Hazard screen  <- TABLE_S7.1(b), S7.2, S7.3, S7.4")
@@ -614,7 +640,7 @@ if (have("TABLE_cumulative_HI_summary.csv")) {
 say("S7.4: community endocrine under C and D", sprintf("from %s (A, B) to %s and %s (C, D)", rh(s3("A_none","Endocrine","HI_pwmean"), 2), rh(s3("C_borrowed","Endocrine","HI_pwmean"), 2), rh(s3("D_upper","Endocrine","HI_pwmean"), 2)), SI)
 b4 <- function(o, c) h4[organ == o][[c]]
 say("S7.4: break-even factors (pw)", sprintf("would fall to 1 only at an HCN factor of %s, and the respiratory index reaches 1 at an H", rh(b4("Endocrine","f_breakeven_pwmean"), 2)), SI)
-say("S7.4: break-even respiratory (pw)", sprintf("S factor of %s; the respiratory index stays below 1 for any factor up to %s.", rh(b4("Respiratory","f_breakeven_pwmean"), 2), rh(b4("Respiratory","f_breakeven_pwmean"), 2)), SI)
+say("S7.4: break-even respiratory (pw)", sprintf("the respiratory index reaches 1 at an H2S factor of %s.", rh(b4("Respiratory","f_breakeven_pwmean"), 2)), SI)
 if (have("TABLE_S7.4_breakeven_factors_medianbasis.csv") && have("TABLE_S7.3_scaling_scenarios_medianbasis.csv")) {
   h4m <- need("TABLE_S7.4_breakeven_factors_medianbasis.csv"); b4m <- function(o, c) h4m[organ == o][[c]]
   h3m <- need("TABLE_S7.3_scaling_scenarios_medianbasis.csv"); s3m <- function(sc, o, c) h3m[scenario == sc & organ == o][[c]]

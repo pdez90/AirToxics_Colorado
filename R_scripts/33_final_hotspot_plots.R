@@ -760,7 +760,7 @@ master_source <- master %>%
     n_pollutants = stringr::str_count(pollutants, "\\+") + 1,
     has_sulfur = stringr::str_detect(tolower(pollutants), "h2s|hcn"),
     chem_type = dplyr::case_when(
-      has_sulfur ~ "Sulfur-containing",
+      has_sulfur ~ "Reduced species",
       stringr::str_detect(tolower(pollutants), "trimethylbenzene") ~ "Petroleum VOC",
       TRUE ~ "BTEX-dominated"
     ),

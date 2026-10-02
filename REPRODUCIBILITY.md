@@ -1,32 +1,80 @@
 # Reproducibility manifest
 
-**Scope note (2026-09-25).** `RUN_ALL_from_raw.R` runs `R00a` in its default mode, which
-verifies the packet inventory, revisions and monthly-CSV coverage but does **not** re-derive
-the monthly CSVs from the official XLSX packets. Those CSVs are therefore validated inputs
-rather than primary ones on the default path. To close the loop back to the XLSX source, run
-`DEEP=1` (content comparison) or `REBUILD=1` (regenerate the CSVs) - see `R00a` - which is the
-reconstruction test this policy relies on.
+## Current state (2 October 2026)
 
-**Policy (adopted 2026-08-15): every manuscript number must be reproducible from primary
-inputs. No hand-made or interactive intermediate is accepted.**
+**Policy: every number in the manuscript, the SI and the Shiny app is regenerated from primary
+inputs by the code in this repository; no hand-made or interactive intermediate is used.**
+`tests/audit_all_claims.R` checks the numbers quoted in both documents against the outputs
+(294 checks), `tests/audit_si_prose.R` the SI prose (21) and `tests/audit_manuscript_claims.R`
+the measurement-file claims (44); all pass on the current outputs.
 
-Last full re-run: **2026-09-23/25**, from raw CDPHE inputs, after the CDPHE co-authors
-required removal of every measurement within 300 m of the ATOPs headquarters. Every number
-in the manuscript, the SI and the Shiny app comes from that run. Stage 1 (R01-R05) ran
-2026-09-23; stages R06 onward were completed by `RUN_RESUME_from_R06.sh` (R06 133 min,
-figures 901 min). 26 of 28 figure groups passed first time; group U was re-run after an
-`apply` masking fix and group A after being killed on memory pressure. **Zero `[EDIT]`
-flags** across every group log, i.e. nothing in the run disagrees with the documents.
+**How the current outputs were produced.** Full run from the raw CDPHE packets on 23-25 Sep 2026
+(after the 300 m headquarters exclusion); the one-value-per-bin re-run of 27-28 Sep (H2S, HCN
+and CH4 reduced to one value per 5-s / 2-s bin; `RUN_BINS.sh`); the mean-of-daily-means primary
+basis and the median-basis supplementary outputs of 30 Sep (MAKE_FIGURES groups X, XM and the
+block/hazard scripts); figure-group re-runs through 2 Oct. Sections further down headed
+"What the ... re-run changed" and the other dated notes are a record of how the analysis got
+here; counts quoted in them are as of their dates. Where they differ from the canonical
+definitions below or from the documents, the latter are current.
 
-The previous full re-run was **2026-08-21/22** (~9.2 h): it retained H2S across the 2023
-inlet-contamination window (+93,992 values, +35 sampling days) and dropped the 28-30 May 2025
-HCN calibration window (-27,739 values, -2 days).
+**Folder layout the pipeline expects.** Code and data share one analysis root,
+`$SUNCOR_BASE` (default `~/Downloads/Suncor`):
 
-Group J (Figure S3.1 route summary) failed in that run on a masked `shift()`; the call is now
-namespaced as `data.table::shift` in `43_figure_s31_routes.R` (and in
-`63_deheld_sensitivity.R`, where a masked lag would have been silent). **Re-run 2026-08-22,
-passed in 21.2 min**, so `figureS31_runs_summary.csv` is current: 205 runs, matching the
-audit's independent Site x day count.
+| repository folder | location under `$SUNCOR_BASE` |
+|---|---|
+| `R_scripts/` | `R_scripts/` |
+| `pipeline/` | `rerun_pipeline/` |
+| `plume_scripts/`, `hrrr_scripts/`, `methane/` | `rerun_pipeline/plume_scripts/` etc. |
+| `tests/` | `tests/` |
+| `shiny_app/` | `shiny_app/` |
+
+`diagnostics_helpers.R` sets `PIPE <- $SUNCOR_BASE/rerun_pipeline`, and the wrappers source
+`$SUNCOR_BASE/R_scripts/...` and `$PIPE/plume_scripts/...`, so copy the folders into place (and
+keep the copies identical to the repository) before running.
+
+**Reproduction path.** `bash rerun_pipeline/RUN_EVERYTHING.sh` runs the guard tests, then
+`RUN_ALL_from_raw.R` (data, maps, census blocks, hotspots, plume inversion, methane), the plume
+simulations and `MAKE_FIGURES.R` (every table and figure of both documents). `RUN_ALL_from_raw.R`
+alone does not write the tables and figures; `MAKE_FIGURES.R` does.
+
+**Where each document item comes from** (script; stage or MAKE_FIGURES group):
+
+| item | script | stage / group |
+|---|---|---|
+| Figure 1 | `42_figure1_sampling_density.R` | J3 |
+| Figure 2, Figure S4.13 | `55_figure2_sharedscale.R` (cell statistics from 13/14) | R03, O |
+| Figure 3 | `26_hotspot_rotated_wind_source_probability_profiles.R` | R05, Z |
+| Figure 4 | `33_final_hotspot_plots.R` -> `34_fancy_plots_of_hotspots.R` | H |
+| Table S1.1 | `71_table_s11.R` | J2 |
+| Table S1.2, MDL lookup | `69_cdphe_audit_mdls.R` (`CDPHE_audit_MDLs.csv`) | J2 |
+| Figure S1.1 / S1.2 | `51_cat_emu_comparison.R` / `57_monthly_stability.R` | R |
+| Figure S3.1 | `37_creating_gif_figure_s1_1.R` | J |
+| Figures S3.2-S3.8 | `07_...R` with `FIG_A_finisher_bins.R` | A |
+| Figures S3.9 / S3.10 | `09_creating_figures.R` / `08_polarplot_maps.R` | B |
+| Table S3.1 | `70_table_s31.R` | J2 |
+| Table S3.2 | `54_health_reference_table.R` | S |
+| Figures S3.11 / S3.12 / S3.13 / S3.14 | `45` / `50` / `56` / `62` | R |
+| Figure S4.1 | `17_..._scaling_factors_...R` | R04 |
+| Figures S4.2 / S4.3 / S4.4 | `41` / `24` / `21` | K / G / E |
+| Figure S4.5 | `16_500_m_plotting_ratios.R` | C |
+| Figures S4.6 / S4.7 | `19_plot_maps_census_blocks.R` | D |
+| Figure S4.8 | `36_hysplit_of_lowest_trimethylbenzene_benzene_ratios.R` | I |
+| Figures S4.9 / S4.10 / S4.11 / S5.7 | `48` / `49` / `58` / `61` | X |
+| Table S4.1, Figure S4.12 | `79_background_sensitivity.R` | X, XM |
+| Table S5.1 panels / day counts | `31_plotting.R` / `76_group_exceedance_days.R` | M / N |
+| Figures S5.1-S5.3 | `27_hotspot_sensitivity_sensitivity.R` | L |
+| Figures S5.4 / S5.5 | `35_hotspot_figure_2.R` | H |
+| Figures S5.6 / S5.8 / S5.9, positional uncertainty | `47` / `52` / `60` / `80_bin_location_error.R` | P |
+| MS 3.4.2 Group 13 headquarters diagnostic | `81_group13_hq_annulus.R` | P |
+| Figures S6.1 / S6.2 / S6.5, Table S6.2 inputs | `P07` / `P07` / `P08` | R07 |
+| Figures S6.3 / S6.4 / S6.6, Table S6.2 detection limits | `P09` / `P10` / `46_min_detectable_rate.R` | V |
+| S6.4 receptor height, S6.8 bearings | `P11_plume_geometry_checks.R` | V |
+| Table S6.2 attribution columns | `70_source_attribution_wwtp_vs_refinery.R` | W |
+| Tables S7.1-S7.4 | `74_health_hazard_screening.R`, `77_health_scaling_sensitivity.R` | J2, XM |
+| Tables S7.5-S7.7, Figures S7.1 / S7.2 | `78_diurnal_scaling_evidence.R` | X |
+| S7.3 cell-level screen | `73_cumulative_risk.R` | T |
+| Figure S8.1 / S8.2 | `M04_sourceprob_map.R` / `M06_methane_at_toxics_hotspots.R` | RUN_ALL, U / Q |
+| `_medianbasis` outputs (S4.7, S7) | scripts above with `EXPOSURE_BASIS` / `HAZARD_BASIS` = `med_of_daily_med` | XM |
 
 ## One command
 
@@ -37,9 +85,9 @@ bash ~/Downloads/Suncor/rerun_pipeline/RUN_EVERYTHING.sh 2>&1 | tee ~/Downloads/
 | stage | what | time |
 |---|---|---|
 | 0 | guard tests — time convention + P08 geometry | ~1 min |
-| 1 | `RUN_ALL_from_raw.R` with `CLEAN=1` | 3.5 h |
+| 1 | `RUN_ALL_from_raw.R` with `CLEAN=1` | 4-6 h |
 | 2 | P09 / P10 plume simulations | < 1 min |
-| 3 | `MAKE_FIGURES.R` — all figures, incl. group I (HYSPLIT) | 4.5 h |
+| 3 | `MAKE_FIGURES.R` — all figures, incl. group I (HYSPLIT) | 13-16 h |
 | 4 | impact diagnostic | 1 min |
 
 Stage 0 is a hard gate: if the guard tests fail nothing else runs. Stages 1–4 continue on
@@ -215,6 +263,11 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
    1,810,015 -> 506,614). Correlations of H2S/HCN with the aromatics use the repeated 1-s bin
    means (`*_rep`, carried through `06_merge_with_wind.R`); plume detection is exempt and uses
    the delivered `*_raw` signal.
+
+## Dated record
+
+The sections from here on record how the analysis reached its current state. Counts quoted in
+them are as of their dates; the canonical definitions above and the documents are current.
 
 ## What the 2026-08-21/22 re-run changed
 

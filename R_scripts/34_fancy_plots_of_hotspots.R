@@ -465,43 +465,64 @@ make_hour_heatmap <- function(hour_all_df) {
 # 12) PANEL D: SOURCE ATTRIBUTION
 # ----------------------------
 make_source_panel_clean <- function(ratio_all_df, master_df) {
+  # Colour = the composition class used in the manuscript text (section 3.4.2) and in
+  # 33_final_hotspot_plots.R: a group persistent for H2S or HCN is "Reduced species";
+  # otherwise one persistent for trimethylbenzene is "Petroleum VOC"; otherwise
+  # (benzene/toluene/xylene only) "BTEX-dominated". Size = max_n_days, the same
+  # exceedance-day persistence that scales the circles in panel A.
+  class_levels <- c("Petroleum VOC", "Reduced species (H2S/HCN)", "BTEX-dominated")
+  class_cols   <- c("Petroleum VOC" = "#E69F00", "Reduced species (H2S/HCN)" = "#0072B2",
+                    "BTEX-dominated" = "#009E73")                 # Okabe-Ito, CVD-safe
+  class_shapes <- c("Petroleum VOC" = 21, "Reduced species (H2S/HCN)" = 24, "BTEX-dominated" = 22)
 
   ratio_plot_data <- ratio_all_df %>%
     dplyr::select(group_id, ratio, median) %>%
     tidyr::pivot_wider(names_from = ratio, values_from = median) %>%
     dplyr::left_join(master_df, by = "group_id") %>%
     dplyr::mutate(
-      source_guess = dplyr::case_when(
-        !is.na(H2S_B) & H2S_B > 0.5 ~ "Sulfur/Refinery",
-        !is.na(TMB_B) & TMB_B > 1.5 ~ "Petroleum/Industrial",
-        !is.na(T_B) & !is.na(X_B) & T_B > 2 & X_B > 1 ~ "Traffic",
-        TRUE ~ "Mixed"
-      )
+      pol = tolower(pollutants),
+      chem_class = factor(dplyr::case_when(
+        stringr::str_detect(pol, "h2s|hcn")        ~ "Reduced species (H2S/HCN)",
+        stringr::str_detect(pol, "trimethylbenzene") ~ "Petroleum VOC",
+        TRUE                                         ~ "BTEX-dominated"
+      ), levels = class_levels)
     )
+  stopifnot(!anyNA(ratio_plot_data$chem_class), !anyNA(ratio_plot_data$max_n_days))
+  print(ratio_plot_data %>% dplyr::select(group_id, pollutants, chem_class, max_n_days, T_B, TMB_B) %>%
+          dplyr::arrange(chem_class, group_id), n = Inf)
 
   ggplot2::ggplot(ratio_plot_data, ggplot2::aes(x = T_B, y = TMB_B)) +
     ggplot2::geom_point(
-      ggplot2::aes(size = persistence_index_weighted, color = source_guess),
-      alpha = 0.9
+      ggplot2::aes(size = max_n_days, fill = chem_class, shape = chem_class),
+      colour = "white", stroke = 0.6, alpha = 0.9
     ) +
     ggrepel::geom_text_repel(
       ggplot2::aes(label = group_id),
       seed = 123,
       size = 3.0,
-      box.padding = 0.2,
-      point.padding = 0.15,
+      box.padding = 0.35,
+      point.padding = 0.3,
       min.segment.length = 0,
       segment.alpha = 0.5,
       max.overlaps = Inf
     ) +
+    ggplot2::scale_fill_manual(values = class_cols, drop = FALSE) +
+    ggplot2::scale_shape_manual(values = class_shapes, drop = FALSE) +
+    ggplot2::scale_size_continuous(range = c(2.5, 8), breaks = c(20, 40, 60)) +
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = 0.08)) +
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = 0.08)) +
+    ggplot2::guides(fill  = ggplot2::guide_legend(order = 1, override.aes = list(size = 4)),
+                    shape = ggplot2::guide_legend(order = 1),
+                    size  = ggplot2::guide_legend(order = 2, override.aes = list(shape = 21, fill = "grey50"))) +
     ggplot2::theme_bw() +
     ggplot2::labs(
-      title = "Source attribution in ratio space",
-      subtitle = "Hotspots positioned by median aromatic ratios",
+      title = "Hotspot composition classes in ratio space",
+      subtitle = "Median aromatic ratios within 100 m; classes as in section 3.4.2",
       x = "Toluene / Benzene",
       y = "Trimethylbenzene / Benzene",
-      color = "Likely source",
-      size = "Persistence"
+      fill = "Composition class",
+      shape = "Composition class",
+      size = "Max exceedance-days"
     )
 }
 

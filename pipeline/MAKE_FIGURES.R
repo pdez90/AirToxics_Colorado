@@ -114,12 +114,12 @@ GROUPS <- list(
            scripts = "27_hotspot_sensitivity_sensitivity.R"),
   M = list(desc = "Table S5.1 per-group reports (maps/scatter/polar + highday tables)",
            pre = character(0),
-           # 76 writes the per-group exceedance-day counts quoted in the
-           # Table S5.1 captions; it needs MASTER (group N) to exist first.
-           scripts = c("31_plotting.R", "76_group_exceedance_days.R")),
-  N = list(desc = "Rebuild root MASTER_hotspot_group_index.csv (must precede H)",
+           scripts = "31_plotting.R"),
+  N = list(desc = "Rebuild root MASTER_hotspot_group_index.csv (must precede H) + Table S5.1 day counts",
            pre = character(0),
-           scripts = "71_rebuild_master_index.R"),
+           # 76 writes the per-group exceedance-day counts of Table S5.1 from the
+           # root MASTER index, so it runs after 71 rebuilds it (DEP_ORDER M -> G -> N).
+           scripts = c("71_rebuild_master_index.R", "76_group_exceedance_days.R")),
   O = list(desc = "FIGURE 2 shared-scale composite (manuscript Figure 2)",
            pre = character(0),
            scripts = "55_figure2_sharedscale.R"),
@@ -130,7 +130,10 @@ GROUPS <- list(
                        "60_sampling_sufficiency.R",
                        # SI S5: positional uncertainty of the 5-s H2S / 2-s HCN bin values
                        # against the 100 m radius (TABLE_bin_location_error.csv). ~30 s.
-                       "80_bin_location_error.R")),
+                       "80_bin_location_error.R",
+                       # MS 3.4.2: Group 13 distance and bearing to the CDPHE headquarters and the
+                       # 300-400 / 400-500 m annulus exceedance rates (TABLE_group13_hq_annulus.csv). ~20 s.
+                       "81_group13_hq_annulus.R")),
   # 2026-08-23: the methane section is RESTORED as manuscript 3.7 and SI S8
   # (the hazard section is SI S7). M06's figure is SI Figure S8.2.
   Q = list(desc = "Methane at the toxics hotspot groups (3.7 / SI Figure S8.2)",
@@ -147,7 +150,11 @@ GROUPS <- list(
            pre = character(0),
            scripts = c("../rerun_pipeline/plume_scripts/P09_simulations_real_stack_height_varies.R",
                        "../rerun_pipeline/plume_scripts/P10_simulations_cross_wind_distance_0.R",
-                       "46_min_detectable_rate.R")),
+                       "46_min_detectable_rate.R",
+                       # SI S6.4/S6.8: receptor-height and plume-bearing checks
+                       # (WWTP_H2S_receptor_height_check.csv, WWTP_H2S_plume_bearing_check.csv);
+                       # needs 46's TABLE_min_detectable_rate_plumes.csv and TRI_subset.csv (G).
+                       "../rerun_pipeline/plume_scripts/P11_plume_geometry_checks.R")),
   W = list(desc = "WWTP-vs-refinery plume source attribution (re-run after CH4 change)",
            pre = character(0),
            scripts = "70_source_attribution_wwtp_vs_refinery.R"),
