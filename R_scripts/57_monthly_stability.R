@@ -31,8 +31,8 @@ print(data.table::dcast(ms[pollutant=="Benzene"], month ~ van, value.var="median
 mdl <- fread(file.path(BASE, "CDPHE_audit_MDLs.csv"))
 mdl[, pollutant := ifelse(grepl("HCN", compound), "HCN", ifelse(grepl("H2S", compound), "H2S", compound))]
 setorder(mdl, pollutant, from_ym)
-mdl[, `:=`(chg = (!is.na(cat_mdl) & !is.na(shift(cat_mdl)) & cat_mdl != shift(cat_mdl)) |
-                 (!is.na(emu_mdl) & !is.na(shift(emu_mdl)) & emu_mdl != shift(emu_mdl))), by = pollutant]
+mdl[, `:=`(chg = (!is.na(cat_mdl) & !is.na(data.table::shift(cat_mdl)) & cat_mdl != data.table::shift(cat_mdl)) |
+                 (!is.na(emu_mdl) & !is.na(data.table::shift(emu_mdl)) & emu_mdl != data.table::shift(emu_mdl))), by = pollutant]
 bounds <- mdl[chg == TRUE, .(pollutant, x = as.Date(sprintf("%d-%02d-01", from_ym %/% 100, from_ym %% 100)))]
 stopifnot(all(bounds$pollutant %in% names(POLLS)))
 print(bounds[, .(dates = paste(format(x, "%Y-%m"), collapse = ", ")), by = pollutant])

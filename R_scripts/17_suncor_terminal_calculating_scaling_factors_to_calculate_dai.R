@@ -81,6 +81,11 @@ lacasa1$date_mst <- lubridate::dmy_hm(lacasa1$date_mst)
 .off <- as.numeric(difftime(lubridate::dmy_hm(lacasa1$date), lacasa1$date_mst, units = "hours"))
 stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
 lacasa1$date <- lacasa1$date_mst   # MST clock, to match the mobile record (see note above)
+# The summer-2023 deployment is the Vocus Elf, whose benzene is not reported
+# (MS 2.2: unit-mass-resolution interference; it averages ~1.8 ppb against ~0.16 ppb
+# from the Vocus 2R in summer 2024). La Casa benzene therefore comes from the
+# summer-2024 Vocus 2R only; toluene and xylene use all three deployments.
+lacasa1$benzene <- NA_real_
 
 lacasa2 <- read.csv(file.path(SUNCOR_BASE, "ascent_2024.csv"), stringsAsFactors = FALSE)
 colnames(lacasa2) <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene","xylene","wd","ws","temp_far","temp_c","rh")

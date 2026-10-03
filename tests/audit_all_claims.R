@@ -575,8 +575,9 @@ for (.bs in list(list(f = "", doc = SI, tag = "S4.5", col = "sBenzene_mean_of_da
 # ==========================================================================
 if (have("TABLE_scaling_sensitivity_risk.csv")) {
   ss <- need("TABLE_scaling_sensitivity_risk.csv")
-  say("S4.3: scaling ratio range (mean basis)", sprintf("the resulting aggregate risk ratio ranges from %s (median-based construction) to %s (baseline), with mobile risk ranges of %s-%s excess cases",
-      rh(min(ss$ratio_vs_ATS), 2), rh(ss[construction == "A_binweighted", ratio_vs_ATS], 2), sprintf("%.3f", min(ss$risk_lo)), sprintf("%.3f", max(ss$risk_hi))), SI)
+  say("S4.3: scaling ratio range (mean basis)", sprintf("the resulting aggregate risk ratio ranges from %s (no scaling) to %s (hour-of-day weights only), with %s at the baseline, and mobile risk ranges of %s-%s excess cases",
+      rh(ss[construction == "E_none", ratio_vs_ATS], 2), rh(ss[construction == "C_hour_only", ratio_vs_ATS], 2), rh(ss[construction == "A_binweighted", ratio_vs_ATS], 2), sprintf("%.3f", min(ss$risk_lo)), sprintf("%.3f", max(ss$risk_hi))), SI)
+  if (min(ss$ratio_vs_ATS) != ss[construction == "E_none", ratio_vs_ATS] || max(ss$ratio_vs_ATS) != ss[construction == "C_hour_only", ratio_vs_ATS]) { n_fail <<- n_fail + 1L; cat("  [FAIL] S4.3: the minimum/maximum constructions are no longer E_none / C_hour_only; reword the S4.3 range sentence\n") }
   if (min(ss$ratio_vs_ATS) <= 1) { n_fail <<- n_fail + 1L; cat("  [FAIL] S4.3: a scaling construction puts the mean-basis ratio at or below 1; the text says every one exceeds AirToxScreen\n") }
 }
 
@@ -722,7 +723,8 @@ if (have("TABLE_wind_station_distance.csv")) { wsd <- need("TABLE_wind_station_d
       cm(wsd$n_fallback), rh(wsd$pct_fallback, 1), rh(wsd$median_extra_km_fallback, 1)), MS)
 } else skip("2.3 wind-station distances", "TABLE_wind_station_distance.csv not found (run 84)")
 if (have("TABLE_lacasa_cpf.csv")) { cp2 <- need("TABLE_lacasa_cpf.csv")
-  say("S5.4: CPF rows", sprintf("(winds > 1 m/s; %s rows with valid concentrations", cm(cp2[pollutant == "benzene", sum(n)])), SI) }
+  say("S5.4: CPF rows (toluene, xylene)", sprintf("(winds > 1 m/s; %s rows with valid toluene and xylene concentrations", cm(cp2[pollutant == "toluene", sum(n)])), SI)
+  say("S5.4: CPF rows (benzene, 2024 only)", sprintf("and %s rows for benzene, which is used from the summer-2024 deployment only", cm(cp2[pollutant == "benzene", sum(n)])), SI) }
 dm <- need("hotspot_source_fingerprint_outputs/hotspot_source_directional_metrics.csv")[group_id == 13]
 b13 <- need("TABLE_group13_hq_annulus.csv")$bearing_group13_to_hq_deg[1]
 inw <- dm[abs(((source_bearing_deg - b13 + 180) %% 360) - 180) <= 30]

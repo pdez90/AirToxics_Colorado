@@ -33,7 +33,12 @@ rd <- function(f, parser) { x <- read.csv(file.path(BASE,f), stringsAsFactors=FA
   stopifnot(all(is.na(.off) | .off %in% c(0, 1)))
   x$date <- .mst                            # MST clock, to match the mobile record
   x }
-lc <- rbindlist(list(rd("ascent_2023.csv", dmy_hm), rd("ascent_2024.csv", dmy_hm)))
+# The summer-2023 deployment is the Vocus Elf, whose benzene is not reported
+# (MS 2.2: unit-mass-resolution interference; it averages ~1.8 ppb against ~0.16 ppb
+# from the Vocus 2R in summer 2024). La Casa benzene therefore comes from the
+# summer-2024 Vocus 2R only; toluene and xylene use all three deployments.
+.lc23 <- rd("ascent_2023.csv", dmy_hm); .lc23$benzene <- NA_real_
+lc <- rbindlist(list(.lc23, rd("ascent_2024.csv", dmy_hm)))
 # The ascent files report wind speed in mph (WS_mph); convert before the 1 m/s cut.
 lc <- as.data.table(lc)[, ws := ws * 0.44704][is.finite(wd) & is.finite(ws) & ws > 1]
 message("La Casa rows with valid wind, ws > 1 m/s: ", format(nrow(lc), big.mark=","))

@@ -126,6 +126,11 @@ rd <- function(f, cn, parser) {
 cn12 <- c("date_mst","date_mst1","date","date_mdt","benzene","toluene",
           "xylene","wd","ws","temp_far","temp_c","rh")
 lc1 <- rd("ascent_2023.csv", cn12, dmy_hm)
+# The summer-2023 deployment is the Vocus Elf, whose benzene is not reported
+# (MS 2.2: unit-mass-resolution interference; it averages ~1.8 ppb against ~0.16 ppb
+# from the Vocus 2R in summer 2024). La Casa benzene therefore comes from the
+# summer-2024 Vocus 2R only; toluene and xylene use all three deployments.
+lc1$benzene <- NA_real_
 lc2 <- rd("ascent_2024.csv", cn12, dmy_hm)
 lc3 <- rd("lacasa3.csv", c("date","toluene","xylene"), mdy_hm)
 lc3$benzene <- NA_real_

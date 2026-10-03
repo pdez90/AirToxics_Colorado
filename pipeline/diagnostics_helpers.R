@@ -249,11 +249,13 @@ REF <- utils::modifyList(REF, list(
   # H2S p99 4.8 -> 5.0 (2026-09-27): H2S is now one value per 5-s bin rather
   # than the bin mean repeated on every delivered second, so each bin counts
   # once. HCN's p99 is unchanged (11).
-  scaling = c(benzene = 1.165, toluene = 1.274, xylene = 1.443),
+  # benzene 1.165 -> 1.309 (2026-10-03): La Casa benzene now comes from the
+  # summer-2024 Vocus 2R only (the Vocus Elf benzene is not used; MS 2.2, SI S2.1).
+  scaling = c(benzene = 1.309, toluene = 1.274, xylene = 1.443),
   n_blocks = 1667, population = 126527,
   # block benzene risk on the primary mean-of-daily-means basis (the median
-  # basis gives 0.108-0.383 cases, ratio 0.92)
-  risk_mobile = c(0.147, 0.523), risk_ratio = 1.26,
+  # basis gives 0.121-0.430 cases, ratio 1.03)
+  risk_mobile = c(0.165, 0.587), risk_ratio = 1.41,
   dbscan_initial = 2763, clusters_ge2 = 37, clusters_ge3 = 15, clusters_ge4 = 6, final_groups = 15
 ))
 

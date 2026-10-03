@@ -208,17 +208,19 @@ Then `MAKE_FIGURES.R` for the figure groups, including group I (script 36, HYSPL
 
 2. **Block-level benzene risk** = population-weighted, using
    `sBenzene_mean_of_daily_mean_scaled` (block mean of daily means, La Casa bin-weighted
-   scaling; benzene factor 1.16, SI Figure S4.1), on blocks with AirToxScreen benzene +
+   scaling; benzene factor 1.31, SI Figure S4.1 - the benzene factor rests on the summer-2024
+   Vocus 2R deployment alone, because the summer-2023 Vocus Elf benzene is not used; scripts
+   17/48/49/61 set it to NA), on blocks with AirToxScreen benzene +
    population > 0. The block median of daily medians (`sBenzene_med_of_daily_med_scaled`) is
    the supplementary basis: set `EXPOSURE_BASIS=med_of_daily_med` (MAKE_FIGURES group XM
    does this and writes the `_medianbasis` outputs). Implemented in R04b + script 20.
 
    Result: **1,667 blocks, 126,527 residents**; AirToxScreen 0.117–0.416 excess cases,
-   mobile 0.147–0.523, **ratio 1.26** (population-weighted benzene 0.202 vs 0.161 ppb; day
-   bootstrap 1.05–1.44). Mobile is more than 2× AirToxScreen in 181 blocks (10.9%) and lower
-   in 46% (median ratio 1.06); block-level correlation is nil (Pearson 0.04, Spearman 0.02).
-   Supplementary median basis: mobile 0.108–0.383 cases, ratio 0.92 (bootstrap 0.77–1.06),
-   100 blocks above 2×, lower than AirToxScreen in 77% of blocks. The two datasets disagree
+   mobile 0.165–0.587, **ratio 1.41** (population-weighted benzene 0.227 vs 0.161 ppb; day
+   bootstrap 1.18–1.61). Mobile is more than 2× AirToxScreen in 242 blocks (14.5%) and lower
+   in 36% (median ratio 1.19); block-level correlation is nil (Pearson 0.04, Spearman 0.02).
+   Supplementary median basis: mobile 0.121–0.430 cases, ratio 1.03 (bootstrap 0.87–1.19),
+   126 blocks above 2×, lower than AirToxScreen in 75% of blocks. The two datasets disagree
    in **spatial pattern** on either statistic.
 
 3. **Plume inversion**: WWTP-updated funnel, **37 candidate events → 4 retained**. Baseline
@@ -307,7 +309,7 @@ median benzene 0.1 ppb, median HCN 1 ppb, La Casa scaling factors (1.15 / 1.23 /
 | 1-s measurements | 2,602,928 | 2,555,285 |
 | common blocks / residents | 1,668 / 126,607 | **1,667 / 126,527** |
 | persistent hotspot groups | 17 | **14** |
-| La Casa scaling (benzene/toluene/xylene) | 1.149 / 1.228 / 1.377 | **1.165 / 1.274 / 1.443** |
+| La Casa scaling (benzene/toluene/xylene) | 1.149 / 1.228 / 1.377 | **1.309 / 1.274 / 1.443** (benzene from the 2024 Vocus 2R only) |
 | p99 toluene / TMB / xylene | 4.31 / 2.59 / 3.19 | **3.80 / 2.14 / 2.83** |
 | p99 H2S / HCN | 4.6 / 11 | **4.8 / 11** |
 | mobile benzene risk | 0.108–0.384 | 0.108–0.383 |

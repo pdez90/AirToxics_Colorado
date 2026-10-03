@@ -124,9 +124,11 @@ say("cells identical",
     sprintf("%s-%s%% of those %d cells retained exactly the same value",
             rh(min(nb$cells_identical_pct), 0), rh(max(nb$cells_identical_pct), 0), t$n_cells[1]), SI,
     sprintf("%.2f - %.2f", min(nb$cells_identical_pct), max(nb$cells_identical_pct)))
+.sf <- file.path(BASE, "lacasa_scaling_factors_option1_binweighted.RData")
+.bz <- if (file.exists(.sf)) { .e <- new.env(); load(.sf, envir = .e); .o <- get(ls(.e)[1], envir = .e); as.numeric(.o$ratio_all_over_mobilelike[.o$pollutant == "benzene"]) } else NA_real_
 say("cells within one step",
-    sprintf("%s-%s%% differed by no more than 0.05 ppb before 24-h scaling (0.058 ppb on the scaled surface), half the 0.1 ppb benzene reporting step",
-            rh(min(nb$cells_within_one_step_pct), 0), rh(max(nb$cells_within_one_step_pct), 0)), SI,
+    sprintf("%s-%s%% differed by no more than 0.05 ppb before 24-h scaling (%s ppb on the scaled surface), half the 0.1 ppb benzene reporting step",
+            rh(min(nb$cells_within_one_step_pct), 0), rh(max(nb$cells_within_one_step_pct), 0), if (is.finite(.bz)) sprintf("%.3f", 0.05 * .bz) else "0.065"), SI,
     sprintf("%.2f - %.2f", min(nb$cells_within_one_step_pct), max(nb$cells_within_one_step_pct)))
 say("largest single-cell change",
     sprintf("was %s ppb on a 24-hour basis", rh(max(t$max_abs_diff_ppb), 2)), SI, max(t$max_abs_diff_ppb))

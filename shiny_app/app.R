@@ -229,9 +229,21 @@ CTX_COLS <- c("Covered facilities" = "red", "Wastewater treatment" = "green",
 # Esri's light grey canvas needs no key, is equally recessive under a
 # sequential ramp, and keeps the data the darkest thing on the page. The
 # fallback keeps the app running on any leaflet build that lacks the entry.
-BASE_PROVIDER <- if ("Esri.WorldGrayCanvas" %in% names(providers))
-                   "Esri.WorldGrayCanvas" else "CartoDB.Positron"
-base_map <- function() leaflet() |> addProviderTiles(BASE_PROVIDER) |>
+# Three keyless basemaps behind a switcher (top right), so a tile service that
+# changes its terms cannot blank or watermark the maps: Esri light grey canvas
+# (default), OpenStreetMap, and CARTO Positron (basemaps.cartocdn.com). None
+# needs an API key; entries missing from the installed leaflet.providers are
+# dropped.
+BASEMAPS <- c("Grey (Esri)" = "Esri.WorldGrayCanvas",
+              "OpenStreetMap" = "OpenStreetMap.Mapnik",
+              "Light (CARTO)" = "CartoDB.Positron")
+BASEMAPS <- BASEMAPS[BASEMAPS %in% names(providers)]
+add_basemaps <- function(m) {
+  for (nm in names(BASEMAPS)) m <- addProviderTiles(m, BASEMAPS[[nm]], group = nm)
+  addLayersControl(m, baseGroups = names(BASEMAPS), position = "topright",
+                   options = layersControlOptions(collapsed = TRUE))
+}
+base_map <- function() leaflet() |> add_basemaps() |>
   setView(-104.95, 39.82, zoom = 11)
 
 
@@ -934,7 +946,7 @@ server <- function(input, output, session) {
     dom <- switch(input$p2_layer,
                   ats = c(0.1, 0.35), mob = c(0, 1), ratio = c(0, 3))
     sc <- if (input$p2_layer == "ratio") ratio_scale() else conc_scale_fixed(dom)
-    leaflet(b) |> addProviderTiles(BASE_PROVIDER) |>
+    leaflet(b) |> add_basemaps() |>
       setView(-104.93, 39.82, zoom = 11) |>
       addPolygons(fillColor = sc$pal(pmin(pmax(val, dom[1]), dom[2])),
                   fillOpacity = 0.75, weight = 0.3, color = "grey40",
