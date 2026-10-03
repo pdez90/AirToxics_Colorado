@@ -3,13 +3,14 @@
 # Re-runs the hotspot pipeline on corrected data:
 #   - source-probability surfaces (Figure 3)
 #   - DBSCAN clustering + persistence filtering (Figure 4, Table S5.1)
-# Then checks the manuscript's cluster counts. CURRENT (2026-09-23 run, after
-# the 300 m ATOPs-headquarters exclusion) - these are what the check below
-# actually expects:
-#   2,652 initial clusters (sum over the six pollutants) -> 217 persistent
-#   single-pollutant clusters -> 155 candidate groups -> 37 (>=2 pollutants)
-#   -> 14 (>=3) -> 8 (>=4) -> 14 final persistent multi-pollutant groups.
-# Superseded, kept so the trail is legible: the 2026-08-22 run gave
+# Then checks the manuscript's cluster counts. CURRENT (one value per H2S/HCN
+# bin, after the 300 m ATOPs-headquarters exclusion; MS 2.5.3.2) - these are
+# what the check below expects (REF in diagnostics_helpers.R):
+#   2,763 initial clusters (sum over the six pollutants) -> 225 persistent
+#   single-pollutant clusters -> 164 candidate groups -> 37 (>=2 pollutants)
+#   -> 15 (>=3) -> 6 (>=4) -> 15 final persistent multi-pollutant groups.
+# Superseded, kept so the trail is legible: the 2026-09-23 run gave
+# 2,652 -> 217 -> 155 -> 37 -> 14 -> 8 -> 14; the 2026-08-22 run gave
 # 2,713 -> 37 -> 17 -> 8 -> 17, and the originally submitted analysis
 # 160 -> 40 -> 17 -> 8, which predates the delay/cadence rework. The exclusion
 # itself moved the clustering barely at all (persistent clusters 216 -> 217);

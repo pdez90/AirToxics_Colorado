@@ -46,8 +46,8 @@ bg_correct <- function(obs, base, med) {
   # BUGFIX (2026-08-20): the multiplicative branch guarded only `base != 0`,
   # not `base <= 0`. This pipeline deliberately RETAINS negative readings, and
   # they are common in exactly the two species whose MDLs sit far above ambient:
-  # 34.2% of retained H2S values and 17.3% of benzene are negative (counted
-  # from the 58 monthly CDPHE CSVs; toluene, xylene, TMB and HCN are delivered
+  # 34.0% of delivered H2S values and 17.2% of benzene are negative (counted
+  # from the 58 monthly CDPHE CSVs, TABLE_S1.4_qaqc_checks.csv; toluene, xylene, TMB and HCN are delivered
   # non-negative). The lowest-20th-percentile baseline of a 20-minute window is
   # therefore frequently <= 0 for H2S, and then:
   #   base <  0 and base > obs  ->  obs * med / base FLIPS THE SIGN, so a

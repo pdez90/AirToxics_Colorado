@@ -122,13 +122,12 @@ if (.br_n > 0)
                       "Decide explicitly whether to keep BR before proceeding."), .br_n))
 
 # ---- QA/QC provenance counts written out (ADDED 2026-08-22) ------------
-# SI S1.4 quotes four counts describing the delivered one-second files BEFORE
-# any exclusion: how many MD-flagged values sit at exactly half the audit MDL,
-# how many rows the genuinely-discarding null qualifiers (AL, BH) remove, how
-# many negative values CDPHE did not blank, and how many benzene readings sit at
-# -0.1 ppb. None of them survived into a saved output, so they could not be
-# checked against the run. Emit them here, at the only point in the pipeline
-# where the pre-exclusion values still exist.
+# Provenance counts on the records as they reach this script, i.e. AFTER the
+# GPS screen of 02_newmobile_data.R: MD-flagged values at half the audit MDL,
+# rows the null qualifiers (AL, BH) remove, negatives CDPHE did not blank, and
+# benzene readings at its modal negative value. These are NOT the numbers SI
+# S1.4 quotes: S1.4 describes the delivered monthly files before any screen,
+# and those counts come from 72_check_s14_qaqc.R (TABLE_S1.4_qaqc_checks.csv).
 .qa_polls <- list(
   Benzene          = c("Benzene_ppbV",          "Benzene_flag"),
   Toluene          = c("Toluene_ppbV",          "Toluene_flag"),
@@ -158,7 +157,8 @@ if (.br_n > 0)
 .qa$benzene_modal_negative[.qa$pollutant == "Benzene"]   <- .bz_mode
 .qa$benzene_modal_negative_n[.qa$pollutant == "Benzene"] <- sum(.bz == .bz_mode)
 write.csv(.qa, file.path(SUNCOR_BASE, "TABLE_qaqc_counts.csv"), row.names = FALSE)
-message("[QA/QC] provenance counts -> TABLE_qaqc_counts.csv (the numbers quoted in SI S1.4)")
+message("[QA/QC] provenance counts -> TABLE_qaqc_counts.csv (after the GPS screen of 02; ",
+        "the delivered-file counts quoted in SI S1.4 are TABLE_S1.4_qaqc_checks.csv from 72_check_s14_qaqc.R)")
 print(.qa)
 message("[QA/QC] benzene modal negative value: ", .bz_mode, " ppb, ",
         format(sum(.bz == .bz_mode), big.mark = ","), " readings")

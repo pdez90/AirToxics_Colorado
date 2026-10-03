@@ -9,7 +9,10 @@
 #     (the dist_km that 06 stores);
 #   - median distance from the individual measurements to the station used;
 #   - share of measurements for which another of the stations used lies nearer
-#     the measurement itself.
+#     the measurement itself;
+#   - the fallback: measurements whose hourly position's closest station had no
+#     wind that hour (station used farther than the closest), and the median
+#     extra distance to the station used.
 #   -> TABLE_wind_station_distance.csv
 #   Rscript R_scripts/84_wind_station_distance.R
 # ==============================================================
@@ -24,7 +27,16 @@ st <- unique(d[, .(SiteNum_wind, Lat_wind, Lon_wind)])
 D <- sapply(seq_len(nrow(st)), function(i) hav(d$Latitude, d$Longitude, st$Lat_wind[i], st$Lon_wind[i]))
 d[, `:=`(d_meas_km = hav(Latitude, Longitude, Lat_wind, Lon_wind),
          nearest = st$SiteNum_wind[max.col(-D, ties.method = "first")])]
+# fallback: per laboratory x route x hour, the station used vs the closest station
+# to that hour's median position (06 stores dist_km from that position)
+g <- d[, .(mlat = median(Latitude), mlon = median(Longitude), dist_km = dist_km[1], n = .N),
+       by = .(Asset, Site, hour)]
+Dg <- sapply(seq_len(nrow(st)), function(i) hav(g$mlat, g$mlon, st$Lat_wind[i], st$Lon_wind[i]))
+g[, dmin := apply(Dg, 1, min)][, fallback := dist_km > dmin + 0.01]   # 10 m tolerance
+fb <- g[fallback == TRUE]
 res <- data.table(n_measurements = nrow(d), n_stations = nrow(st),
+                  n_fallback = sum(fb$n), pct_fallback = 100 * sum(fb$n) / nrow(d),
+                  median_extra_km_fallback = median(rep(fb$dist_km - fb$dmin, fb$n)),
                   median_dist_hourly_position_km = median(d$dist_km),
                   median_dist_measurement_km = median(d$d_meas_km),
                   pct_other_station_nearer = 100 * mean(d$nearest != d$SiteNum_wind))

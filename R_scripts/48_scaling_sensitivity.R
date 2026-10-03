@@ -63,11 +63,8 @@ S_BASE_BENZ <- .sf_get("benzene", 1.149)   # baseline benzene factor, from R04
 .risk_file <- file.path(BASE, "FinalFig",
                         "benzene_risk_summary_BINWEIGHTED_COMMONBLOCKS.csv")
 .risk_anchor <- function() {
-  if (!file.exists(.risk_file)) {
-    warning("[RISK] ", basename(.risk_file), " absent - falling back to the ",
-            "documented 2026-09-23 values; re-run 19/R05 and repeat this script")
-    return(list(lo = 0.108, hi = 0.383, ats_lo = 0.117, ats_hi = 0.416, ratio = 0.92))
-  }
+  if (!file.exists(.risk_file))   # no typed-in fallback: those were median-basis values
+    stop("[RISK] ", basename(.risk_file), " absent - run 19/20 (block risk) first")
   r <- data.table::fread(.risk_file)
   g <- function(pat, col) as.numeric(r[[col]][grep(pat, r$metric)][1])
   lo <- g("^Mobile", "risk_5_75");  hi <- g("^Mobile", "risk_20_40")

@@ -293,7 +293,7 @@ say("S4.4: night/window ratios", sprintf("by factors of %s (benzene), %s (toluen
     rh(dn[pollutant == "benzene", ratio_night_over_window_mean], 2), rh(dn[pollutant == "toluene", ratio_night_over_window_mean], 2), rh(dn[pollutant == "xylene", ratio_night_over_window_mean], 2),
     rh(dn[pollutant == "benzene", ratio_night_over_window_median], 2), rh(dn[pollutant == "toluene", ratio_night_over_window_median], 2), rh(dn[pollutant == "xylene", ratio_night_over_window_median], 2)), SI)
 wk <- dn$ratio_weekend_over_window_mean
-say("S4.4: weekend ratios", sprintf("%s-%s%% lower than weekday daytimes (ratios %s, %s, and %s)", pc(100 * (1 - max(wk))), pc(100 * (1 - min(wk))), rh(wk[1], 2), rh(wk[2], 2), rh(wk[3], 2)), SI)
+say("S4.4: weekend ratios", sprintf("%s-%s%% lower than the driving-window means (ratios %s, %s, and %s)", pc(100 * (1 - max(wk))), pc(100 * (1 - min(wk))), rh(wk[1], 2), rh(wk[2], 2), rh(wk[3], 2)), SI)
 nt <- dn$ratio_night_over_window_mean
 say("3.8: La Casa contrasts", sprintf("by factors of %s-%s, and weekend daytimes are %s-%s%% lower", rh(min(nt), 2), rh(max(nt), 2), pc(100 * (1 - max(wk))), pc(100 * (1 - min(wk)))), MS)
 sfF <- file.path(BASE, "lacasa_scaling_factors_option1_binweighted.RData")
@@ -451,7 +451,7 @@ if (have("WWTP_H2S_plume_bearing_check.csv")) {
 if (have("WWTP_H2S_receptor_height_check.csv")) {
   rz <- need("WWTP_H2S_receptor_height_check.csv")
   say("S6.4: receptor-height effect", sprintf("changes the inferred rates by at most %s%%", rh(max(abs(rz$pct_change_in_Q)), 3)), SI)
-  say("S6.4: sigma_z and mixing-depth ranges", sprintf("(σz of %s-%s m at %s-%s km; mixing depths of %s-%s m)", cm(min(rz$sigma_z_m)), cm(max(rz$sigma_z_m)), rh(min(rz$x_km), 2), rh(max(rz$x_km), 2), cm(min(rz$hpbl_m)), cm(max(rz$hpbl_m))), SI)
+  say("S6.4: sigma_z and mixing-depth ranges", sprintf("(σz of %s-%s m at %s-%s km, within 1%% of the inversion's along-wind values; mixing depths of %s-%s m)", cm(min(rz$sigma_z_m)), cm(max(rz$sigma_z_m)), rh(min(rz$x_km), 2), rh(max(rz$x_km), 2), cm(min(rz$hpbl_m)), cm(max(rz$hpbl_m))), SI)
 } else skip("S6.4 receptor-height check", "WWTP_H2S_receptor_height_check.csv not present (run plume_scripts/P11_plume_geometry_checks.R)")
 MV_site <- 83000 / (8.314 * 298.15); MV_std <- 101325 / (8.314 * 273.15)   # mol/m3 at 25 C / 830 hPa and at 0 C / 1013 hPa
 .inv <- need("FinalFig/WWTP_H2S_inversion_all_scenarios_METRIC_TPY.csv")[sens_group == "baseline"]
@@ -526,8 +526,8 @@ if (file.exists(MP)) { e <- new.env(); load(MP, envir = e); s <- e$sourceprob_ch
 # ==========================================================================
 hdr("K. Smoke and season  <- TABLE_smoke_comparison.csv, TABLE_seasonal.csv")
 sm <- need("TABLE_smoke_comparison.csv"); sv <- function(p, c) sm[pollutant == p & class == "none"][[c]]
-say("S3.2: benzene / toluene / xylene ratios", sprintf("benzene daily medians were unchanged (ratio %s), toluene and xylene were modestly lower on smoke days (ratios %s and %s; Wilcoxon p = %s and %s)",
-    rh(sv("Benzene","ratio_smoke_over_none"), 2), rh(sv("Toluene","ratio_smoke_over_none"), 2), rh(sv("Xylene","ratio_smoke_over_none"), 2), rh(sv("Toluene","p_wilcoxon_smoke_vs_none"), 3), rh(sv("Xylene","p_wilcoxon_smoke_vs_none"), 3)), SI)
+say("S3.2: benzene / toluene / xylene ratios", sprintf("benzene daily medians had the same median (ratio %s) but a lower distribution on smoke days (Wilcoxon p = %s), and toluene and xylene were modestly lower on smoke days (ratios %s and %s; Wilcoxon p = %s and %s)",
+    rh(sv("Benzene","ratio_smoke_over_none"), 2), rh(sv("Benzene","p_wilcoxon_smoke_vs_none"), 3), rh(sv("Toluene","ratio_smoke_over_none"), 2), rh(sv("Xylene","ratio_smoke_over_none"), 2), rh(sv("Toluene","p_wilcoxon_smoke_vs_none"), 3), rh(sv("Xylene","p_wilcoxon_smoke_vs_none"), 3)), SI)
 say("S3.2: H2S under light overlay", sprintf("(%s vs %s ppb) but not significantly so (p = %s)", rh(sm[pollutant == "H2S" & class == "light", median_of_day_medians], 1), rh(sv("H2S","median_of_day_medians"), 1), rh(sv("H2S","p_wilcoxon_smoke_vs_none"), 2)), SI)
 se_ <- need("TABLE_seasonal.csv"); sz <- function(p, s) se_[pollutant == p & season == s, med]
 say("S3.3: benzene by season", sprintf("benzene %s ppb in DJF vs %s ppb in other seasons", rh(sz("Benzene","DJF"), 2), rh(sz("Benzene","MAM"), 2)), SI)
@@ -718,6 +718,8 @@ if (have("TABLE_background_sign_changes.csv")) { bs <- need("TABLE_background_si
 if (have("TABLE_wind_station_distance.csv")) { wsd <- need("TABLE_wind_station_distance.csv")
   say("2.3: wind-station distances", sprintf("The median distance from that hourly position to the station used was %s km (%s km from the individual measurements; for %s%% of measurements",
       rh(wsd$median_dist_hourly_position_km, 1), rh(wsd$median_dist_measurement_km, 1), rh(wsd$pct_other_station_nearer, 1)), MS)
+  say("2.3: wind-station fallback", sprintf("For %s measurements (%s%%), the nearest station reported no wind for that hour and the next-closest reporting station was used, a median of %s km farther away",
+      cm(wsd$n_fallback), rh(wsd$pct_fallback, 1), rh(wsd$median_extra_km_fallback, 1)), MS)
 } else skip("2.3 wind-station distances", "TABLE_wind_station_distance.csv not found (run 84)")
 if (have("TABLE_lacasa_cpf.csv")) { cp2 <- need("TABLE_lacasa_cpf.csv")
   say("S5.4: CPF rows", sprintf("(winds > 1 m/s; %s rows with valid concentrations", cm(cp2[pollutant == "benzene", sum(n)])), SI) }
@@ -731,12 +733,19 @@ say("3.4.2: Group 13 acceptance window", sprintf("as WWTF2 (%d degrees), Sinclai
 if (nrow(inw) != 9) { n_fail <- n_fail + 1L; cat(sprintf("  [FAIL] 3.4.2: %d candidate sources in the Group 13 window; the text lists 9\n", nrow(inw))) }
 sm <- need("FinalFig/WWTP_H2S_inversion_summary_mean_ci_METRIC_TPY.csv")
 say("S6.5.2: averaging-time range", sprintf("(%s-%s metric tons/yr for 60 s to 3,600 s)", cm(sm[scenario == "avg_60s", metric_mean]), cm(sm[scenario == "avg_3600s", metric_mean])), SI)
+if (have("TABLE_block_assignment_sensitivity.csv")) { ba <- need("TABLE_block_assignment_sensitivity.csv")
+  say("3.8: block assignment sensitivity", sprintf("rounding the coordinates to five decimal places (about 1 m) moves %s%% of the observations in the common blocks into a different block", rh(ba$pct_changed, 1)), MS)
+  say("S4.5: block assignment sensitivity", sprintf("rounding the measurement coordinates to five decimal places (about 1 m) moves %s%% of the observations in the common blocks into a different block", rh(ba$pct_changed, 1)), SI)
+} else skip("3.8 / S4.5 block assignment", "TABLE_block_assignment_sensitivity.csv not found (run 85)")
+if (have("TABLE_wind_source_agreement.csv")) { wa <- need("TABLE_wind_source_agreement.csv")
+  say("3.8: wind-source agreement (86)", sprintf("differ by a median of %s degrees, with a 95th percentile of %s degrees, and their angular offsets", pc(wa$median_wd_difference_deg), pc(wa$p95_wd_difference_deg)), MS)
+  say("3.8: offset agreement (86)", sprintf("differ by a median of %s degrees, with a 95th percentile of %s degrees.", pc(wa$median_offset_difference_deg), pc(wa$p95_offset_difference_deg)), MS)
+} else skip("3.8 wind-source agreement", "TABLE_wind_source_agreement.csv not found (run 86)")
 hdr("N. Claims this script does NOT vouch for (sourced from documents, not code)")
 cat("  - Permit and TRI quantities in S6.1 / S6.7 / Table S6.1 (119.01 and 2.38 t/yr; 340 lb/yr; 8 t/yr digester gas; 5,819 lb and 22,373 lb TRI)\n")
 cat("  - Literature values in S6.4 (>= 15 transects; >= 10 transects; ~95% within +/-70%; slope 0.96; 266 plumes; ~4%)\n")
-cat("  - Instrument specifications in S1 / S2 (cadences, calibration ranges, tubing, flow rates, MaxiMet 92.2%)\n")
+cat("  - Instrument specifications in S1 / S2 (cadences, calibration ranges, tubing, flow rates)\n")
 cat("  - AirToxScreen / IRIS / OEHHA reference values (RfCs, unit risks, RELs, MRLs)\n")
-cat("  - The 2.3 wind-station fallback statistics (218,527; 8.6%; 0.9 km) - reconstructed 2026-09-23 from 06_merge_with_wind.R, no artifact written\n")
 cat("  - HQ-screen record counts (47,643 / 2,602,928 etc.) - checked by 72_check_s14_qaqc.R, not here\n")
 cat("  - Hour-of-day, weekday, correlation and speed statistics - checked by tests/audit_manuscript_claims.R\n")
 

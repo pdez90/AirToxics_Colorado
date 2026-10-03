@@ -154,6 +154,9 @@ GROUPS <- list(
                        # SI S6.4/S6.8: receptor-height and plume-bearing checks
                        # (WWTP_H2S_receptor_height_check.csv, WWTP_H2S_plume_bearing_check.csv);
                        # needs 46's TABLE_min_detectable_rate_plumes.csv and TRI_subset.csv (G).
+                       # MS 3.6/3.8: HRRR vs station wind agreement (TABLE_wind_source_agreement.csv),
+                       # read by P11 for its summary line, so it runs first.
+                       "86_wind_source_agreement.R",
                        "../rerun_pipeline/plume_scripts/P11_plume_geometry_checks.R")),
   W = list(desc = "WWTP-vs-refinery plume source attribution (re-run after CH4 change)",
            pre = character(0),
@@ -229,10 +232,10 @@ GROUPS <- list(
   # Numbers quoted in the text that no figure script writes: SI S1.4 delivery
   # spacing (raw monthly CSVs), SI S4.1.1 background sign changes, MS 2.3 wind-
   # station distances. ~2 min.
-  TX = list(desc = "Text diagnostics (SI S1.4, S4.1.1; MS 2.3)",
+  TX = list(desc = "Text diagnostics (SI S1.4, S4.1.1, S4.5; MS 2.3, 3.8)",
             pre = character(0),
             scripts = c("83_delivery_spacing_stats.R", "82_background_sign_changes.R",
-                        "84_wind_station_distance.R"))
+                        "84_wind_station_distance.R", "85_block_assignment_sensitivity.R"))
 )
 
 sel <- Sys.getenv("GROUPS")

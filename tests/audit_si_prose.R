@@ -125,7 +125,7 @@ say("cells identical",
             rh(min(nb$cells_identical_pct), 0), rh(max(nb$cells_identical_pct), 0), t$n_cells[1]), SI,
     sprintf("%.2f - %.2f", min(nb$cells_identical_pct), max(nb$cells_identical_pct)))
 say("cells within one step",
-    sprintf("%s-%s%% differed by no more than 0.05 ppb, half the 0.1 ppb benzene reporting step",
+    sprintf("%s-%s%% differed by no more than 0.05 ppb before 24-h scaling (0.058 ppb on the scaled surface), half the 0.1 ppb benzene reporting step",
             rh(min(nb$cells_within_one_step_pct), 0), rh(max(nb$cells_within_one_step_pct), 0)), SI,
     sprintf("%.2f - %.2f", min(nb$cells_within_one_step_pct), max(nb$cells_within_one_step_pct)))
 say("largest single-cell change",

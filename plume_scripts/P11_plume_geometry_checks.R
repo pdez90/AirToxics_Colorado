@@ -81,8 +81,10 @@ cat(sprintf("\n  source separation %.0f-%.0f deg; off-axis to WWTP %.0f-%.0f deg
             min(bear$source_separation_deg), max(bear$source_separation_deg),
             min(bear$offaxis_WWTP_deg), max(bear$offaxis_WWTP_deg),
             min(bear$offaxis_refinery_deg), max(bear$offaxis_refinery_deg)))
+.wa <- file.path(BASE, "TABLE_wind_source_agreement.csv")   # 86_wind_source_agreement.R
+.wd_med <- if (file.exists(.wa)) sprintf("%.0f", fread(.wa)$median_wd_difference_deg) else "(run 86 first)"
 cat("  Read: the +-10 deg acceptance window (P07) selects plumes aligned with the WWTP; at these\n",
-    " separations, and with HRRR and station wind directions differing by a median of 27 deg\n",
+    sprintf(" separations, and with HRRR and station wind directions differing by a median of %s deg\n", .wd_med),
     " (section 3.8), the same geometry is consistent with the refinery. It does not discriminate.\n")
 
 # ---- (b) receptor height ---------------------------------------------------

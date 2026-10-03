@@ -152,6 +152,9 @@ neg  <- is.finite(bv) & bv < 0
 tabn <- sort(table(bv[neg]), decreasing = TRUE)
 mode_val <- as.numeric(names(tabn)[1]); mode_n <- as.integer(tabn[1])
 mode_n_md <- sum(neg & bmd & abs(bv - mode_val) < HALF_TOL)
+# written out so the S1.4 count of benzene readings at the modal negative value is in a file
+res[, `:=`(modal_negative_value = NA_real_, n_at_modal_negative = NA_integer_)]
+res[pollutant == "Benzene", `:=`(modal_negative_value = mode_val, n_at_modal_negative = mode_n)]
 
 fwrite(res, OUT)
 message("\n-> ", OUT)

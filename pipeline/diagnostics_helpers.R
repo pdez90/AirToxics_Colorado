@@ -254,7 +254,7 @@ REF <- utils::modifyList(REF, list(
   # block benzene risk on the primary mean-of-daily-means basis (the median
   # basis gives 0.108-0.383 cases, ratio 0.92)
   risk_mobile = c(0.147, 0.523), risk_ratio = 1.26,
-  dbscan_initial = 2763, clusters_ge3 = 15, final_groups = 15
+  dbscan_initial = 2763, clusters_ge2 = 37, clusters_ge3 = 15, clusters_ge4 = 6, final_groups = 15
 ))
 
 .ref_delta <- names(REF)[vapply(names(REF), function(k)

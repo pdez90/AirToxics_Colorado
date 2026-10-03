@@ -13,7 +13,7 @@
 # audit values in force are CAT 5 (Q1) / 10 (Q2) and EMU 18 (Q1) /
 # 2 (Q2) ppb; weighted by retained HCN observations (25,205 / 75,253 /
 # 151,137 / 227,065 rows) the median MDL is 5 ppb, which is used here.
-# At the 2 ppb value that applied to 47% of HCN observations, 3 of the
+# At the 2 ppb value that applied to 46% of the retained HCN 2-s bin values (47% of the delivered seconds), 3 of the
 # 359 HCN cells would be colored; at 5, 10 or 18 ppb none are.
 # Output: FinalFig/FIG_belowMDL_maps.png (+ per-panel CSV summary)
 # ==============================================================

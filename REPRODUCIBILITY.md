@@ -5,7 +5,7 @@
 **Policy: every number in the manuscript, the SI and the Shiny app is regenerated from primary
 inputs by the code in this repository; no hand-made or interactive intermediate is used.**
 `tests/audit_all_claims.R` checks the numbers quoted in both documents against the outputs
-(313 checks), `tests/audit_si_prose.R` the SI prose (21) and `tests/audit_manuscript_claims.R`
+(318 checks), `tests/audit_si_prose.R` the SI prose (21) and `tests/audit_manuscript_claims.R`
 the measurement-file claims (44); all pass on the current outputs.
 
 **How the current outputs were produced.** Full run from the raw CDPHE packets on 23-25 Sep 2026
@@ -66,7 +66,8 @@ alone does not write the tables and figures; `MAKE_FIGURES.R` does.
 | Figures S5.4 / S5.5 | `35_hotspot_figure_2.R` | H |
 | Figures S5.6 / S5.8 / S5.9, positional uncertainty | `47` / `52` / `60` / `80_bin_location_error.R` | P |
 | MS 3.4.2 Group 13 headquarters diagnostic | `81_group13_hq_annulus.R` | P |
-| SI S1.4 delivery spacing / S4.1.1 background sign changes / MS 2.3 wind-station distances | `83` / `82` / `84` | TX |
+| SI S1.4 delivery spacing / S4.1.1 background sign changes / MS 2.3 wind-station distances and fallback / MS 3.8, SI S4.5 block-assignment sensitivity | `83` / `82` / `84` / `85` | TX |
+| MS 3.6, 3.8, SI S6.8 HRRR vs station wind agreement | `86_wind_source_agreement.R` | V |
 | Figures S6.1 / S6.2 / S6.5, Table S6.2 inputs | `P07` / `P07` / `P08` | R07 |
 | Figures S6.3 / S6.4 / S6.6, Table S6.2 detection limits | `P09` / `P10` / `46_min_detectable_rate.R` | V |
 | S6.4 receptor height, S6.8 bearings | `P11_plume_geometry_checks.R` | V |
@@ -125,7 +126,7 @@ daylight-saving months — measured across the 203 sampling days at **0.99 h (95
 0.74–1.25)**, consistent with 1.00 h (p = 0.95) and rejecting 0.00 h (p ≈ 8e-12).
 
 `date` is therefore a **fixed-MST wall clock stored with a UTC attribute — not an absolute
-UTC instant.** The tzone attribute is a carrier for the clock reading, not a claim about the
+UTC instant.** The plume output tables (`WWTP_H2S_retained_plumes.csv`, `TABLE_min_detectable_rate_plumes.csv`, `WWTP_H2S_plume_bearing_check.csv`, `WWTP_H2S_source_attribution.csv`) write this MST clock with a trailing `Z`, which is the storage label, not a UTC offset; Table S6.2 prints the same times as MST. The tzone attribute is a carrier for the clock reading, not a claim about the
 instant. Two consumers depend on exactly this:
 
 - `06_merge_with_wind.R` joins to EPA AQS `Date.Local`/`Time.Local`, which AQS publishes in
@@ -167,7 +168,7 @@ P08's own function. 540 cases, recovery exact to 7e-14 %.
 
 These are kept for the record or as one-off tools; no number or figure in the documents depends on them.
 
-- `R_scripts/00_run_all.R` (legacy driver, superseded by `pipeline/RUN_EVERYTHING.sh`), `04_stats_hour_of_day_weekend_weekday.R`, `44_daily_coverage_gif.R`, `53_windrose.R`, `63_deheld_sensitivity.R`, `64_commoncadence_sensitivity.R`, `65_plume_cadence_sensitivity.R`, `avg_to_5s_helper.R`, `75_airtoxscreen_from_epa.R/.py`, `methane/M05_methane_sourceprob_facilities.R`.
+- `R_scripts/00_run_all.R` (legacy driver, superseded by `pipeline/RUN_EVERYTHING.sh`), `04_stats_hour_of_day_weekend_weekday.R`, `44_daily_coverage_gif.R`, `53_windrose.R`, `63_deheld_sensitivity.R`, `64_commoncadence_sensitivity.R`, `65_plume_cadence_sensitivity.R`, `avg_to_5s_helper.R`, `40_alert.R`, `methane/M05_methane_sourceprob_facilities.R`; `75_airtoxscreen_from_epa.R/.py` is run only by the one-off `pipeline/RUN_HQ300_phase2.sh`.
 - `R_scripts/74_group9_garage_check.R`: superseded. It refers to an earlier hotspot numbering and headquarters point; the current Group 9 is the group 0.19 km from the Sinclair terminal.
 - `R_scripts/38_download_roads.R`: run once to create `all_colorado_roads.RData` (see Primary inputs).
 - `pipeline/FIG_A_*.R`: stand-alone copies of code already in `07_...R` (group A).
@@ -344,8 +345,9 @@ no script in the current pipeline writes or reads it, and it predates the delay 
 
 `tests/audit_manuscript_claims.R` recomputes, from `mobile_wswd.RData`, every
 number the text asserts about the measurement record, so a future re-run either
-reproduces the printed claim or shows what moved. It currently passes on all
-checks. Verified this way and now stated correctly in both documents:
+reproduces the printed claim or shows what moved. The values below are as of
+21 August 2026 and are superseded; the current values are in the documents and
+are checked by the audits listed under Current state. Verified this way at that date:
 
 | claim | value |
 |---|---|

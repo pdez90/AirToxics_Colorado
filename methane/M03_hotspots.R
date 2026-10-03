@@ -23,7 +23,7 @@ load(file.path(BASE, "mobile_methane_wind_bg.RData"))  # df_ch4_bg
 ch4 <- as.data.table(df_ch4_bg)
 
 # ----------------------------------------------------------------
-# 1) Threshold: 99th percentile of raw 1-s values (as in ms 2.5.3)
+# 1) Threshold: 99th percentile of the 5-s bin values (one value per bin; SI S8)
 # ----------------------------------------------------------------
 p99 <- quantile(ch4$ch4_ppm, 0.99, na.rm = TRUE)
 p95 <- quantile(ch4$ch4_ppm, 0.95, na.rm = TRUE)

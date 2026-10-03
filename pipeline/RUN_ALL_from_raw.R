@@ -173,7 +173,7 @@ run_stage("R01_delay_reprocessing.R")          # raw CSVs -> delay-corrected 1-s
 run_stage("R02_wind_merge.R")                  # + EPA AQS wind
 run_stage("R03_background_segments.R")         # background + 500 m segments (Fig 2)
 run_stage("R04_scaling_census_risk.R")         # La Casa scaling + census blocks
-run_stage("R04b_build_block_sf_risk.R")        # CANONICAL block risk (med-of-daily-med, scaled)
+run_stage("R04b_build_block_sf_risk.R")        # CANONICAL block risk (mean of daily means, scaled; median basis via EXPOSURE_BASIS)
 run_stage("R05_hotspots.R")                    # source-prob maps + hotspot groups (Figs 3-4)
 # SKIP_PLUMES=1 skips the Gaussian plume branch. Used for the 2026-09 HQ-exclusion
 # re-run: every plume candidate lies 0.5-5 km from the wastewater facility, >9 km
