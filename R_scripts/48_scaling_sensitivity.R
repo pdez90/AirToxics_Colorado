@@ -146,7 +146,7 @@ message("La Casa rows: ", nrow(lc), " | span ", min(lc$date), " - ", max(lc$date
 wmean <- function(x, w) { ok <- is.finite(x) & is.finite(w)
   if (!any(ok)) return(NA_real_); sum(x[ok] * w[ok]) / sum(w[ok]) }
 
-factors <- list()
+factors <- list(); factors_raw <- list()
 for (poll in c("benzene", "toluene", "xylene")) {
   v <- lc[[poll]]
   overall_mean <- mean(v, na.rm = TRUE)
@@ -170,9 +170,13 @@ for (poll in c("benzene", "toluene", "xylene")) {
     pollutant = poll,
     A_binweighted = round(sA, 3), B_window = round(sB, 3),
     C_hour_only = round(sC, 3), D_median = round(sD, 3), E_none = 1)
+  # unrounded factors for the risk propagation, so that the baseline row reproduces
+  # the section 3.3 risk range exactly (rounding s first moved 0.1655 to 0.166)
+  factors_raw[[poll]] <- data.table(pollutant = poll, A_binweighted = sA, B_window = sB,
+                                    C_hour_only = sC, D_median = sD, E_none = 1)
   message(sprintf("%-8s A=%.3f  B=%.3f  C=%.3f  D=%.3f", poll, sA, sB, sC, sD))
 }
-factors <- rbindlist(factors)
+factors <- rbindlist(factors); factors_raw <- rbindlist(factors_raw)
 
 # validate baseline reproduction
 sA_benz <- factors[pollutant == "benzene", A_binweighted]
@@ -180,10 +184,10 @@ message("Baseline benzene factor reproduced: ", sA_benz,
         " (canonical ", S_BASE_BENZ, "; should agree within ~2%)")
 
 # ---- propagate to benzene risk --------------------------------
-risk <- factors[pollutant == "benzene",
-                .(construction = c("A_binweighted", "B_window",
-                                   "C_hour_only", "D_median", "E_none"),
-                  s = c(A_binweighted, B_window, C_hour_only, D_median, 1))]
+risk <- factors_raw[pollutant == "benzene",
+                    .(construction = c("A_binweighted", "B_window",
+                                       "C_hour_only", "D_median", "E_none"),
+                      s = c(A_binweighted, B_window, C_hour_only, D_median, 1))]
 risk[, `:=`(
   risk_lo = round(RISK_LO * s / S_BASE_BENZ, 3),
   risk_hi = round(RISK_HI * s / S_BASE_BENZ, 3),
@@ -221,7 +225,7 @@ stopifnot(max(nchar(strsplit(CAP, "\n", fixed = TRUE)[[1]])) <= 125)
 p <- ggplot(risk, aes(clab, ratio_vs_ATS)) +
   geom_col(fill = "#4292c6", width = 0.6, color = "grey20", linewidth = 0.2) +
   geom_hline(yintercept = 1, linetype = 2, color = "red") +
-  geom_text(aes(label = sprintf("s = %.3f\nrisk %.3f-%.3f", s, risk_lo, risk_hi)),   # 3 dp: s is stored rounded to 3 dp, so 2 dp would round twice
+  geom_text(aes(label = sprintf("s = %.3f\nrisk %.3f-%.3f", s, risk_lo, risk_hi)),   # 3 dp, matching the factor table
             vjust = -0.25, size = 3.1, lineheight = 0.95) +
   scale_y_continuous(limits = c(0, max(risk$ratio_vs_ATS) * 1.25)) +
   labs(x = NULL,

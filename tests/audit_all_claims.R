@@ -194,6 +194,10 @@ if (file.exists(SEG)) {
     mx <- function(p, f = 1, st = "mean_of_daily_means") max(cell(p, 10, st)) * f
     SIrow <- rows(SI)
     say("Table S3.2: benzene sustained max (>=10 d, scaled)", sprintf("| %s |", rh(mx("Benzene", fac["benzene"]), 2)), SIrow)
+    # the median of daily medians of the cell that maximises the benzene mean (S3.2 text), on the 24-h basis
+    .bm <- cell("Benzene", 10); .bmed <- cell("Benzene", 10, "median_of_daily_medians")
+    if (length(.bm) == length(.bmed) && length(.bm) > 0)
+      say("S3.2: I-70 benzene cell median (scaled)", sprintf("its median of daily medians is %s ppb on the same basis", rh(.bmed[which.max(.bm)] * fac["benzene"], 2)), SI)
     say("Table S3.2: toluene sustained max", sprintf("| %s |", rh(mx("Toluene", fac["toluene"]), 2)), SIrow)
     sayx("Table S3.2: TMB sustained max (unscaled)", sprintf("\\| %s \\(unscaled\\) \\|", rt(mx("Trimethylbenzene"), 2)), SIrow)
     say("Table S3.2: xylene sustained max", sprintf("| %s |", rh(mx("Xylene", fac["xylene"]), 2)), SIrow)

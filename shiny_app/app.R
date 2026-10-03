@@ -672,7 +672,7 @@ ui <- navbarPage(
         radioButtons("p7_organ", "Organ-system hazard index",
                      choices = if (!is.null(haz) && !is.null(haz$cells))
                                  sort(unique(haz$cells$organ)) else "none"),
-        h4("Organ-system hazard indices"), tableOutput("p7_hi"),
+        h4("Organ-system hazard indices"), uiOutput("p7_flag"), tableOutput("p7_hi", sanitize.text.function = identity),
         h4("What is shown"),
         helpText("A screening-level cumulative noncancer assessment. Each ",
                  "pollutant is expressed as a hazard quotient - its exposure ",
@@ -690,13 +690,16 @@ ui <- navbarPage(
                  "days)."),
         BASIS_EXPLAIN,
         helpText(tags$b("Read the H2S and HCN values with care. "),
-                 "Their reference concentrations (2 and 0.8 ug/m3) lie below ",
-                 "the detection limits of the instruments that measured them, ",
-                 "so these hazard indices are set by values at or below the ",
-                 "detection limit. They indicate a measurement-capability ",
-                 "gap - current mobile instrumentation cannot resolve ambient ",
-                 "concentrations at the level of the health benchmark - not a ",
-                 "demonstrated exceedance."),
+                 "Their reference concentrations (2 and 0.8 ug/m3; 1.75 and 0.88 ppb ",
+                 "at site pressure) lie below the detection limits of the instruments ",
+                 "that measured them (H2S 2-6 ppb, HCN 2-18 ppb over the campaign), so ",
+                 "individual readings cannot resolve concentrations at the level of the ",
+                 "health benchmark. The community-average values behind these indices ",
+                 "lie at or below the detection limits; the H2S value in the most-exposed ",
+                 "block and cell exceeds the detection limits but is set by a few days ",
+                 "with very high readings. Neither establishes chronic exposure above the ",
+                 "benchmark: read the indices as a screening flag and a ",
+                 "measurement-capability gap, not a demonstrated exceedance (SI S3.2, S7.3)."),
         helpText("This is a screening assessment, not a formal exposure or ",
                  "risk assessment: it rests on repeated short visits rather ",
                  "than continuous exposure monitoring, and assumes ",
@@ -1262,23 +1265,42 @@ server <- function(input, output, session) {
     helpText(txt)
   })
 
-  output$p7_hi <- renderTable({
+  # organ-system indices for the live basis and scenario, in one shape
+  p7_hi_tab <- reactive({
     req(haz)
     h <- hb()
     if (!is.null(h$scen)) {
-      d <- h$scen[scenario == p7_scen()]
-      req(nrow(d) > 0)
-      d <- d[order(-HI_pwmean)]
-      data.frame(`Organ system` = d$organ,
-                 `Community avg` = sprintf("%.3g", d$HI_pwmean),
-                 `Most-exposed block` = sprintf("%.3g", d$HI_maxblock),
-                 check.names = FALSE)
+      d <- h$scen[scenario == p7_scen()]; req(nrow(d) > 0)
+      data.table(organ = d$organ, pw = as.numeric(d$HI_pwmean), mx = as.numeric(d$HI_maxblock))
     } else {
-      data.frame(`Organ system` = h$hi$target_organ,
-                 `Community avg` = sprintf("%.3g", h$hi$HI_pwmean),
-                 `Most-exposed block` = sprintf("%.3g", h$hi$HI_maxblock),
-                 check.names = FALSE)
+      data.table(organ = h$hi$target_organ, pw = as.numeric(h$hi$HI_pwmean), mx = as.numeric(h$hi$HI_maxblock))
     }
+  })
+  # which indices are at or above 1 is the result of this page: say it, and mark
+  # those cells in the table, for whichever statistic and scenario is selected
+  output$p7_flag <- renderUI({
+    d <- p7_hi_tab()[order(-pw)]
+    both <- d[pw >= 1 & mx >= 1, organ]; mxo <- d[pw < 1 & mx >= 1, organ]; none <- d[pw < 1 & mx < 1, organ]
+    lab <- function(x) if (length(x)) paste(tolower(x), collapse = " and ") else NULL
+    parts <- c(
+      if (length(both)) sprintf("%s at or above 1 for both the community average and the most-exposed block", lab(both)),
+      if (length(mxo))  sprintf("%s at or above 1 in the most-exposed block only", lab(mxo)),
+      if (length(none)) sprintf("%s below 1 on both metrics", lab(none)))
+    tags$p(style = "font-size:12.5px;line-height:1.45;margin:0 0 6px 0",
+      tags$b(sprintf("On the %s%s: ", BASIS_SHORT[[p7_b()]],
+                     if (!is.null(hb()$scen)) sprintf(", scenario %s", substr(p7_scen(), 1, 1)) else "")),
+      paste0(paste(parts, collapse = "; "), "."),
+      if (nrow(d[organ == "Neurological" & pw < 1 & mx < 1]) == 1 && !any(c("Neurological") %in% c(both, mxo)))
+        paste0(" Each index at or above 1 is set by a single pollutant (endocrine by HCN, respiratory by H2S); ",
+               "the neurological index, the one that sums several pollutants, stays below 1."))
+  })
+  output$p7_hi <- renderTable({
+    d <- p7_hi_tab()[order(-pw)]
+    mark <- function(v) ifelse(v >= 1, sprintf('<span style="color:#B22222;font-weight:bold">%.3g</span>', v), sprintf("%.3g", v))
+    data.frame(`Organ system` = d$organ,
+               `Community avg` = mark(d$pw),
+               `Most-exposed block` = mark(d$mx),
+               check.names = FALSE)
   })
 
   output$p7_chronic <- renderTable({
