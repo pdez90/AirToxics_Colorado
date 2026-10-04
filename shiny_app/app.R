@@ -672,7 +672,7 @@ ui <- navbarPage(
         radioButtons("p7_organ", "Organ-system hazard index",
                      choices = if (!is.null(haz) && !is.null(haz$cells))
                                  sort(unique(haz$cells$organ)) else "none"),
-        h4("Organ-system hazard indices"), uiOutput("p7_flag"), tableOutput("p7_hi", sanitize.text.function = identity),
+        h4("Organ-system hazard indices"), uiOutput("p7_flag"), tableOutput("p7_hi"),
         h4("What is shown"),
         helpText("A screening-level cumulative noncancer assessment. Each ",
                  "pollutant is expressed as a hazard quotient - its exposure ",
@@ -1301,7 +1301,7 @@ server <- function(input, output, session) {
                `Community avg` = mark(d$pw),
                `Most-exposed block` = mark(d$mx),
                check.names = FALSE)
-  })
+  }, sanitize.text.function = identity)   # keeps the <span> markup that marks indices at or above 1
 
   output$p7_chronic <- renderTable({
     req(haz)
