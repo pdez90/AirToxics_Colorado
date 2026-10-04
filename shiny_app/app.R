@@ -1,7 +1,7 @@
 # ==============================================================
 # CDPHE Mobile Air Toxics Explorer — Shiny app
 # Pages: 1 Raw data | 2 AirToxScreen vs Mobile | 3 Plumes |
-#        4 Hotspots | 5 Source probability | 6 Methane |
+#        4 Hotspots | 5 Source association | 6 Methane |
 #        7 Study context | 8 Health screening | 9 Contact
 # Run prep_app_data.R first, then:  shiny::runApp("shiny_app")
 # ==============================================================
@@ -78,6 +78,13 @@ haz_basis <- function(b) {
 }
 
 # One explanation, shown on both pages that carry the toggle.
+# Collapsible methods box for the sidebars: a one-line summary stays visible,
+# the detail opens on click (plain HTML <details>, no extra package).
+fold <- function(title, ...) tags$details(
+  style = "margin:4px 0 10px 0",
+  tags$summary(style = "cursor:pointer;font-weight:bold;font-size:13px;color:#2c3e50", title),
+  tags$div(style = "margin-top:4px", ...))
+
 BASIS_EXPLAIN <- tags$div(
   style = paste0("background:#F4F6F8;border-left:5px solid #555;padding:9px 12px;",
                  "margin:6px 0 12px 0;border-radius:4px;font-size:12.5px;line-height:1.5"),
@@ -408,6 +415,7 @@ ui <- navbarPage(
                    "Terminal route (points thinned for display).")),
         h4("Campaign summary"), tableOutput("p1_summary"),
         h4("Sampling coverage"), htmlOutput("p1_coverage"),
+        fold("Platform, instruments and data processing",
         h4("Platform and instruments"),
         helpText("Measurements were made by two CDPHE mobile laboratories: ",
                  "the Community Air Toxics (CAT) lab and its duplicate, the ",
@@ -464,7 +472,8 @@ ui <- navbarPage(
                  "described above. Negative values and values below the ",
                  "detection limit are kept. % below MDL compares each value ",
                  "with CDPHE's quarterly audit method detection limit for that ",
-                 "laboratory and quarter (SI Table S1.2).")),
+                 "laboratory and quarter (SI Table S1.2).")
+        )),
       mainPanel(width = 9, leafletOutput("p1_map", height = 640)))),
 
   tabPanel("2. AirToxScreen vs Mobile",
@@ -477,6 +486,7 @@ ui <- navbarPage(
                        "Ratio mobile / AirToxScreen" = "ratio")),
         h4(paste0("Across ", format(nrow(blocks), big.mark = ","),
                   " common blocks")), tableOutput("p2_stats"),
+        fold("How the comparison is built and which statistic to use",
         h4("How the mobile surface was built"),
         helpText("Every one-second benzene measurement is assigned to its ",
                  "census block. A rolling-window background computed from the ",
@@ -487,7 +497,8 @@ ui <- navbarPage(
                  "means) - the toggle above. Because driving occurred mainly on ",
                  "weekday daytimes, block values are scaled to 24-h-equivalent ",
                  "concentrations using the diurnal pattern measured at the La ",
-                 "Casa stationary site (benzene factor from its two summer ",
+                 "Casa stationary site (benzene factor from the summer-2024 ",
+                 "Vocus 2R deployment only; toluene and xylene from all three ",
                  "deployments). EPA AirToxScreen values are modeled 2020 ",
                  "annual-average ambient benzene for the same blocks; the ",
                  "comparison uses only the ",
@@ -495,7 +506,8 @@ ui <- navbarPage(
                  "both datasets."),
         h4("What the comparison shows"),
         uiOutput("p2_text"),
-        BASIS_EXPLAIN),
+        BASIS_EXPLAIN
+        )),
       mainPanel(width = 9, leafletOutput("p2_map", height = 380),
                 plotOutput("p2_scatter", height = 420)))),
 
@@ -538,6 +550,7 @@ ui <- navbarPage(
         checkboxGroupInput("p4_ctx", "Context layers", CTX_CHOICES,
                            selected = c("Covered facilities", "Wastewater treatment",
                                         "Woodshop", "Refueling stations")),
+        fold("How hotspots were identified",
         h4("How hotspots were identified"),
         helpText("For each pollutant, readings above its campaign 99th ",
                  "percentile were clustered on their geographic coordinates ",
@@ -555,8 +568,12 @@ ui <- navbarPage(
                  nrow(hs$groups), " groups ",
                  "persistent in three or more pollutants are the ",
                  "multi-pollutant hotspots mapped here. Methane, measured ",
-                 "alongside H2S, is analyzed the same way and overlaid as a ",
-                 "co-elevation class on each group."),
+                 "alongside H2S, is run through the same event-selection and ",
+                 "clustering steps but with a separate, methane-specific ",
+                 "persistence screen and minimum-cluster-size setting (SI S8), ",
+                 "so its hotspots are not strictly comparable; it is overlaid as a ",
+                 "co-elevation class on each group.")
+        ),
         helpText("Group markers scale with persistence; click for pollutant ",
                  "make-up, exceedance-days, nearest TRI facility, and methane ",
                  "co-elevation class.")),
@@ -564,7 +581,7 @@ ui <- navbarPage(
                 h4("Group composition and candidate sources"),
                 DT::DTOutput("p4_table")))),
 
-  tabPanel("5. Source probability",
+  tabPanel("5. Source association",
     sidebarLayout(
       sidebarPanel(width = 3,
         selectInput("p5_poll", "Pollutant", unique(events$pollutant),
@@ -575,6 +592,7 @@ ui <- navbarPage(
         selectInput("p5_sigma", "Smoothing sigma (m)",
                     c(500, 900, 1200, 1800), selected = 900),
         actionButton("p5_go", "Compute surface", class = "btn-primary"),
+        fold("How the surface is created",
         h4("How the surface is created"),
         helpText("A wind back-projection: every measurement above the chosen ",
                  "percentile threshold is an exceedance event. From each ",
@@ -582,11 +600,15 @@ ui <- navbarPage(
                  "came from), weighted by the enhancement magnitude and ",
                  "decaying with distance. Weights accumulate on a 250-m grid ",
                  "and are smoothed with a Gaussian kernel; the surface is ",
-                 "scaled to its maximum. Bright areas are the places most ",
-                 "often upwind of high readings - probable source regions. ",
+                 "scaled to its maximum, giving a ", tags$b("relative source-association index"),
+                 " (0-1). It is not a calibrated probability and does not ",
+                 "attribute readings to a unique source: bright areas are the ",
+                 "places most often upwind of high readings - candidate source ",
+                 "regions, which several facilities along the same bearing can share. ",
                  "Winds are taken from the nearest EPA AQS meteorological ",
                  "station. Defaults: p99 threshold, 15 km rays, 900 m ",
-                 "smoothing."),
+                 "smoothing.")
+        ),
         textOutput("p5_info")),
       mainPanel(width = 9, leafletOutput("p5_map", height = 640)))),
 
@@ -601,6 +623,7 @@ ui <- navbarPage(
                            selected = "Persistent methane clusters"),
         checkboxGroupInput("pch4_ctx", "Show context layers", CTX_CHOICES,
                            selected = c("Covered facilities", "Wastewater treatment")),
+        fold("Methane hotspot screen: method and caveats",
         h4("Methane hotspot screen"), htmlOutput("pch4_summary"),
         helpText("Methane was recorded by the same Picarro G2204 that measures ",
                  "H2S, at a 5 s acquisition cadence, and is processed through ",
@@ -623,7 +646,8 @@ ui <- navbarPage(
                  "page 4, whether methane is co-elevated there. That contrast ",
                  "is the reason methane is carried at all: it separates ",
                  "gas-associated hotspots from combustion- and ",
-                 "evaporative-type ones, which the toxics alone do not.")),
+                 "evaporative-type ones, which the toxics alone do not.")
+        )),
       mainPanel(width = 9,
         CH4_CAVEAT,
         leafletOutput("pch4_map", height = 560),
@@ -652,27 +676,34 @@ ui <- navbarPage(
         radioButtons("p7_basis", "Block / cell statistic", BASIS_CHOICES),
         radioButtons("p7_scen", "Temporal scaling of concentrations",
                      choices = SCEN_CHOICES, selected = SCEN_CHOICES[[1]]),
+        fold("Temporal scaling scenarios: what A-D mean",
         helpText("Sampling ran on weekday daytimes, so a campaign mean is not ",
                  "a 24-hour mean. The La Casa stationary monitor measures that ",
-                 "gap directly - but only for benzene, toluene and the C8 ",
-                 "aromatics. There is no La Casa channel for ",
-                 "1,2,4-trimethylbenzene, and ", tags$b("none for H2S or HCN"),
+                 "gap for benzene, toluene and the C8 aromatics. The La Casa ",
+                 "trimethylbenzene channel was not included in the record ",
+                 "supplied for this analysis, and ", tags$b("H2S and HCN are not measured there"),
                  " - the two species that set the endocrine and respiratory indices, the largest on this page. ",
                  "Scenario A scales nothing and is what the paper reports. B ",
                  "applies each measured aromatic's own factor and gives ",
                  "1,2,4-TMB the mean of the three. C and D additionally ",
                  tags$i("borrow"), " a factor for H2S and HCN."),
-        helpText(tags$b("C and D are bounds, not estimates. "),
+        helpText(tags$b("C and D are sensitivity scenarios, not established bounds. "),
                  "Borrowing assumes the unmeasured species share the aromatics' ",
-                 "diurnal shape. Within 500 m cells they do not: the aromatics ",
-                 "fall across the sampling window while H2S and HCN rise. Read ",
-                 "C and D as an upper envelope on what scaling could do, not as ",
-                 "a better estimate than A."),
+                 "diurnal shape. Within 500 m cells they do not: toluene, xylenes ",
+                 "and trimethylbenzene fall across the sampling window while H2S ",
+                 "and HCN rise - and so does benzene, which nevertheless carries a ",
+                 "measured factor above 1, because the factor is set largely by ",
+                 "overnight hours the vans never sampled. The within-window shape ",
+                 "therefore neither supports borrowing a factor nor shows that the ",
+                 "H2S and HCN factors are below 1; read C and D as what scaling ",
+                 "could do, not as estimates or bounds (SI S7.4).")
+        ),
         uiOutput("p7_window"),
         radioButtons("p7_organ", "Organ-system hazard index",
                      choices = if (!is.null(haz) && !is.null(haz$cells))
                                  sort(unique(haz$cells$organ)) else "none"),
         h4("Organ-system hazard indices"), uiOutput("p7_flag"), tableOutput("p7_hi"),
+        fold("What is shown and which statistic to use",
         h4("What is shown"),
         helpText("A screening-level cumulative noncancer assessment. Each ",
                  "pollutant is expressed as a hazard quotient - its exposure ",
@@ -688,7 +719,8 @@ ui <- navbarPage(
                  "resolves the same indices onto the 500 m grid, using the same ",
                  "statistic as the tables (cells sampled on at least ten ",
                  "days)."),
-        BASIS_EXPLAIN,
+        BASIS_EXPLAIN
+        ),
         helpText(tags$b("Read the H2S and HCN values with care. "),
                  "Their reference concentrations (2 and 0.8 ug/m3; 1.75 and 0.88 ppb ",
                  "at site pressure) lie below the detection limits of the instruments ",
@@ -716,7 +748,7 @@ ui <- navbarPage(
                 helpText("For each organ system: the hazard index with nothing ",
                          "scaled, with only the measured aromatics scaled, and ",
                          "the factor that would have to apply to the species ",
-                         "with no La Casa channel for that index to reach 1. A ",
+                         "with no La Casa factor for that index to reach 1. A ",
                          "blank means no unscalable species contributes, so no ",
                          "borrowed factor can move that row."),
                 tableOutput("p7_breakeven"),
@@ -1162,7 +1194,7 @@ server <- function(input, output, session) {
 
   # ---- page 5 ----
   surface <- eventReactive(input$p5_go, ignoreNULL = FALSE, {
-    withProgress(message = "Computing source-probability surface...", {
+    withProgress(message = "Computing source-association surface...", {
       tryCatch({
         ev <- events[pollutant == input$p5_poll]
         thr <- if (input$p5_thr == "p99") ev$thr99[1] else ev$thr95[1]
@@ -1228,7 +1260,7 @@ server <- function(input, output, session) {
     north <- s$lat0 + s$yr[2] / 110540
     pal <- colorNumeric("inferno", c(0, 1), na.color = "transparent")
     m <- base_map() |>
-      addLegend(pal = pal, values = c(0, 1), title = "Relative<br>probability")
+      addLegend(pal = pal, values = c(0, 1), title = "Relative source-<br>association index")
     m <- add_context(m, c("Covered facilities", "Wastewater treatment",
                           "Woodshop", "Refueling stations"))
     htmlwidgets::onRender(m, sprintf(
