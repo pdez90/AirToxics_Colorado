@@ -105,7 +105,8 @@ POLL[, block_col := paste0("s", poll, "_", HAZARD_BASIS)]
   if (length(r) != 1L || !is.finite(r)) stop("[SCALING] no finite factor for ", pol, " in ", basename(.sf_file))
   r
 }
-f_benz <- .sf_get("benzene", 1.165)
+# the second argument is a label only: the factors are read from the RData file
+f_benz <- .sf_get("benzene", 1.309)
 f_tol  <- .sf_get("toluene", 1.274)
 f_xyl  <- .sf_get("xylene",  1.443)
 f_arom_mean <- mean(c(f_benz, f_tol, f_xyl))
@@ -389,17 +390,18 @@ cat(sprintf(paste0(
   .hr, if (.hr < 1) "reaches" else "falls to", .fr,
   if (.cross(.hr, .fr)) "a measured factor WOULD carry it across 1" else "no measured factor carries it across 1"))
 
-cat(paste0(
+cat(sprintf(paste0(
   "\n== why we do not adopt a borrowed factor ==\n",
   "  A La Casa factor is the ratio of a 24/7 mean to a mobile-bin-weighted\n",
   "  mean, so it is large exactly for species depleted during the sampling\n",
   "  window. 78_diurnal_scaling_evidence.R shows that within 500 m cells the\n",
   "  aromatics fall across that window while H2S and HCN rise, so the premise\n",
   "  behind borrowing - that these species behave alike within the day - is\n",
-  "  contradicted by our own data. That rules borrowing OUT; it does not\n",
-  "  establish that the H2S/HCN factors are below 1, because benzene rises\n",
-  "  across the window too and still carries a factor of 1.165: the factor is\n",
-  "  set largely by overnight hours we never sampled. Scenarios C and D are\n",
-  "  therefore bounds, not estimates, and the S7 baseline remains scenario A.\n",
-  "  The break-even table is what a reader should use.\n"))
+  "  not supported by our own data. That does not establish that the H2S/HCN\n",
+  "  factors are below 1 either: benzene rises across the window too and still\n",
+  "  carries a factor of %.3f, because the factor is set largely by overnight\n",
+  "  hours we never sampled. Scenarios C and D are therefore sensitivity\n",
+  "  scenarios - neither estimated corrections nor demonstrated bounds on the\n",
+  "  true factors (SI S7.4) - and the S7 baseline remains scenario A. The\n",
+  "  break-even table is what a reader should use.\n"), f_benz))
 message("\nDONE.")
