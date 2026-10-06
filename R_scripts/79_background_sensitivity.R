@@ -334,7 +334,7 @@ run_arm <- function(p, half, keep_rows = FALSE) {
   # (2026-09-30) cell statistic follows HAZARD_BASIS (mean of daily means by
   # default); the column keeps its historical name EC_median.
   cells[, .ec := if (HAZARD_BASIS == "mean_of_daily_mean") mean_ppb else median_ppb]
-  cells[, EC_median := pmax(fifelse(is.na(scale_factor), .ec, .ec * scale_factor), 0)]
+  cells[, EC_median := fifelse(is.na(scale_factor), .ec, .ec * scale_factor)]   # negatives retained (as in 73)
   cells[, HQ_median := EC_median / rfc_ppb[pollutant]]
   cells[, tos := TOS[pollutant]]
   ntos    <- table(TOS)

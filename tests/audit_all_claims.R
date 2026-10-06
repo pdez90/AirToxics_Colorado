@@ -222,6 +222,10 @@ say("S1.5: H2S / HCN median abs difference", sprintf("median absolute difference
 hdr("D. Measurement record  <- TABLE_S3.1.csv, TABLE_S1.4_qaqc_checks.csv")
 s31 <- need("TABLE_S3.1.csv"); q14 <- need("TABLE_S1.4_qaqc_checks.csv")
 say("3.1: HCN record", sprintf("with %s values confined to %d days", cm(s31[pollutant == "HCN", analysis]), s31[pollutant == "HCN", n_days]), MS)
+# 2.1.1 parallel record counts (Table S3.1): aromatics reported -> analysis set and days; H2S reported -> bins and days
+.ar <- s31[pollutant %in% c("Benzene","Toluene","Xylene","Trimethylbenzene")]
+say("2.1.1: aromatic record counts", sprintf("reduce the %s-%s million reported aromatic records to %s-%s million one-second values on %d-%d sampling days", sprintf("%.2f", min(.ar$reported)/1e6), sprintf("%.2f", max(.ar$reported)/1e6), sprintf("%.2f", min(.ar$analysis)/1e6), sprintf("%.2f", max(.ar$analysis)/1e6), min(.ar$n_days), max(.ar$n_days)), MS)
+say("2.1.1: H2S record counts", sprintf("the %s million reported H2S records to %s 5-s bin values on %d days", sprintf("%.2f", s31[pollutant == "H2S", reported]/1e6), cm(s31[pollutant == "H2S", analysis]), s31[pollutant == "H2S", n_days]), MS)
 say("3.1 / 3.8: below-MDL shares", sprintf("%s%% of benzene, %s%% of H2S and %s%% of HCN", pc(s31[pollutant == "Benzene", pct_belowMDL]), pc(s31[pollutant == "H2S", pct_belowMDL]), pc(s31[pollutant == "HCN", pct_belowMDL])), MS)
 say("S1.4: negatives retained", sprintf("%s of them for benzene and %s for H2S", cm(q14[pollutant == "Benzene", n_negative_after_qc]), cm(q14[pollutant == "H2S", n_negative_after_qc])), SI)
 say("Table S3.1: analysis-set counts", sprintf("| %s | %s | %s | %s | %s | %s |", cm(s31$analysis[1]), cm(s31$analysis[2]), cm(s31$analysis[3]), cm(s31$analysis[4]), cm(s31$analysis[5]), cm(s31$analysis[6])),

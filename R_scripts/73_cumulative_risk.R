@@ -197,7 +197,10 @@ METRICS <- c("median", "mean", "ucl85", "ucl95")
 for (m in METRICS) {
   src <- paste0(m, "_ppb"); dst <- paste0("EC_", m)
   exposure[, (dst) := fifelse(is.na(scale_factor), get(src), get(src) * scale_factor)]
-  exposure[, (dst) := pmax(get(dst), 0)]     # negatives are noise about zero
+  # Negative cell values are retained, as everywhere else in the pipeline (SI S1.4):
+  # a few H2S cells have a slightly negative mean or median (noise about zero), and
+  # their hazard quotients are then slightly negative rather than clipped to zero.
+  # (2026-10-06: the earlier pmax(., 0) clip was removed; it touched 2-3 H2S cells only.)
 }
 
 hr("Effect of the exposure metric")
