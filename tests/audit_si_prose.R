@@ -170,12 +170,12 @@ say("reduction",
 # ==========================================================================
 cat("\n== manuscript ==\n")
 say("MS emission caveat",
-    sprintf("reduces the estimate by %s%%, to %s metric tons/yr",
+    sprintf("reduced the mean inferred rate by %s%%, to %s metric tons/yr",
             rh(100 * (1 - mean(r$q_mean) / mean(p$inferred_tpy)), 0),
             cm(mean(r$q_mean))), MS, "")
 .dev <- max(abs(t$mobile_pw_ppb - bs$mobile_pw_ppb) / bs$mobile_pw_ppb) * 100
 say("MS S4.6 pointer bound",
-    sprintf("moves by at most %d%%", ceiling(.dev)), MS, sprintf("max deviation %.2f%%", .dev))
+    sprintf("Population-weighted block benzene concentration differed from the baseline by no more than %d%%", ceiling(.dev)), MS, sprintf("max deviation %.2f%%", .dev))
 
 cat(sprintf("\n%d OK, %d FAIL, %d SKIP\n", n_ok, n_fail, n_skip))
 if (n_fail > 0) {
