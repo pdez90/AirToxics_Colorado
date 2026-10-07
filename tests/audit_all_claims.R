@@ -96,9 +96,9 @@ say("abstract: mobile vs AirToxScreen cases",
     sprintf("%s-%s excess cases among %s residents, versus %s-%s", rh(mob$risk_5_75, 3), rh(mob$risk_20_40, 3),
             cm(mob$total_population_used), rh(ats$risk_5_75, 3), rh(ats$risk_20_40, 3)), MS)
 say("2.1: common blocks and residents", sprintf("%s blocks housing %s residents", cm(mob$n_blocks), cm(mob$total_population_used)), MS)
-say("3.3: pop-weighted means", sprintf("population-weighted mean benzene concentrations of %s ppb for mobile monitoring and %s ppb for AirToxScreen", rh(mob$pop_weighted_mean_ppb, 3), rh(ats$pop_weighted_mean_ppb, 3)), MS)
+say("3.3: pop-weighted means", sprintf("population-weighted mean benzene mixing ratios of %s ppb for mobile monitoring and %s ppb for AirToxScreen", rh(mob$pop_weighted_mean_ppb, 3), rh(ats$pop_weighted_mean_ppb, 3)), MS)
 say("3.3: residents across common blocks", sprintf("The %s census blocks with both AirToxScreen and mobile benzene estimates contained %s residents", cm(mob$n_blocks), cm(mob$total_population_used)), MS)
-say("3.3: cancer cases", sprintf("compared with %s-%s cases using temporally scaled mobile concentrations", rh(mob$risk_5_75, 3), rh(mob$risk_20_40, 3)), MS)
+say("3.3: cancer cases", sprintf("compared with %s-%s cases using temporally scaled mobile mixing ratios", rh(mob$risk_5_75, 3), rh(mob$risk_20_40, 3)), MS)
 say("4: risk ratio", sprintf("mean-based risk ratio of %s", rh(mob$pop_weighted_mean_ppb / ats$pop_weighted_mean_ppb, 2)), MS)
 
 BLK <- file.path(BASE, "censusblocks_suncor_terminal_BINWEIGHTED_AB_overlap.RData")
@@ -116,7 +116,7 @@ if (file.exists(BLK)) {
   say("3.3: Pearson / Spearman", sprintf("(Pearson r = %s, Spearman ρ = %s)", rh(cor(m[k], a[k]), 2), rh(cor(m[k], a[k], method = "spearman"), 2)), MS)
   say("3.3: AirToxScreen block range", sprintf("span only %s-%s ppb across the entire domain (a %s-fold range)", rh(min(a[k]), 3), rh(max(a[k]), 3), rh(max(a[k]) / min(a[k]), 1)), MS)
   say("3.3: mobile block maximum", sprintf("reaching %s ppb", rh(max(m[k]), 1)), MS)
-  say("3.3: blocks > 2x / 5x / max ratio", sprintf("In %d of the %s common blocks (%s%%), mobile-derived concentrations exceed AirToxScreen by more than a factor of two, in %d blocks by more than a factor of five, and in the most extreme block by a factor of %d",
+  say("3.3: blocks > 2x / 5x / max ratio", sprintf("In %d of the %s common blocks (%s%%), mobile-derived mixing ratios exceed AirToxScreen by more than a factor of two, in %d blocks by more than a factor of five, and in the most extreme block by a factor of %d",
       sum(r > 2), cm(sum(k)), rh(100 * mean(r > 2), 1), sum(r > 5), round(max(r))), MS)
   say("3.3: blocks below AirToxScreen", sprintf("lower than AirToxScreen in %s%% of blocks (median ratio %s)", pc(100 * mean(r < 1)), rh(median(r), 2)), MS)
   ar <- d$area_km2[k]
@@ -520,7 +520,7 @@ mh <- need("methane_hotspot_summary.csv"); mc <- need("cent_out_methane_persiste
 say("3.7: p99, clusters", sprintf("High-methane observations (≥ 99th percentile, %s ppm) formed %d spatial clusters, of which two", rh(mh$p99, 2), mh$n_clusters), MS)
 say("S8: p99 / p95 / events / days / clusters", sprintf("campaign-wide 99th percentile (%s ppm; the 95th percentile was %s ppm). The %s high-methane events (observed on %d of 193 days) grouped into %d spatial clusters", rh(mh$p99, 3), rh(mh$p95, 3), cm(mh$n_high_events), mh$n_days_high, mh$n_clusters), SI)
 c1 <- mc[cluster == 1]; c2 <- mc[cluster == 2]
-say("3.7: largest methane hotspot", sprintf("The largest persistent methane hotspot (%s° N, %s° W) lay in the industrial corridor north-northeast of the refinery and contained %s high-methane observations across %d days, with a maximum reported concentration of %s ppm", rh(c1$lat, 3), rh(-c1$lon, 3), cm(c1$n_events), c1$n_days, rh(c1$ch4_max, 1)), MS)
+say("3.7: largest methane hotspot", sprintf("The largest persistent methane hotspot (%s° N, %s° W) lay in the industrial corridor north-northeast of the refinery and contained %s high-methane observations across %d days, with a maximum reported mixing ratio of %s ppm", rh(c1$lat, 3), rh(-c1$lon, 3), cm(c1$n_events), c1$n_days, rh(c1$ch4_max, 1)), MS)
 say("3.7: second methane hotspot", sprintf("The second (%s° N, %s° W), along the Vasquez Boulevard corridor, contained %s observations across %d days", rh(c2$lat, 3), rh(-c2$lon, 3), cm(c2$n_events), c2$n_days), MS)
 say("S8: largest methane hotspot", sprintf("(%s° N, %s° W; %s events on %d days; maximum %s ppm)", rh(c1$lat, 4), rh(-c1$lon, 4), cm(c1$n_events), c1$n_days, rh(c1$ch4_max, 1)), SI)
 hav <- function(la, lo, LA, LO) { R <- 6371008.8; p_ <- pi/180; a <- sin((LA-la)*p_/2)^2 + cos(la*p_)*cos(LA*p_)*sin((LO-lo)*p_/2)^2; 2*R*asin(pmin(1, sqrt(a))) }
@@ -742,7 +742,7 @@ if (have("TABLE_wind_station_distance.csv")) { wsd <- need("TABLE_wind_station_d
       cm(wsd$n_fallback), rh(wsd$pct_fallback, 1), rh(wsd$median_extra_km_fallback, 1)), MS)
 } else skip("2.3 wind-station distances", "TABLE_wind_station_distance.csv not found (run 84)")
 if (have("TABLE_lacasa_cpf.csv")) { cp2 <- need("TABLE_lacasa_cpf.csv")
-  say("S5.4: CPF rows (toluene, xylene)", sprintf("(winds > 1 m/s; %s rows with valid toluene and xylene concentrations", cm(cp2[pollutant == "toluene", sum(n)])), SI)
+  say("S5.4: CPF rows (toluene, xylene)", sprintf("(winds > 1 m/s; %s rows with valid toluene and xylene mixing ratios", cm(cp2[pollutant == "toluene", sum(n)])), SI)
   say("S5.4: CPF rows (benzene, 2024 only)", sprintf("and %s rows for benzene, which is used from the summer-2024 deployment only", cm(cp2[pollutant == "benzene", sum(n)])), SI) }
 dm <- need("hotspot_source_fingerprint_outputs/hotspot_source_directional_metrics.csv")[group_id == 13]
 b13 <- need("TABLE_group13_hq_annulus.csv")$bearing_group13_to_hq_deg[1]
