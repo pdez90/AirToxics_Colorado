@@ -114,7 +114,8 @@ p1 <- ggplot(hm, aes(x = variable, y = group_id, fill = value)) +
   geom_tile(color = "white") +
   geom_text(aes(label = value), size = 2.8) +
   scale_fill_viridis_c(option = "C", trans = "sqrt", name = NULL) +
-  facet_wrap(~variable, scales = "free_x", nrow = 1) +
+  facet_wrap(~variable, scales = "free_x", nrow = 1,
+             labeller = as_labeller(function(x) gsub("CH4", "CH\u2084", x))) +   # display only
   theme_bw(base_size = 11) +
   theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
         strip.background = element_rect(fill = "grey95")) +
@@ -131,12 +132,13 @@ p2 <- ggplot() +
   geom_point(data = gmap, aes(X, Y, color = ch4_class), size = 3.5) +
   geom_text(data = gmap, aes(X, Y, label = group_id), size = 2.5, vjust = -1) +
   scale_shape_manual(values = c(`TRUE` = 17, `FALSE` = 1),
-                     name = "CH4 cluster\n(persistent)") +
+                     name = "CH\u2084 cluster\n(persistent)") +
   scale_color_manual(values = c("CH4-enriched" = "red3",
                                 "CH4-intermediate" = "orange2",
-                                "CH4-quiet" = "steelblue"), name = NULL) +
+                                "CH4-quiet" = "steelblue"), name = NULL,
+                     labels = function(x) gsub("CH4", "CH\u2084", x)) +   # display only
   coord_equal() + theme_bw(base_size = 11) +
-  labs(title = "Toxics groups (colored by CH4 class) vs CH4 clusters (grey)",
+  labs(title = "Toxics groups (colored by CH\u2084 class) vs CH\u2084 clusters (grey)",
        x = NULL, y = NULL)
 
 ggsave(file.path(BASE, "FinalFig", "FIG_methane_at_toxics_hotspots.png"),

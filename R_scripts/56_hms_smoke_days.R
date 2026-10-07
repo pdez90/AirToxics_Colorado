@@ -126,11 +126,12 @@ print(wtests)
 # ---- figure ---------------------------------------------------
 p <- ggplot(daily, aes(class, dmed, fill = class)) +
   geom_boxplot(outlier.size = 0.6, linewidth = 0.3, show.legend = FALSE) +
-  facet_wrap(~pollutant, scales = "free_y") +
+  facet_wrap(~pollutant, scales = "free_y",
+             labeller = as_labeller(function(x) sub("^H2S$", "H\u2082S", x))) +   # display only
   scale_fill_manual(values = c(none = "grey85", light = "#fee8c8",
                                medium = "#fdbb84", heavy = "#e34a33")) +
   labs(x = "NOAA HMS smoke overlay on the study domain (sampling day)",
-       y = "Daily median concentration (ppb)",
+       y = "Daily median mixing ratio (ppb)",
        caption = "Each point in a box is one sampling day's campaign-wide median.\nSmoke classes from NOAA Hazard Mapping System smoke polygons intersecting the study domain (maximum density).") +
   theme_bw(base_size = 11) +
   theme(plot.caption = element_text(size = 8.5, hjust = 0))

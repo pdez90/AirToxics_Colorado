@@ -228,10 +228,13 @@ p <- ggplot(summ2, aes(x = distance, y = mean, group = inside, color = inside)) 
   scale_color_manual(values = c("Outside" = "blue", "Inside" = "red"), name = NULL) +
   labs(
     x = "Buffer radius (m)",
-    y = "Mean concentration (ppb)",
+    y = "Mean mixing ratio (ppb)",
     caption = "Points: mean of individual observations. No intervals or tests are shown: consecutive observations are autocorrelated (SI section S4.1)."
   ) +
-  facet_wrap(~ Pollutant, scales = "free_y", ncol = 2) +
+  # strip labels only: drop the "s" prefix of the background-corrected columns
+  # (as script 21 does) and subscript the 2 in H2S
+  facet_wrap(~ Pollutant, scales = "free_y", ncol = 2,
+             labeller = as_labeller(function(x) sub("^H2S$", "H\u2082S", sub("^s(?=[A-Z])", "", x, perl = TRUE)))) +
   theme_bw(base_size = 12) +
   theme(
     legend.position = "top",

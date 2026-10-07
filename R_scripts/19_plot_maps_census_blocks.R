@@ -325,7 +325,7 @@ panel6_maps <- (p1 | p2) /
   (p5 | p6) +
   patchwork::plot_annotation(
     title = paste0(
-      "Overlapping Census Blocks: AirToxScreen vs Mobile (scaled) Concentrations (robust limits: 2–98%)",
+      "Overlapping Census Blocks: AirToxScreen vs Mobile (scaled) Mixing Ratios (robust limits: 2–98%)",
       ifelse(USE_LOG_FILL, " — log10 color scale", "")
     ),
     theme = theme(plot.title = element_text(size = 14, face = "bold"))

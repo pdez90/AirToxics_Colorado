@@ -115,11 +115,11 @@ p <- ggplot(Ld, aes(x = inside, y = value)) +
   facet_wrap(~Pollutant, ncol = 2, scales = "free_y",
              labeller = as_labeller(c(Benzene = "A) Benzene", Toluene = "B) Toluene",
                                       Xylene = "C) Xylene", Trimethylbenzene = "D) Trimethylbenzene",
-                                      H2S = "E) H2S", HCN = "F) HCN"))) +
+                                      H2S = "E) H\u2082S", HCN = "F) HCN"))) +
   scale_y_log10(labels = scales::label_number(accuracy = 0.01, big.mark = ","),
                 expand = expansion(mult = c(0.10, 0.05))) +
   scale_fill_manual(values = c(Outside = "steelblue", Inside = "indianred"), guide = "none") +
-  labs(x = NULL, y = "Background-corrected concentration (ppb, log scale)",
+  labs(x = NULL, y = "Background-corrected mixing ratio (ppb, log scale)",
        caption = sprintf("Inside = within %g km of a TRI facility. Violins and boxes: values >= 0.001 ppb.\nRed dots: medians of all values, including those not drawn.", RADIUS_M / 1000)) +
   theme_bw(base_size = 12) +
   theme(strip.background = element_rect(fill = "grey95", color = NA),

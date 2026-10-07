@@ -40,7 +40,8 @@ p <- ggplot(ms, aes(month, median, color=van)) +
   geom_vline(data=bounds, aes(xintercept=x), linetype=3, color="grey60", linewidth=0.3) +
   geom_line(linewidth=0.6) + geom_point(size=1.4) +
   geom_line(aes(y=p95), linetype=2, linewidth=0.4) +
-  facet_wrap(~pollutant, scales="free_y") +
+  facet_wrap(~pollutant, scales="free_y",
+             labeller=as_labeller(function(x) sub("^H2S$", "H\u2082S", x))) +   # display only
   scale_color_manual(values=c(CAT="#2166ac", EMU="#b2182b"), name=NULL) +
   labs(x=NULL, y="Monthly median (solid) and p95 (dashed), ppb",
        caption="Dotted verticals: start of each quarter in which that pollutant's MDL changed on either vehicle (Table S1.2). Months with <1,000 valid observations omitted.") +

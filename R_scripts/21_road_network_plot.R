@@ -146,7 +146,8 @@ make_clean_road_figure <- function(DT, pollutant_cols, out_file,
       label.padding = unit(0.10, "lines"),
       vjust = 1.2
     ) +
-    facet_wrap(~ Pollutant, ncol = 2, scales = "free_y") +
+    facet_wrap(~ Pollutant, ncol = 2, scales = "free_y",
+               labeller = as_labeller(function(x) sub("^H2S$", "H\u2082S", x))) +   # display only
     scale_fill_viridis_d(option = "E", guide = "none") +
     scale_y_log10(labels = scales::label_number(drop0trailing = TRUE, big.mark = ",")) +
     coord_cartesian(clip = "off") +

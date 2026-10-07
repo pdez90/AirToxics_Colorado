@@ -139,8 +139,7 @@ if (file.exists(BLK)) {
   mm <- d$sBenzene_mean_of_daily_mean_scaled; md <- d$sBenzene_med_of_daily_med_scaled; k2 <- is.finite(mm) & is.finite(md) & is.finite(a) & is.finite(d$POP20) & d$POP20 > 0
   say("3.3: median-basis benzene (supplementary)", sprintf("the population-weighted mobile benzene is %s ppb, %s-%s excess cases, a mobile-to-AirToxScreen ratio of %s and %d blocks above twice", rh(pw(md), 3),
       rh(5.75 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(pw(md) / pw(a), 2), sum(md[k2] / a[k2] > 2)), MS)
-  say("S4.3: median-basis benzene", sprintf("the population-weighted mobile benzene is %s ppb (%s-%s excess cases), the ratio to AirToxScreen is %s, and %d rather than %d blocks exceed twice", rh(pw(md), 3),
-      rh(5.75 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(pw(md) / pw(a), 2), sum(md[k2] / a[k2] > 2), sum(mm[k2] / a[k2] > 2)), SI)
+  skip("S4.3: median-basis benzene", "SI repetition removed R28; values checked in MS 3.3 and SI S4.7")
   say("S4.7: median-basis benzene and risk", sprintf("the population-weighted mobile benzene over the %s common blocks is %s ppb against %s ppb for AirToxScreen (ratio %s), and the excess lifetime cancer risk is %s-%s cases against %s-%s cases",
       cm(sum(k2)), rh(pw(md), 3), rh(pw(a), 3), rh(pw(md) / pw(a), 2), rh(5.75 * sum(md[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(md[k2] * d$POP20[k2]) / 1e6, 3),
       rh(5.75 * sum(a[k2] * d$POP20[k2]) / 1e6, 3), rh(20.40 * sum(a[k2] * d$POP20[k2]) / 1e6, 3)), SI)
@@ -222,11 +221,11 @@ say("S1.5: H2S / HCN median abs difference", sprintf("median absolute difference
 # ==========================================================================
 hdr("D. Measurement record  <- TABLE_S3.1.csv, TABLE_S1.4_qaqc_checks.csv")
 s31 <- need("TABLE_S3.1.csv"); q14 <- need("TABLE_S1.4_qaqc_checks.csv")
-say("3.1: HCN record", sprintf("with %s values confined to %d days", cm(s31[pollutant == "HCN", analysis]), s31[pollutant == "HCN", n_days]), MS)
+say("3.1: HCN record", sprintf("one per 2-s bin, confined to %d days", s31[pollutant == "HCN", n_days]), MS)
 # 2.1.1 parallel record counts (Table S3.1): aromatics reported -> analysis set and days; H2S reported -> bins and days
 .ar <- s31[pollutant %in% c("Benzene","Toluene","Xylene","Trimethylbenzene")]
-say("2.1.1: aromatic record counts", sprintf("reduce the %s-%s million reported aromatic records to %s-%s million 1-s values on %d-%d sampling days", sprintf("%.2f", min(.ar$reported)/1e6), sprintf("%.2f", max(.ar$reported)/1e6), sprintf("%.2f", min(.ar$analysis)/1e6), sprintf("%.2f", max(.ar$analysis)/1e6), min(.ar$n_days), max(.ar$n_days)), MS)
-say("2.1.1: H2S record counts", sprintf("the %s million H2S records to %s 5-s bin values on %d days", sprintf("%.2f", s31[pollutant == "H2S", reported]/1e6), cm(s31[pollutant == "H2S", analysis]), s31[pollutant == "H2S", n_days]), MS)
+say("3.1: aromatic record counts", sprintf("reduced the %s-%s million reported aromatic records to %s-%s million 1-s values on %d-%d sampling days", sprintf("%.2f", min(.ar$reported)/1e6), sprintf("%.2f", max(.ar$reported)/1e6), sprintf("%.2f", min(.ar$analysis)/1e6), sprintf("%.2f", max(.ar$analysis)/1e6), min(.ar$n_days), max(.ar$n_days)), MS)
+say("3.1: H2S record counts", sprintf("the %s million H2S records to %s 5-s bin values on %d days", sprintf("%.2f", s31[pollutant == "H2S", reported]/1e6), cm(s31[pollutant == "H2S", analysis]), s31[pollutant == "H2S", n_days]), MS)
 say("3.1 / 3.8: below-MDL shares", sprintf("%s%% of benzene, %s%% of H2S and %s%% of HCN", pc(s31[pollutant == "Benzene", pct_belowMDL]), pc(s31[pollutant == "H2S", pct_belowMDL]), pc(s31[pollutant == "HCN", pct_belowMDL])), MS)
 say("S1.4: negatives retained", sprintf("%s of them for benzene and %s for H2S", cm(q14[pollutant == "Benzene", n_negative_after_qc]), cm(q14[pollutant == "H2S", n_negative_after_qc])), SI)
 say("Table S3.1: analysis-set counts", sprintf("| %s | %s | %s | %s | %s | %s |", cm(s31$analysis[1]), cm(s31$analysis[2]), cm(s31$analysis[3]), cm(s31$analysis[4]), cm(s31$analysis[5]), cm(s31$analysis[6])),
@@ -236,8 +235,8 @@ for (.st in c("no_gps_flag", "one_per_second", "with_position", "outside_hq")) i
   say(sprintf("Table S3.1: stage %s", .st), paste0("| ", paste(cm(s31[[.st]]), collapse = " | "), " |"), rows(SI))
 if ("outside_hq" %in% names(s31)) cat(sprintf("  [%s] %-46s last funnel stage == analysis set\n",
     if (all((if ("one_per_bin" %in% names(s31)) s31$one_per_bin else s31$outside_hq) == s31$analysis)) "OK  " else "FAIL", "Table S3.1: funnel closes"))
-say("2.1.1: HCN funnel", sprintf("the HCN dataset contained %s delivered records", cm(s31[pollutant == "HCN", after_excl])), MS)
-say("2.1.1: HCN funnel (analysis set)", sprintf("Retaining one mean per 2-s bin then yielded %s values across", cm(s31[pollutant == "HCN", analysis])), MS)
+say("3.1: HCN funnel", sprintf("the %s delivered records that remained after the campaign-period exclusions", cm(s31[pollutant == "HCN", after_excl])), MS)
+say("3.1: HCN funnel (analysis set)", sprintf("yielded %s values, one per 2-s bin", cm(s31[pollutant == "HCN", analysis])), MS)
 if ("no_gps_flag" %in% names(s31)) { .gp <- 100 * (1 - s31$no_gps_flag / s31$after_excl)
   say("S1.4: GPS-flag share", sprintf("which removes %s-%s%% of each pollutant's record after the campaign exclusions", rh(min(.gp), 1), rh(max(.gp), 1)), SI) }
 # delivered (un-averaged) H2S / HCN statistics beside the bin means (2026-09-27)
@@ -499,13 +498,13 @@ if (file.exists(WS)) { e <- new.env(); suppressWarnings(load(WS, envir = e)); o 
     # (H2S 3.25, HCN 1.81) were dropped from section 2.1.1 (the H2S ratio is still checked in S1.4 below)
     frag <- sprintf("The retained data comprise %s H2S bins from %s records, %s HCN bins from %s records",
       cm(nrow(hb)), cm(nrow(hr_)), cm(nrow(cb)), cm(nrow(cr)))
-    say("2.1.1: bins", gsub("H2S", "H2S", frag), MS)
+    skip("2.1.1: bins", "R29: bin/record counts moved to SI S1.4 (checked there) and MS 3.1")
     skip("2.1.1: seconds per bin (H2S, HCN)", sprintf("claim removed from manuscript wording R26 (computed %s and %s s per bin)", rh(nrow(hr_) / nrow(hb), 2), rh(nrow(cr) / nrow(cb), 2)))
     say("S1.4: bins per lab", sprintf("form %s 5-s bins (%s seconds per bin: %s for the CAT laboratory and %s for the EMU", cm(nrow(hb)), rh(nrow(hr_) / nrow(hb), 2),
       rh(nrow(hr_[Asset == "CAT"]) / nrow(hb[Asset == "CAT"]), 2), rh(nrow(hr_[Asset == "EMU"]) / nrow(hb[Asset == "EMU"]), 2)), SI)
     .cat <- sprintf("CAT contributes %s%% of the delivered H2S records, but %s%% of the bins", pc(100 * mean(hr_$Asset == "CAT")), pc(100 * mean(hb$Asset == "CAT")))
     say("2.1.1: CAT weighting", .cat, MS)
-    say("S1.4: CAT weighting", sprintf("the CAT laboratory supplies %s%% of the delivered H2S seconds but %s%% of the bins", pc(100 * mean(hr_$Asset == "CAT")), pc(100 * mean(hb$Asset == "CAT"))), SI)
+    skip("S1.4: CAT weighting", "SI repetition removed R28; checked in MS 2.1.1")
     say("S1.4: bin vs delivered H2S", sprintf("For H2S the median is %s ppb against %s ppb for the delivered seconds, the mean %s against %s ppb",
       rh(median(hb$Hydrogen_Sulfide_ppb), 2), pc(median(hr_$Hydrogen_Sulfide_ppb_raw)), rh(mean(hb$Hydrogen_Sulfide_ppb), 2), rh(mean(hr_$Hydrogen_Sulfide_ppb_raw), 2)), SI)
     if (all(c("Hydrogen_Sulfide_ppb_rep", "Hydrogen_Cyanide_ppb_rep") %in% names(o))) cat("  [OK  ] mobile_wswd carries the repeated 1-s bin means (*_rep) for the correlations\n") else

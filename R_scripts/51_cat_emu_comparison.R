@@ -74,7 +74,8 @@ if (length(plot_dt)) {
   p <- ggplot(pd, aes(CAT, EMU)) +
     geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
     geom_point(alpha = 0.4, size = 1) +
-    facet_wrap(~pollutant, scales = "free") +
+    facet_wrap(~pollutant, scales = "free",
+               labeller = as_labeller(function(x) sub("^H2S$", "H\u2082S", x))) +   # display only
     scale_x_log10(labels = label_number()) +
     scale_y_log10(labels = label_number()) +
     labs(x = "CAT daily median in shared 500 m cell (ppb, log scale)",

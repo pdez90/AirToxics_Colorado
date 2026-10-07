@@ -167,7 +167,7 @@ f2 <- save_ratio_map("ratio_X_B",   "Xylene/Benzene (bg-corrected) — median-of
                      "ratio_XB.jpg")
 f3 <- save_ratio_map("ratio_TMB_B", "Trimethylbenzene/Benzene (bg-corrected) — median-of-daily-medians ratio",
                      "ratio_TMBB.jpg")
-f4 <- save_ratio_map("ratio_H2S_B", "H2S/Benzene (bg-corrected) — median-of-daily-medians ratio",
+f4 <- save_ratio_map("ratio_H2S_B", "H\u2082S/Benzene (bg-corrected) — median-of-daily-medians ratio",
                      "ratio_H2SB.jpg")
 
 # If you also want HCN/B as a 5th map, uncomment:

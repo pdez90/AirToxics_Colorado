@@ -516,7 +516,7 @@ p_funnel <- ggplot2::ggplot(
     labels = scales::comma_format()
   ) +
   ggplot2::labs(
-    title = "Stepwise retention of candidate WWTP H2S plume events",
+    title = "Stepwise retention of candidate WWTP H\u2082S plume events",
     subtitle = "Counts show plume events remaining after each identification and QA filter",
     x = "Number of plume events",
     y = NULL
@@ -548,8 +548,8 @@ p_all_plumes <- ggplot2::ggplot(h2s_all_shapes, ggplot2::aes(x = t_rel_s, y = dH
   ggplot2::geom_point(ggplot2::aes(color = distance_wwtp), alpha = 0.85, size = 1.2) +
   ggplot2::scale_color_viridis_c(name = "Distance to WWTP (km)", trans = "log1p") +
   ggplot2::labs(
-    title = "All initial H2S plume candidates near WWTP (pre-filters)",
-    subtitle = "Each facet is a plume_id; x-axis is seconds since plume start; y = ΔH2S",
+    title = "All initial H\u2082S plume candidates near WWTP (pre-filters)",
+    subtitle = "Each facet is a plume_id; x-axis is seconds since plume start; y = ΔH\u2082S",
     x = "Seconds since plume start",
     y = expression("ΔH"[2]*"S (ppb)")
   ) +
@@ -581,8 +581,8 @@ p_kept_all <- ggplot2::ggplot(h2s_kept_shapes, ggplot2::aes(x = t_rel_s, y = dH2
   ggplot2::geom_point(ggplot2::aes(color = distance_wwtp), size = 1.2, alpha = 0.85) +
   ggplot2::scale_color_viridis_c(name = "Distance to WWTP (km)", trans = "log1p") +
   ggplot2::labs(
-    title = "All kept H2S plumes near WWTP",
-    subtitle = "Each facet is one retained plume; x-axis is seconds since plume start; y = ΔH2S",
+    title = "All kept H\u2082S plumes near WWTP",
+    subtitle = "Each facet is one retained plume; x-axis is seconds since plume start; y = ΔH\u2082S",
     x = "Seconds since plume start",
     y = expression("ΔH"[2]*"S (ppb)")
   ) +
@@ -614,8 +614,8 @@ p1 <- ggplot2::ggplot(h2s_evt_keep, ggplot2::aes(x = dist_at_peak_km, y = peak_d
   ggplot2::geom_smooth(method = "loess", se = TRUE, linewidth = 0.7) +
   ggplot2::scale_y_continuous(labels = scales::number_format(accuracy = 0.1)) +
   ggplot2::labs(
-    title = "H2S plume enhancement vs distance from WWTP (filtered plumes)",
-    subtitle = "Each point is one plume; peak enhancement = H2S − baseline at plume maximum",
+    title = "H\u2082S plume enhancement vs distance from WWTP (filtered plumes)",
+    subtitle = "Each point is one plume; peak enhancement = H\u2082S − baseline at plume maximum",
     x = "Distance from WWTP (km)",
     y = expression("Peak ΔH"[2]*"S (ppb)"),
     shape = "Stability"
@@ -633,7 +633,7 @@ p2 <- ggplot2::ggplot(h2s_evt_keep, ggplot2::aes(y = dist_at_peak_km)) +
   ) +
   ggplot2::scale_color_viridis_c(name = expression("Peak ΔH"[2]*"S (ppb)"), trans = "log1p") +
   ggplot2::labs(
-    title = "Filtered H2S plume events near WWTP over time",
+    title = "Filtered H\u2082S plume events near WWTP over time",
     subtitle = "Each segment is one plume (start→end), positioned by distance at peak enhancement",
     x = "Time",
     y = "Distance from WWTP (km)"
@@ -657,8 +657,8 @@ p3 <- ggplot2::ggplot(h2s_plot3, ggplot2::aes(x = t_rel_s, y = dH2S)) +
   ggplot2::geom_point(ggplot2::aes(color = distance_wwtp), size = 1.2, alpha = 0.85) +
   ggplot2::scale_color_viridis_c(name = "Distance to WWTP (km)", trans = "log1p") +
   ggplot2::labs(
-    title = "Filtered H2S plume shapes near WWTP",
-    subtitle = "Lines show ΔH2S = H2S − baseline; all retained plumes shown",
+    title = "Filtered H\u2082S plume shapes near WWTP",
+    subtitle = "Lines show ΔH\u2082S = H\u2082S − baseline; all retained plumes shown",
     x = "Seconds since plume start",
     y = expression("ΔH"[2]*"S (ppb)")
   ) +
@@ -692,8 +692,8 @@ p5 <- ggplot2::ggplot(h2s_evt_all, ggplot2::aes(x = wind_sd_deg, y = peak_dH2S))
   ggplot2::geom_vline(xintercept = max_wind_sd_deg, linetype = "dashed") +
   ggplot2::scale_y_continuous(trans = "log1p") +
   ggplot2::labs(
-    title = "Wind-direction consistency during H2S plumes (QA)",
-    subtitle = paste0("Dashed line = wind SD threshold (", max_wind_sd_deg, "°); y is peak ΔH2S (log1p)"),
+    title = "Wind-direction consistency during H\u2082S plumes (QA)",
+    subtitle = paste0("Dashed line = wind SD threshold (", max_wind_sd_deg, "°); y is peak ΔH\u2082S (log1p)"),
     x = "Circular SD of wind direction during plume (degrees)",
     y = expression("Peak ΔH"[2]*"S (ppb, log1p)")
   ) +
@@ -715,7 +715,7 @@ if ("wind_from_deg_wwtf" %in% names(dat)) {
     ggplot2::scale_y_continuous(trans = "log1p") +
     ggplot2::labs(
       title = "Angular alignment diagnostic (QA)",
-      subtitle = "ΔH2S should concentrate near 0° if WWTP dominates",
+      subtitle = "ΔH\u2082S should concentrate near 0° if WWTP dominates",
       x = "Observed wind direction − wind-from-WWTP (degrees; 0 = directly downwind)",
       y = expression("ΔH"[2]*"S (ppb, log1p)")
     ) +

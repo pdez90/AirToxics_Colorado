@@ -110,7 +110,7 @@ for (i in seq_along(POLLS)) {
   p <- p +
     coord_sf(crs = 4326, default_crs = 4326, xlim = xlim, ylim = ylim,
              expand = FALSE) +
-    labs(title = sprintf("%s", P$name),
+    labs(title = sub("^H2S$", "H\u2082S", P$name),   # display only
          subtitle = if (n_above > 0) sprintf("%.0f%% of cells below MDL (%.2g ppb, gray)", pct, P$mdl)
                     else sprintf("All %d cells below MDL (%.2g ppb, gray)", nrow(cm), P$mdl),
          x = NULL, y = NULL) +
@@ -131,7 +131,7 @@ print(summ)
 fig <- (panels[[1]] | panels[[2]] | panels[[3]]) /
        (panels[[4]] | panels[[5]] | panels[[6]]) +
   plot_annotation(
-    caption = paste0("Cell values are medians of daily medians of raw reported concentrations on the 500 m grid. ",
+    caption = paste0("Cell values are medians of daily medians of raw reported mixing ratios on the 500 m grid. ",
                      "Gray cells fall below the reference MDL (CAT laboratory audit values from the Quarterly Summary\n",
                      "tab of the CDPHE quarterly data packets; HCN: observation-weighted median over its 2025 record, 5 ppb). ",
                      "Basemap: \u00a9 OpenStreetMap contributors."),

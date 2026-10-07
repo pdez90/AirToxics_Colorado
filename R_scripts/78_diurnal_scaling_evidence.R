@@ -289,19 +289,20 @@ HASF <- P[!is.na(lacasa), name]
 pl <- copy(prof)
 pl[, grp := fifelse(pollutant %in% HASF,
                     "has a measured La Casa factor",
-                    "no La Casa factor (1,2,4-TMB, H2S, HCN)")]
+                    "no La Casa factor (1,2,4-TMB, H\u2082S, HCN)")]
 g1 <- ggplot(pl, aes(hr, rel, colour = pollutant, linetype = grp)) +
   geom_hline(yintercept = 1, colour = "grey60", linewidth = 0.3) +
   geom_line(linewidth = 0.8) + geom_point(size = 1.6) +
   scale_x_continuous(breaks = HRS) +
+  scale_colour_discrete(labels = function(x) sub("^H2S$", "H\u2082S", x)) +   # display only
   scale_linetype_manual(values = setNames(c("solid", "22"),
-      c("has a measured La Casa factor", "no La Casa factor (1,2,4-TMB, H2S, HCN)"))) +
+      c("has a measured La Casa factor", "no La Casa factor (1,2,4-TMB, H\u2082S, HCN)"))) +
   labs(x = "hour of day (MST)",
-       y = "concentration relative to the all-hour level",
+       y = "mixing ratio relative to the all-hour level",
        colour = NULL, linetype = NULL,
        title = "Within-cell hour-of-day shape, 500 m cells sampled in at least 4 hours",
        subtitle = paste("Toluene, xylene and 1,2,4-TMB fall across the window;",
-                        "benzene, H2S and HCN rise")) +
+                        "benzene, H\u2082S and HCN rise")) +
   guides(linetype = guide_legend(order = 1), colour = guide_legend(order = 2, nrow = 2)) +
   theme_bw(base_size = 11) +
   theme(legend.position = "bottom", legend.box = "vertical",
@@ -323,6 +324,7 @@ g2 <- ggplot(rr, aes(aft_morn, pollutant, colour = is.na(factor_24h))) +
   scale_colour_manual(values = c(`FALSE` = "grey25", `TRUE` = "#b2182b"),
                       labels = c(`FALSE` = "has a measured La Casa factor",
                                  `TRUE` = "no La Casa factor"), name = NULL) +
+  scale_y_discrete(labels = function(x) sub("^H2S$", "H\u2082S", x)) +   # display only
   expand_limits(x = max(rr$hi) * 1.25) +
   labs(x = "afternoon (13-14) : morning (09-10), within 500 m cells",
        y = NULL,

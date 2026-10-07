@@ -42,9 +42,10 @@ message("Sampling days per season: ",
         paste(capture.output(print(table(unique(df[,.(day,season)])$season))), collapse=" "))
 p <- ggplot(daily, aes(season, dmed, fill=season)) +
   geom_boxplot(outlier.size=0.5, linewidth=0.3, show.legend=FALSE) +
-  facet_wrap(~pollutant, scales="free_y") +
+  facet_wrap(~pollutant, scales="free_y",
+             labeller=as_labeller(function(x) sub("^H2S$", "H\u2082S", x))) +   # display only
   scale_fill_brewer(palette="Paired") +
-  labs(x=NULL, y="Daily median concentration (ppb)",
+  labs(x=NULL, y="Daily median mixing ratio (ppb)",
        caption="Each point in a box is one sampling day's campaign-wide median. HCN is available from January 22, 2025 only (DJF, MAM and JJA 2025).") +
   theme_bw(base_size=11) + theme(plot.caption=element_text(size=8.5, hjust=0))
 ggsave(file.path(BASE,"FinalFig","FIG_seasonal.png"), p,

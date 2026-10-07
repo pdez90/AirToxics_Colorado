@@ -192,7 +192,7 @@ if (nrow(bad_cols) > 0) stop("Missing df columns:\n", paste0(bad_cols$pollutant,
 
 # Display labels for pairwise plots (remove _ppb; special cases)
 pretty_poll_label <- function(colname) {
-  if (colname == "Hydrogen_Sulfide_ppb") return("H2S")
+  if (colname == "Hydrogen_Sulfide_ppb") return("H\u2082S")
   if (colname == "Hydrogen_Cyanide_ppb") return("HCN")
   gsub("_ppb$", "", colname)
 }
@@ -336,7 +336,15 @@ make_polar_plot <- function(df_sub, pol_cols, title_prefix) {
   if (!all(c("ws","wd") %in% names(df_sub))) return(NULL)
   pol_cols <- pol_cols[pol_cols %in% names(df_sub)]
   if (length(pol_cols) == 0) return(NULL)
-  openair::polarPlot(df_sub, pollutant = pol_cols, statistic = "nwr", main = title_prefix)
+  # Strip labels only: pass display names to openair (its auto.text renders
+  # "H2S" with a subscript 2); the data columns outside this function are unchanged.
+  disp <- sub("_ppb$", "", pol_cols)
+  disp[pol_cols == "Hydrogen_Sulfide_ppb"] <- "H2S"
+  disp[pol_cols == "Hydrogen_Cyanide_ppb"] <- "HCN"
+  keep <- intersect(c("date", "ws", "wd"), names(df_sub))
+  df_sub <- as.data.frame(df_sub)[, c(keep, pol_cols), drop = FALSE]
+  names(df_sub) <- c(keep, disp)
+  openair::polarPlot(df_sub, pollutant = disp, statistic = "nwr", main = title_prefix)
 }
 
 pair_plot_one <- function(m, xcol, ycol) {

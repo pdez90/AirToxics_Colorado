@@ -280,7 +280,7 @@ make_chem_fingerprint <- function(master_df) {
     dplyr::mutate(pollutants = tolower(pollutants)) %>%
     tidyr::separate_rows(pollutants, sep = "\\+") %>%
     dplyr::mutate(pollutants = dplyr::case_when(
-      pollutants == "h2s" ~ "H2S",
+      pollutants == "h2s" ~ "H\u2082S",   # display label
       pollutants == "hcn" ~ "HCN",
       pollutants == "trimethylbenzene" ~ "Trimethylbenzene",
       TRUE ~ stringr::str_to_title(pollutants)
@@ -556,7 +556,7 @@ make_ratio_heatmap <- function(ratio_all_df) {
                             T_B   = "Toluene/Benzene",
                             X_B   = "Xylene/Benzene",
                             TMB_B = "TMB/Benzene",
-                            H2S_B = "H2S/Benzene",
+                            H2S_B = "H\u2082S/Benzene",
                             HCN_B = "HCN/Benzene")
     )
 

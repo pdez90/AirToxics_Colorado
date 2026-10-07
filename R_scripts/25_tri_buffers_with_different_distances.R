@@ -231,7 +231,7 @@ p2 <- ggplot(summ2, aes(x = distance, y = mean, group = inside)) +
   ) +
   scale_color_manual(values = c("Outside" = "blue", "Inside" = "red"), name = NULL) +
   coord_cartesian(clip = "off") +
-  labs(x = "Buffer radius (m)", y = "Mean concentration") +
+  labs(x = "Buffer radius (m)", y = "Mean mixing ratio") +
   theme_minimal(base_size = 12) +
   theme(
     legend.position = "bottom",

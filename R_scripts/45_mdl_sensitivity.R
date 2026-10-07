@@ -241,7 +241,8 @@ pA <- ggplot(summ, aes(pollutant, median, fill = case_f)) +
   geom_point(aes(y = p95, group = case_f), position = position_dodge(0.8),
              shape = 21, size = 1.6, fill = "white", stroke = 0.5) +
   scale_fill_brewer(palette = "Blues", name = NULL) +
-  labs(x = NULL, y = "Concentration (ppb)",
+  scale_x_discrete(labels = function(x) sub("^H2S$", "H\u2082S", x)) +   # display only
+  labs(x = NULL, y = "Mixing ratio (ppb)",
        title = "A) Campaign median (bars) and 95th percentile (points) by substitution case") +
   theme_bw(base_size = 11) + theme(legend.position = "bottom")
 blk[, case_f := factor(case_lab[case], levels = case_lab)]

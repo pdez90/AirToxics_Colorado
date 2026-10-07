@@ -274,6 +274,7 @@ for (s in sort(unique(df_corr$Site))) {
   p <- GGally::ggpairs(
     d0,
     title = paste0("Scatterplots + Pearson r: ", s),
+    columnLabels = sub("^H2S$", "H\u2082S", names(d0)),   # strip labels only
     upper = list(continuous = GGally::wrap(cor_panel, method = "pearson")),
     lower = list(continuous = GGally::wrap(scat_panel)),
     diag  = list(continuous = GGally::wrap(diag_panel))

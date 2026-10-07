@@ -124,7 +124,7 @@ p <- ggplot(diur, aes(hour, mean, color = daytype, fill = daytype)) +
   scale_fill_manual(values = c(Weekday = "#2166ac", Weekend = "#b2182b"),
                     guide = "none") +
   scale_x_continuous(breaks = seq(0, 24, 6)) +
-  labs(x = "Hour of day (local)", y = "Concentration (ppb)",
+  labs(x = "Hour of day (local)", y = "Mixing ratio (ppb)",
        caption = "Lines: hourly means at the La Casa stationary site; ribbons: interquartile range. Shaded band: the mobile campaign's weekday driving window (08:00-15:59).") +
   theme_bw(base_size = 12) +
   theme(legend.position = "bottom",

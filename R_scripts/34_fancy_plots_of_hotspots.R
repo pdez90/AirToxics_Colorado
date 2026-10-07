@@ -419,7 +419,7 @@ make_chem_fingerprint <- function(master_df) {
     dplyr::mutate(pollutants = tolower(pollutants)) %>%
     tidyr::separate_rows(pollutants, sep = "\\+") %>%
     dplyr::mutate(pollutants = dplyr::case_when(
-      pollutants == "h2s" ~ "H2S",
+      pollutants == "h2s" ~ "H\u2082S",   # display label
       pollutants == "hcn" ~ "HCN",
       pollutants == "trimethylbenzene" ~ "Trimethylbenzene",
       TRUE ~ stringr::str_to_title(pollutants)
@@ -470,10 +470,10 @@ make_source_panel_clean <- function(ratio_all_df, master_df) {
   # otherwise one persistent for trimethylbenzene is "Petroleum VOC"; otherwise
   # (benzene/toluene/xylene only) "BTEX-dominated". Size = max_n_days, the same
   # exceedance-day persistence that scales the circles in panel A.
-  class_levels <- c("Petroleum VOC", "Reduced species (H2S/HCN)", "BTEX-dominated")
-  class_cols   <- c("Petroleum VOC" = "#E69F00", "Reduced species (H2S/HCN)" = "#0072B2",
+  class_levels <- c("Petroleum VOC", "Reduced species (H\u2082S/HCN)", "BTEX-dominated")
+  class_cols   <- c("Petroleum VOC" = "#E69F00", "Reduced species (H\u2082S/HCN)" = "#0072B2",
                     "BTEX-dominated" = "#009E73")                 # Okabe-Ito, CVD-safe
-  class_shapes <- c("Petroleum VOC" = 21, "Reduced species (H2S/HCN)" = 24, "BTEX-dominated" = 22)
+  class_shapes <- c("Petroleum VOC" = 21, "Reduced species (H\u2082S/HCN)" = 24, "BTEX-dominated" = 22)
 
   ratio_plot_data <- ratio_all_df %>%
     dplyr::select(group_id, ratio, median) %>%
@@ -482,7 +482,7 @@ make_source_panel_clean <- function(ratio_all_df, master_df) {
     dplyr::mutate(
       pol = tolower(pollutants),
       chem_class = factor(dplyr::case_when(
-        stringr::str_detect(pol, "h2s|hcn")        ~ "Reduced species (H2S/HCN)",
+        stringr::str_detect(pol, "h2s|hcn")        ~ "Reduced species (H\u2082S/HCN)",
         stringr::str_detect(pol, "trimethylbenzene") ~ "Petroleum VOC",
         TRUE                                         ~ "BTEX-dominated"
       ), levels = class_levels)

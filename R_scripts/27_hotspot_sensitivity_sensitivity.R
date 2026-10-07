@@ -87,6 +87,13 @@ ratio_defs <- list(
 ratio_fresh_q <- 0.80
 ratio_aged_q  <- 0.20
 
+# Display name for titles only (column names and file names are unchanged)
+.disp_pol <- function(x) {
+  x <- gsub("_ppb$", "", x)
+  x <- sub("^Hydrogen_Sulfide$", "H\u2082S", x)
+  sub("^Hydrogen_Cyanide$", "HCN", x)
+}
+
 pollutants <- c(
   Benzene_ppb            = "benzene",
   Toluene_ppb            = "toluene",
@@ -441,7 +448,7 @@ for (pol_col in names(pollutants)) {
     )
     if (is.null(df_r)) next
 
-    title <- paste0(gsub("_ppb", "", pol_col), " source probability (", nm, " events)")
+    title <- paste0(.disp_pol(pol_col), " source probability (", nm, " events)")
     subtitle <- paste0("Events ≥", nm, " (thr=", signif(thr, 4), " ppb); n=", nrow(use_sf),
                        "; ray=", ray_len_m / 1000, " km; σ=", sigma_m, " m")
 
@@ -501,7 +508,7 @@ for (ray_len_m in ray_len_grid_m) {
     )
     if (is.null(df_r)) next
 
-    title <- paste0(gsub("_ppb", "", pol_focus), " sensitivity (p99 events)")
+    title <- paste0(.disp_pol(pol_focus), " sensitivity (p99 events)")
     subtitle <- paste0("ray=", ray_len_m / 1000, " km; σ=", sigma_m, " m; n=", nrow(use_sf),
                        "; thr(p99)=", signif(thr99, 4), " ppb")
 
@@ -539,7 +546,7 @@ sens_plots_fixed <- lapply(sens_plots, function(p) {
 
 sens_panel_fixed <- patchwork::wrap_plots(sens_plots_fixed, ncol = length(sigma_grid_m)) +
   patchwork::plot_annotation(
-    title = paste0("Sensitivity: ", gsub("_ppb", "", pol_focus), " (p99) — ray length × smoothing σ"),
+    title = paste0("Sensitivity: ", .disp_pol(pol_focus), " (p99) — ray length × smoothing σ"),
     theme = theme(plot.title = element_text(face = "bold", size = 16))
   )
 
@@ -626,7 +633,7 @@ for (pol_col in names(pollutants)) {
   if (!is.finite(rmax) || rmax <= 0) next
   norm_tbl <- norm_tbl %>% mutate(prob = pmin(.data$ratio / rmax, 1))
 
-  title <- paste0(gsub("_ppb", "", pol_col), " effort-normalized source probability")
+  title <- paste0(.disp_pol(pol_col), " effort-normalized source probability")
   subtitle <- paste0("Event/Opportunity; res=", grid_res_m, " m; ray=", ray_len_m / 1000,
                      " km; σ=", sigma_m, " m; p99 thr=", signif(thr, 4), " ppb")
 
@@ -1423,7 +1430,7 @@ run_steps_for_pollutant <- function(pol_col, pol_key) {
       subtitle = paste0("Top 5% events (>= ", signif(thr_hi, 3), " ppb). Downwind: alignment ≤ ",
                         downwind_thresh_deg, "° within ", max_dist_m/1000, " km."),
       x = "Wind alignment to facility (degrees; 0°=perfectly downwind)",
-      y = "Predicted concentration (ppb)",
+      y = "Predicted mixing ratio (ppb)",
       color = "Facility"
     )
 
@@ -1454,7 +1461,7 @@ run_steps_for_pollutant <- function(pol_col, pol_key) {
       title = paste0(pol_col, " — distance decay (predicted; downwind)"),
       subtitle = "Alignment fixed at 0°; ws fixed at median; x-axis log scale.",
       x = "Distance to facility (m; log scale)",
-      y = "Predicted concentration (ppb)",
+      y = "Predicted mixing ratio (ppb)",
       color = "Facility"
     )
 

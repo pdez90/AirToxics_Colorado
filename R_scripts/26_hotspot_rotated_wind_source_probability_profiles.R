@@ -478,7 +478,7 @@ plot_sourceprob <- function(obj) {
     toluene          = "(b) Toluene",
     trimethylbenzene = "(c) Trimethylbenzene",
     xylene           = "(d) Xylene",
-    h2s              = "(e) H2S",
+    h2s              = "(e) H\u2082S",
     hcn              = "(f) HCN"
   )
   title_txt <- if (!is.null(obj$pol_key) && obj$pol_key %in% names(disp_names)) {

@@ -334,7 +334,7 @@ p_means <- ggplot(plot_bins_long, aes(x = hour_of_day, y = weekday, fill = bin_m
   scale_fill_viridis_c(na.value = "grey90") +
   facet_wrap(~ pollutant, ncol = 1, scales = "free") +
   labs(
-    title = "La Casa mean concentration within mobile-used bins",
+    title = "La Casa mean mixing ratio within mobile-used bins",
     x = "Hour of day",
     y = NULL,
     fill = "Bin mean"
@@ -360,7 +360,7 @@ p_scale <- ggplot(sf_long, aes(x = pollutant, y = value, fill = mean_type)) +
   labs(
     title = "Scaling factors: overall vs mobile-like weighted means",
     x = NULL,
-    y = "Mean concentration",
+    y = "Mean mixing ratio",
     fill = NULL
   ) +
   theme_minimal(base_size = 12) +
@@ -425,7 +425,7 @@ p_means_single <- plot_bins_long[pollutant == "Toluene"] %>%
     title = "B. Diurnal pattern (La Casa, Toluene)",
     x = "Hour of day",
     y = NULL,
-    fill = "Conc."
+    fill = "Mixing\nratio"
   ) +
   theme_minimal(base_size = 11) +
   theme(panel.grid = element_blank())
