@@ -1,8 +1,8 @@
 # ==============================================================
 # CDPHE Mobile Air Toxics Explorer — Shiny app
 # Pages: 1 Raw data | 2 AirToxScreen vs Mobile | 3 Plumes |
-#        4 Hotspots | 5 Source probability | 6 Study context |
-#        7 Health screening | 8 Contact
+#        4 Hotspots | 5 Source association | 6 Methane |
+#        7 Study context | 8 Health screening | 9 Contact
 # Run prep_app_data.R first, then:  shiny::runApp("shiny_app")
 # ==============================================================
 
@@ -20,17 +20,39 @@ events  <- readRDS(file.path(DATA, "events.rds"))
 blocks  <- readRDS(file.path(DATA, "blocks.rds"))
 plumes  <- readRDS(file.path(DATA, "plumes.rds"))
 hs      <- readRDS(file.path(DATA, "hotspots.rds"))
-# Population-weighted means quoted on page 2. Computed from the block table
-# rather than typed in, so they follow the data through a re-run instead of
-# going stale (they were still the pre-exclusion 0.149 / 0.161 before this).
-.b_      <- sf::st_drop_geometry(blocks)
-.k_      <- is.finite(.b_$sBenzene_med_of_daily_med_scaled) &
-            is.finite(.b_$benzene_ppb_airtox) & is.finite(.b_$Population_airtox)
-.pw_mob  <- stats::weighted.mean(.b_$sBenzene_med_of_daily_med_scaled[.k_],
-                                 .b_$Population_airtox[.k_])
-.pw_ats  <- stats::weighted.mean(.b_$benzene_ppb_airtox[.k_],
-                                 .b_$Population_airtox[.k_])
-rm(.b_, .k_)
+# ---- two exposure statistics (2026-09-27) ---------------------------------
+# (2026-09-30) The paper's primary statistic is the mean of daily means (maps,
+# benzene risk, hazard screen); the median of daily medians is the SI's
+# supplementary analysis. Every
+# number quoted on pages 2 and 8 is computed here from the block table or read
+# from the written SI tables for the basis selected, never typed.
+BASIS_CHOICES <- c("Mean of daily means (the paper's primary statistic)"            = "mean",
+                   "Median of daily medians (supplementary analysis in the SI)"     = "med")
+BASIS_SHORT <- c(med = "median of daily medians", mean = "mean of daily means")
+.bdf <- sf::st_drop_geometry(blocks)
+MOB_COL <- c(med = "sBenzene_med_of_daily_med_scaled", mean = "sBenzene_mean_of_daily_mean_scaled")
+if (!MOB_COL[["mean"]] %in% names(.bdf)) {   # blocks.rds built before the basis toggle
+  warning("blocks.rds has no mean-of-daily-means column (the paper's primary statistic); ",
+          "the median column is shown in its place - rerun prep_app_data.R")
+  MOB_COL[["mean"]] <- MOB_COL[["med"]]
+}
+IUR_PPB <- c(lo = 5.75e-6, hi = 20.40e-6)   # IRIS benzene IUR per ppb (paper section 2.4)
+block_stats <- function(b) {
+  x <- .bdf[[MOB_COL[[b]]]]; a <- .bdf$benzene_ppb_airtox; p <- .bdf$Population_airtox
+  k <- is.finite(x) & is.finite(a) & is.finite(p) & a > 0
+  r <- x[k] / a[k]
+  list(n = sum(k), pop = sum(p[k]),
+       pw_mob = stats::weighted.mean(x[k], p[k]), pw_ats = stats::weighted.mean(a[k], p[k]),
+       cases_mob = sum(p[k] * x[k]) * IUR_PPB, cases_ats = sum(p[k] * a[k]) * IUR_PPB,
+       gt2 = sum(r > 2), gt5 = sum(r > 5), rmax = max(r), med_ratio = stats::median(r),
+       pct_below = 100 * mean(r < 1),
+       pearson = stats::cor(x[k], a[k]), spearman = stats::cor(x[k], a[k], method = "spearman"),
+       mob_rng = range(x[k]), ats_rng = range(a[k]))
+}
+BSTAT <- list(med = block_stats("med"), mean = block_stats("mean"))
+BSTAT$med$ratio <- BSTAT$med$pw_mob / BSTAT$med$pw_ats
+BSTAT$mean$ratio <- BSTAT$mean$pw_mob / BSTAT$mean$pw_ats
+.pw_mob <- BSTAT$mean$pw_mob; .pw_ats <- BSTAT$mean$pw_ats
 ctx     <- readRDS(file.path(DATA, "context.rds"))
 camp    <- if (file.exists(file.path(DATA, "campaign.rds")))
              readRDS(file.path(DATA, "campaign.rds")) else NULL
@@ -38,7 +60,64 @@ tracks  <- if (file.exists(file.path(DATA, "daily_tracks.rds")))
              readRDS(file.path(DATA, "daily_tracks.rds")) else NULL
 haz     <- if (file.exists(file.path(DATA, "hazard.rds")))
              readRDS(file.path(DATA, "hazard.rds")) else NULL
+ch4     <- if (file.exists(file.path(DATA, "methane.rds")))
+             readRDS(file.path(DATA, "methane.rds")) else NULL
 udays   <- if (!is.null(tracks)) sort(unique(tracks$day)) else NULL
+# hazard tables for one basis; the top level of hazard.rds is the primary basis
+haz_basis <- function(b) {
+  if (is.null(haz)) return(NULL)
+  if (!is.null(haz$bases) && b %in% names(haz$bases)) haz$bases[[b]] else haz
+}
+.hi_endo <- function(b) {
+  h <- haz_basis(b); if (is.null(h) || is.null(h$hi)) return(NA_real_)
+  as.numeric(h$hi$HI_pwmean[match("Endocrine", h$hi$target_organ)])
+}
+.hi_endo_max <- function(b) {
+  h <- haz_basis(b); if (is.null(h) || is.null(h$hi)) return(NA_real_)
+  as.numeric(h$hi$HI_maxblock[match("Endocrine", h$hi$target_organ)])
+}
+
+# One explanation, shown on both pages that carry the toggle.
+# Collapsible methods box for the sidebars: a one-line summary stays visible,
+# the detail opens on click (plain HTML <details>, no extra package).
+fold <- function(title, ...) tags$details(
+  style = "margin:4px 0 10px 0",
+  tags$summary(style = "cursor:pointer;font-weight:bold;font-size:13px;color:#2c3e50", title),
+  tags$div(style = "margin-top:4px", ...))
+
+BASIS_EXPLAIN <- tags$div(
+  style = paste0("background:#F4F6F8;border-left:5px solid #555;padding:9px 12px;",
+                 "margin:6px 0 12px 0;border-radius:4px;font-size:12.5px;line-height:1.5"),
+  tags$b("Which statistic should I use?"),
+  tags$p(style = "margin:6px 0 0 0",
+    "Each census block (or 500 m cell) was driven on a limited number of weekday ",
+    "daytimes. Both statistics first summarize every sampling day, so a day with ",
+    "many measurements does not outweigh a day with few."),
+  tags$ul(style = "margin:4px 0 0 0;padding-left:18px",
+    tags$li(tags$b("Mean of daily means"), " (the paper's primary statistic) keeps the ",
+            "high days and plumes. It is the statistic a lifetime-average risk estimate, a ",
+            "chronic reference concentration and AirToxScreen's annual-average model ",
+            "presume, but with few visits per block it depends strongly on which days ",
+            "were sampled."),
+    tags$li(tags$b("Median of daily medians"), " (a supplementary analysis in the SI) ",
+            "takes the typical day. It is robust to the one or two unusually high days a ",
+            "block may happen to have been visited on, and to short plume spikes, but by ",
+            "construction it discards the episodic upper tail.")),
+  tags$p(style = "margin:6px 0 0 0",
+    "The paper leads with the mean and reports the median as a supplementary analysis. ",
+    sprintf(paste0("For benzene the population-weighted mobile concentration is %.3f ppb ",
+                   "on the median basis and %.3f ppb on the mean basis, against %.3f ppb ",
+                   "from AirToxScreen (ratios %.2f and %.2f; %d and %d blocks above twice ",
+                   "AirToxScreen)."),
+            BSTAT$med$pw_mob, BSTAT$mean$pw_mob, BSTAT$med$pw_ats,
+            BSTAT$med$ratio, BSTAT$mean$ratio, BSTAT$med$gt2, BSTAT$mean$gt2),
+    if (is.finite(.hi_endo("med")) && is.finite(.hi_endo("mean")))
+      sprintf(paste0(" The community-average endocrine (HCN) hazard index is %.2f on the ",
+                     "median basis and %.2f on the mean basis, so whether it exceeds 1 depends ",
+                     "on the statistic; in the most-exposed block it exceeds 1 on both (%.2f and %.2f)."),
+              .hi_endo("med"), .hi_endo("mean"), .hi_endo_max("med"), .hi_endo_max("mean")),
+    " Conclusions that hold on both are robust to this choice; those that hold on only one ",
+    "should be read as conditional on it."))
 
 # ---- S7.4 temporal-scaling scenarios --------------------------------------
 # Mobile sampling is weekday-daytime, so a campaign mean is not a 24-h mean.
@@ -58,28 +137,52 @@ SCEN_CHOICES <- if (!is.null(haz) && !is.null(haz$scen)) {
 } else stats::setNames("A_none", SCEN_LAB[["A_none"]])
 
 # The measured-factor range and the break-even factors are quoted in the
-# sidebar text. Both are read from the written SI tables at load, so the
-# sentence follows a re-run instead of going stale.
-.meas <- if (!is.null(haz) && !is.null(haz$scen_poll))
-           haz$scen_poll[grepl("^La Casa", factor_source), unique(factor)] else numeric(0)
-.be   <- if (!is.null(haz) && !is.null(haz$breakeven)) haz$breakeven else NULL
-.bget <- function(org, col) {
-  if (is.null(.be) || !org %in% .be$organ) return(NA_real_)
-  as.numeric(.be[[col]][match(org, .be$organ)])
+# sidebar text. Both are read from the written SI tables for the selected
+# basis, so the sentence follows a re-run and the toggle instead of going stale.
+# Basis-aware: an index BELOW 1 unscaled reaches 1 at f* and is carried across
+# by any factor >= f*; an index ABOVE 1 falls to 1 at f* and is carried across
+# by any factor <= f*.
+scale_window_txt <- function(b) {
+  h <- haz_basis(b)
+  if (is.null(h) || is.null(h$scen_poll) || is.null(h$breakeven)) return(NULL)
+  meas <- h$scen_poll[grepl("^La Casa", factor_source), unique(factor)]
+  be <- h$breakeven
+  if (!length(meas)) return(NULL)
+  bget <- function(org, col) if (!org %in% be$organ) NA_real_ else as.numeric(be[[col]][match(org, be$organ)])
+  clause <- function(org, species) {
+    f <- bget(org, "f_breakeven_pwmean"); h0 <- bget(org, "HI_pwmean_unscaled")
+    if (!is.finite(f) || !is.finite(h0)) return(NULL)
+    if (h0 < 1) sprintf("%s would need a 24-h factor of %.2f or more before the community-average %s hazard index reached 1", species, f, tolower(org))
+    else        sprintf("%s would need a 24-h factor below %.2f before the community-average %s hazard index fell to 1", species, f, tolower(org))
+  }
+  cl <- c(clause("Respiratory", "H2S"), clause("Endocrine", "HCN"))
+  fs <- c(bget("Respiratory", "f_breakeven_pwmean"), bget("Endocrine", "f_breakeven_pwmean"))
+  h0 <- c(bget("Respiratory", "HI_pwmean_unscaled"), bget("Endocrine", "HI_pwmean_unscaled"))
+  reaches <- is.finite(fs) & is.finite(h0) & ifelse(h0 < 1, max(meas) >= fs, min(meas) <= fs)
+  paste0("How wrong would a borrowed factor have to be to matter? On the ", BASIS_SHORT[[b]],
+         ", ", paste(cl, collapse = ", and "),
+         sprintf(". The measured aromatic factors span %.2f to %.2f", min(meas), max(meas)),
+         if (any(reaches)) paste0("; borrowing any of them would carry the ",
+                                  paste(c("respiratory", "endocrine")[reaches], collapse = " and "),
+                                  " index across 1, so that community-level conclusion depends on the scaling assumption for a species with no measured factor.")
+         else ", which would not carry either index across 1, so no community-level conclusion moves between scenarios A and D on this statistic.")
 }
-SCALE_WINDOW_TXT <- if (length(.meas) && !is.null(.be)) sprintf(paste0(
-  "How wrong would a borrowed factor have to be to matter? H2S would need a ",
-  "24-h factor of %.2f before the community-average respiratory hazard index ",
-  "reached 1, and HCN a factor below %.2f before the endocrine index fell to ",
-  "1. The measured aromatic factors span %.2f to %.2f, comfortably inside ",
-  "that window - which is why no conclusion on this page moves between ",
-  "scenarios A and D."),
-  .bget("Respiratory", "f_breakeven_pwmean"), .bget("Endocrine", "f_breakeven_pwmean"),
-  min(.meas), max(.meas)) else NULL
 
 POLLS <- sort(unique(cells$pollutant))
 unit_of <- function(p) if (p == "Methane") "ppm" else "ppb"
 WWTP_LL <- c(39.81000447, -104.95562510)
+# Robert W. Hite Treatment Facility (Metro Water Recovery), CDPHE AIRS ID 001-0097.
+# CDPHE's public records portal has no per-facility deep link, so the app links the
+# portal and states the search to run; one recent APEN (docid 51122967) is linked directly.
+HITE_AIRS <- "001-0097"
+HITE_APEN_SEARCH_URL <- "https://oitco.hylandcloud.com/CDPHERMPublicAccess/index.html"
+HITE_APEN_LATEST_URL <- "https://oitco.hylandcloud.com/cdphermpop/docpop/docpop.aspx?docid=51122967"
+HITE_POPUP <- sprintf(paste0(
+  "<b>Robert W. Hite Treatment Facility</b><br>Metro Water Recovery; CDPHE AIRS ID %s<br>",
+  "<a href=\"%s\" target=\"_blank\">CDPHE APEN records</a> ",
+  "(search type &ldquo;CDPHERM Air Stationary Source APENs&rdquo;, AIRS ID %s)<br>",
+  "<a href=\"%s\" target=\"_blank\">APEN received 12 Aug 2025 (permit 25AD0306)</a>"),
+  HITE_AIRS, HITE_APEN_SEARCH_URL, HITE_AIRS, HITE_APEN_LATEST_URL)
 
 # ---- shared overlay helper --------------------------------------
 # Context features are drawn as STARS (SVG icons) so they are visually
@@ -102,7 +205,8 @@ add_context <- function(map, layers) {
       group = "Covered facilities")
   if ("Wastewater treatment" %in% layers)
     map <- addMarkers(map, data = k[k$type == "Wastewater treatment", ],
-      ~lon, ~lat, icon = star_icon("green", 24), label = ~name, group = "WWTFs")
+      ~lon, ~lat, icon = star_icon("green", 24), label = ~name, group = "WWTFs",
+      popup = ~ifelse(grepl("Hite", name), HITE_POPUP, name))
   if ("Woodshop" %in% layers)
     map <- addMarkers(map, data = k[k$type == "Woodshop", ],
       ~lon, ~lat, icon = star_icon("purple", 21), label = ~name, group = "Woodshop")
@@ -145,10 +249,150 @@ CTX_COLS <- c("Covered facilities" = "red", "Wastewater treatment" = "green",
 # Esri's light grey canvas needs no key, is equally recessive under a
 # sequential ramp, and keeps the data the darkest thing on the page. The
 # fallback keeps the app running on any leaflet build that lacks the entry.
-BASE_PROVIDER <- if ("Esri.WorldGrayCanvas" %in% names(providers))
-                   "Esri.WorldGrayCanvas" else "CartoDB.Positron"
-base_map <- function() leaflet() |> addProviderTiles(BASE_PROVIDER) |>
+# Three keyless basemaps behind a switcher (top right), so a tile service that
+# changes its terms cannot blank or watermark the maps: Esri light grey canvas
+# (default), OpenStreetMap, and CARTO Positron (basemaps.cartocdn.com). None
+# needs an API key; entries missing from the installed leaflet.providers are
+# dropped.
+BASEMAPS <- c("Grey (Esri)" = "Esri.WorldGrayCanvas",
+              "OpenStreetMap" = "OpenStreetMap.Mapnik",
+              "Light (CARTO)" = "CartoDB.Positron")
+BASEMAPS <- BASEMAPS[BASEMAPS %in% names(providers)]
+add_basemaps <- function(m) {
+  for (nm in names(BASEMAPS)) m <- addProviderTiles(m, BASEMAPS[[nm]], group = nm)
+  addLayersControl(m, baseGroups = names(BASEMAPS), position = "topright",
+                   options = layersControlOptions(collapsed = TRUE))
+}
+base_map <- function() leaflet() |> add_basemaps() |>
   setView(-104.95, 39.82, zoom = 11)
+
+
+# ---- plume emission-rate caveats ------------------------------------------
+# The plume page reports inverse Gaussian-plume emission rates. The H2S data
+# behind them ARE quality assured, so this is not a data caveat - it is an
+# interpretation caveat about the inversion, and it is deliberately styled
+# differently from the amber "not QA/QC'd" callout on the methane page so the
+# two are not conflated. Every number that can be derived from plumes.rds is
+# derived from it here rather than typed, so the text cannot drift from the
+# data the page is drawing. The four values that cannot be (the candidate
+# count, the traverse-mean re-inversion, the minimum detectable rate and the
+# scenario range) are quoted from the paper and SI, with the section given:
+#   37 candidates / 4 retained ....... paper section 3.6, SI S6.3 (Fig. S6.1)
+#   858 t/yr on traverse means ....... SI S6.5.2
+#   Qmin 358-701 t/yr, peak/MDL ...... SI S6.6
+#   scenario means 420-2,223 t/yr .... paper section 3.6, SI S6.5.2
+#   10-15 transects for a mean ....... SI S6.4
+#   HRRR vs station wind direction ... paper section 3.8 (median 27 deg, p95 128 deg)
+#   refinery bearing 2-17 deg ......... paper section 3.6, SI S6.8 (P11)
+H2S_MDL_PPB <- 5   # SI Table S1.2: audited Picarro G2204 MDL used throughout S6.6
+EMIS_CAVEAT <- local({
+  r  <- sort(plumes$rate_tpy)
+  mn <- mean(plumes$rate_tpy)
+  dl <- range(plumes$dH2S_ppb / H2S_MDL_PPB)
+  li <- function(...) tags$li(style = "margin-bottom:6px", ...)
+  tags$div(
+    style = paste0("background:#EEF3F8;border-left:5px solid #2166AC;",
+                   "padding:10px 14px;margin:0 0 12px 0;border-radius:4px;",
+                   "font-size:13px;line-height:1.55"),
+    tags$b("How to read these emission rates."),
+    sprintf(" Each rate is an inverse Gaussian-plume estimate from a single
+             traverse. The %s retained intercepts give %s and %s metric tons/yr,
+             and their mean of %s metric tons/yr should not be read as the
+             facility's average emission rate. Six things limit it:",
+            if (nrow(plumes) <= 10)
+              c("one", "two", "three", "four", "five", "six", "seven", "eight",
+                "nine", "ten")[nrow(plumes)] else format(nrow(plumes)),
+            paste(format(r[-length(r)], big.mark = ","), collapse = ", "),
+            format(r[length(r)], big.mark = ","),
+            format(round(mn), big.mark = ",")),
+    tags$ul(style = "margin:8px 0 0 0;padding-left:20px",
+      li(tags$b("Four intercepts, not a sample. "),
+         "37 candidate events were segmented and 4 survived the minimum-observation,
+          shape, wind-consistency and stability filters (SI S6.3, Figure S6.1).
+          Controlled-release work indicates that of order ten
+          to fifteen transects are needed before the mean of transect-based
+          estimates approaches the true release rate (SI S6.4), so four
+          realizations cannot establish a long-run rate for any source."),
+      li(tags$b("Censored from below. "),
+         sprintf("At these distances, wind speeds and stability classes the
+                  minimum detectable rate was 358-701 metric tons/yr, and the
+                  observed peaks exceeded the %g ppb detection limit by only
+                  %.1f-%.1fx: three of the four were detected essentially at the
+                  threshold. Smaller continuous releases - including rates well
+                  above zero - would not have produced a detectable enhancement
+                  at all. These are therefore the largest releases the campaign
+                  was able to resolve, not typical operation (SI S6.6).",
+                 H2S_MDL_PPB, dl[1], dl[2])),
+      li(tags$b("Peak versus within-plume mean: 17%. "),
+         sprintf("Re-inverting on the mean of each traverse's in-plume points
+                  instead of its peak moves the four-intercept mean from %s to
+                  858 metric tons/yr. Those points are flagged as in-plume and so
+                  lie near the peak by construction, which makes this a bound on
+                  the choice of statistic rather than on averaging time.",
+                 format(round(mn), big.mark = ","))),
+      li(tags$b("The averaging-time mismatch is unresolved. "),
+         "The traverses last 30-172 s, while the Pasquill-Gifford dispersion
+          coefficients describe a plume averaged over of order ten minutes. This
+          is potentially the leading uncertainty, but it cannot be varied on its
+          own: Q is divided by ",
+         # One HTML() node per formula: htmltools puts each child of a tag on its
+         # own line, and the browser collapses that newline to a space, so a
+         # formula assembled from separate tags$sup()/tags$sub() children renders
+         # as "exp(-y 2 /2 sigma y 2 )".
+         HTML("exp(&minus;<i>y</i><sup>2</sup>/2&sigma;<sub>y</sub><sup>2</sup>),"),
+         " and at the measured angular offsets the receptor already sits off the
+          plume axis, so narrowing ", HTML("&sigma;<sub>y</sub>"),
+         " toward an instantaneous width drives that divisor toward zero and
+          inflates the estimate rather than reducing it. A crosswind-integrated
+          or instantaneous-width treatment should not be assumed to collapse
+          these numbers to tens of metric tons/yr (SI S6.5.2)."),
+      li(tags$b("Continuous operation is assumed. "),
+         "Each value is the constant release rate that would have produced the
+          observed peak enhancement, annualized. It is not a measured emission
+          total and carries no information about duty cycle or duration."),
+      li(tags$b("Attribution is not unique. "),
+         "Several potential emitters lie close together. From the four intercept
+          points the Suncor refinery lies within 2-17 degrees of the same bearing
+          as the wastewater facility (0.8 km along it, between the van and the
+          facility, for the 16 November 2023 plume), so the wind geometry is
+          consistent with a wastewater origin but does not distinguish the
+          facility from the refinery. The chemical fingerprint (no co-located
+          aromatics or HCN) could not be evaluated - none of the four plume
+          windows holds a usable aromatic or HCN measurement - and the methane
+          cross-check was inconclusive. The HRRR and nearest-station wind
+          directions also differ by a median of 27 degrees (95th percentile 128
+          degrees; paper section 3.8). The observations are therefore consistent
+          with a wastewater-facility source but do not demonstrate that the plumes
+          originated there, and the rates above are computed under the
+          wastewater-facility geometry: attributing a plume to the refinery would
+          change its distance and crosswind offset and require a new inversion
+          (paper section 3.6, SI S6.8, Table S6.2).")),
+    tags$div(style = "margin-top:8px",
+      "Structured sensitivity scenarios place the four-intercept mean anywhere
+       between 420 and 2,223 metric tons/yr (paper section 3.6, SI S6.5.2). The
+       estimates are best read as motivating targeted follow-up measurement
+       nearer the fence line, not as a compliance or regulatory quantification."))
+})
+
+# ---- methane caveat -------------------------------------------------------
+# The methane channel is NOT in CDPHE's QA/QC'd public repository and was not
+# routinely calibrated. The paper confines methane to secondary analyses for
+# exactly that reason. A caveat that only appears on the Contact page is a
+# caveat nobody reads, so it is rendered at the top of the methane page itself.
+CH4_CAVEAT <- tags$div(
+  style = paste0("background:#FFF4E5;border-left:5px solid #D94801;",
+                 "padding:10px 14px;margin:0 0 12px 0;border-radius:4px;",
+                 "font-size:13px;line-height:1.55"),
+  tags$b("These methane data are not QA/QC'd."),
+  " The Picarro methane channel is not part of CDPHE's quality-assured public ",
+  "air-toxics repository and was not routinely calibrated over the campaign. ",
+  "Methane is therefore used here only in ", tags$b("relative"), " terms: where it ",
+  "is elevated against its own local background, and which toxics hotspots it ",
+  "coincides with. The absolute mixing ratios shown should not be read as ",
+  "calibrated concentrations, compared against other studies, or used for any ",
+  "regulatory purpose. Everything on this page is a secondary analysis ",
+  "(paper section 3.7, SI section S8), processed with the same delay, cadence, ",
+  "background and hotspot procedures as the quality-assured species.")
 
 # ================= UI =================
 ui <- navbarPage(
@@ -160,8 +404,17 @@ ui <- navbarPage(
       sidebarPanel(width = 3,
         selectInput("p1_poll", "Pollutant", POLLS, selected = "Benzene"),
         radioButtons("p1_stat", "Cell statistic",
-                     c("Median" = "median", "95th percentile" = "p95",
+                     c("Mean of daily means (primary)" = "dmeanmean",
+                       "Median of daily medians" = "dmedmed",
+                       "Median of all measurements" = "median",
+                       "95th percentile" = "p95",
                        "Maximum" = "max", "Number of measurements" = "n")),
+        helpText("The two day-based statistics first summarize each sampling ",
+                 "day in the cell and then take the median or the mean across ",
+                 "days - the two exposure statistics used in the paper (see ",
+                 "page 2 for which to use). These are delay-corrected values ",
+                 "before background correction, so they are not the ",
+                 "background-corrected surfaces of Figure 2."),
         checkboxGroupInput("p1_ctx", "Show context layers", CTX_CHOICES,
                            selected = c("Covered facilities", "Wastewater treatment",
                                         "Refueling stations")),
@@ -175,6 +428,7 @@ ui <- navbarPage(
                    "Terminal route (points thinned for display).")),
         h4("Campaign summary"), tableOutput("p1_summary"),
         h4("Sampling coverage"), htmlOutput("p1_coverage"),
+        fold("Platform, instruments and data processing",
         h4("Platform and instruments"),
         helpText("Measurements were made by two CDPHE mobile laboratories: ",
                  "the Community Air Toxics (CAT) lab and its duplicate, the ",
@@ -184,9 +438,9 @@ ui <- navbarPage(
                  "Each carries a Vocus Eiger PTR-ToF-MS (benzene, toluene, ",
                  "xylene, trimethylbenzene), a Vocus CI-ToF-MS (HCN), and a ",
                  "Picarro G2204 cavity ring-down spectrometer (H2S and ",
-                 "methane). The Eiger acquires once per second; the CI-ToF-MS ",
-                 "acquires HCN every 2 s and the Picarro H2S and methane ",
-                 "every 5 s."),
+                 "methane). Nominal acquisition cadences are 1 s for the Eiger, ",
+                 "2 s for HCN on the CI-ToF-MS and 5 s for H2S and methane on ",
+                 "the Picarro."),
         helpText("Because sampled air travels through ~3 m of inlet tubing ",
                  "and instrument response times differ, each measurement was ",
                  "shifted back in time by an instrument- and vehicle-specific ",
@@ -195,15 +449,24 @@ ui <- navbarPage(
                  "so every value aligns with the GPS position where the ",
                  "sampled air entered the inlet. All data shown are ",
                  "delay-corrected."),
-        helpText("CDPHE delivers every channel on a common one-second grid, ",
-                 "carrying the most recent reading forward between the ",
-                 "acquisitions of the two slower instruments. To avoid ",
-                 "treating those repeats as independent measurements, HCN, ",
-                 "H2S and methane are averaged to their native acquisition ",
-                 "cadence after the delay correction; the aromatics are kept ",
-                 "at 1 Hz. Plume detection (page 3) is the one exception and ",
-                 "uses the as-delivered H2S signal, because the inversion ",
-                 "depends on sub-five-second peak shape."),
+        helpText("CDPHE delivers every channel on a nominal one-second grid, ",
+                 "although consecutive rows are 1-2 s apart depending on the ",
+                 "laboratory and year. H2S and HCN are reported in whole ppb, ",
+                 "and a reading from the slower instruments often repeats over ",
+                 "several seconds, but individual acquisitions cannot be ",
+                 "identified in the delivered files. After the delay ",
+                 "correction, HCN is therefore averaged within fixed 2-s bins ",
+                 "and H2S and methane within fixed 5-s bins of the delivery ",
+                 "clock, and each bin contributes ONE value (placed at its ",
+                 "middle delivered second) to every map, statistic and health ",
+                 "estimate, so repeated seconds are not counted as separate ",
+                 "measurements. This smooths toward the instruments' cadence ",
+                 "rather than reconstructing individual acquisitions; the ",
+                 "aromatics are not averaged. Two analyses keep one-second ",
+                 "rows: correlations of H2S and HCN with the aromatics, which ",
+                 "need time-matched rows (the bin mean is repeated on each ",
+                 "delivered second there), and plume detection (page 3), which ",
+                 "uses the as-delivered H2S series."),
         helpText("Measurements taken within 300 m of CDPHE's ATOPs ",
                  "headquarters in Wheat Ridge are excluded throughout. The ",
                  "vehicles are garaged there and run start-up and shut-down ",
@@ -217,51 +480,47 @@ ui <- navbarPage(
         tags$p(tags$a(href = "https://cdphe.colorado.gov/apcd/monitoring",
                       target = "_blank",
                       "More on CDPHE air quality monitoring")),
-        helpText("Cells are the 500 m analysis grid; values summarize every ",
-                 "measurement in each cell at the native cadence described ",
-                 "above. % below MDL is based on CDPHE instrument quality ",
-                 "flags.")),
+        helpText("Cells are the 500 m analysis grid; values summarize the ",
+                 "delay-corrected measurements in each cell after the averaging ",
+                 "described above. Negative values and values below the ",
+                 "detection limit are kept. % below MDL compares each value ",
+                 "with CDPHE's quarterly audit method detection limit for that ",
+                 "laboratory and quarter (SI Table S1.2).")
+        )),
       mainPanel(width = 9, leafletOutput("p1_map", height = 640)))),
 
   tabPanel("2. AirToxScreen vs Mobile",
     sidebarLayout(
       sidebarPanel(width = 3,
+        radioButtons("p2_basis", "Block statistic (mobile data)", BASIS_CHOICES),
         radioButtons("p2_layer", "Map layer",
                      c("AirToxScreen benzene" = "ats",
                        "Mobile benzene (scaled)" = "mob",
                        "Ratio mobile / AirToxScreen" = "ratio")),
         h4(paste0("Across ", format(nrow(blocks), big.mark = ","),
                   " common blocks")), tableOutput("p2_stats"),
+        fold("How the comparison is built and which statistic to use",
         h4("How the mobile surface was built"),
-        helpText("Every 1-s benzene measurement is assigned to its census ",
-                 "block. Within a block, each sampling day is summarized by ",
-                 "its median, and the block estimate is the median of those ",
-                 "daily medians - a metric robust to brief plume spikes. A ",
-                 "rolling-window background computed from the mobile data ",
-                 "itself separates the regional background from local ",
-                 "enhancements. Because driving occurred mainly on weekday ",
-                 "daytimes, block values are scaled to 24-h-equivalent ",
-                 "concentrations using the diurnal pattern measured at the ",
-                 "La Casa stationary monitoring site. EPA AirToxScreen ",
-                 "values are modeled annual-average ambient benzene for the ",
-                 "same blocks; the comparison uses only the ",
-                 format(nrow(blocks), big.mark = ","), " blocks ",
-                 "covered by both datasets."),
+        helpText("Every one-second benzene measurement is assigned to its ",
+                 "census block. A rolling-window background computed from the ",
+                 "mobile data itself separates the regional background from ",
+                 "local enhancements. Within a block, each sampling day is ",
+                 "summarized by its median (or mean), and the block value is ",
+                 "the median of those daily medians (or the mean of the daily ",
+                 "means) - the toggle above. Because driving occurred mainly on ",
+                 "weekday daytimes, block values are scaled to 24-h-equivalent ",
+                 "concentrations using the diurnal pattern measured at the La ",
+                 "Casa stationary site (benzene factor from the summer-2024 ",
+                 "Vocus 2R deployment only; toluene and xylene from all three ",
+                 "deployments). EPA AirToxScreen values are modeled 2020 ",
+                 "annual-average ambient benzene for the same blocks; the ",
+                 "comparison uses only the ",
+                 format(nrow(blocks), big.mark = ","), " blocks covered by ",
+                 "both datasets."),
         h4("What the comparison shows"),
-        helpText("The two datasets agree closely in aggregate - ",
-                 sprintf("population-weighted mean benzene of %.3f ppb from the ",
-                         .pw_mob),
-                 sprintf("mobile data against %.3f ppb from AirToxScreen, an ", .pw_ats),
-                 sprintf("aggregate cancer-risk ratio of %.2f - while disagreeing ",
-                         .pw_mob / .pw_ats),
-                 "almost completely block by block (Pearson r = 0.00). The ",
-                 "screening model captures the regional total but misplaces ",
-                 "it: modelled values span only a 2.5-fold range across the ",
-                 "domain, whereas the mobile surface spans more than an order ",
-                 "of magnitude. Because the block metric is a median of daily ",
-                 "medians, it deliberately suppresses episodic plumes; ",
-                 "metrics weighted toward the upper tail would place ",
-                 "mobile-derived exposure above AirToxScreen overall.")),
+        uiOutput("p2_text"),
+        BASIS_EXPLAIN
+        )),
       mainPanel(width = 9, leafletOutput("p2_map", height = 380),
                 plotOutput("p2_scatter", height = 420)))),
 
@@ -283,8 +542,30 @@ ui <- navbarPage(
                  "and Pasquill-Gifford stability, assuming continuous ",
                  "operation. Winds and boundary-layer depth come from NOAA's ",
                  "3-km hourly HRRR model at the measurement times."),
-        tableOutput("p3_table")),
-      mainPanel(width = 9, leafletOutput("p3_map", height = 640)))),
+        tableOutput("p3_table"),
+        helpText(sprintf(paste0("Peak/MDL is the observed peak enhancement ",
+                                "divided by the %g ppb H2S detection limit; a ",
+                                "value near 1 means the plume was detected ",
+                                "essentially at the threshold."),
+                         H2S_MDL_PPB)),
+        h4("Facility emission notices"),
+        # One HTML() string: separate helpText() children would each render on
+        # their own line and leave stray spaces before ")" and ":".
+        helpText(HTML(sprintf(paste0(
+          "The wastewater treatment facility is Metro Water Recovery's Robert W. ",
+          "Hite Treatment Facility (CDPHE AIRS ID %s). Its Air Pollutant Emission ",
+          "Notices (APENs), which list the emission points and the emissions the ",
+          "operator reports to CDPHE, are public in ",
+          "<a href=\"%s\" target=\"_blank\">CDPHE's records portal</a>: choose ",
+          "the search type &ldquo;CDPHERM Air Stationary Source APENs&rdquo; and ",
+          "enter AIRS ID %s. The facility has filed many APENs (one per emission ",
+          "point and revision); <a href=\"%s\" target=\"_blank\">this one</a> ",
+          "was received on 12 August 2025. Click the facility star on the map for ",
+          "the same links."),
+          HITE_AIRS, HITE_APEN_SEARCH_URL, HITE_AIRS, HITE_APEN_LATEST_URL)))),
+      mainPanel(width = 9,
+        EMIS_CAVEAT,
+        leafletOutput("p3_map", height = 640)))),
 
   tabPanel("4. Hotspots",
     sidebarLayout(
@@ -297,6 +578,7 @@ ui <- navbarPage(
         checkboxGroupInput("p4_ctx", "Context layers", CTX_CHOICES,
                            selected = c("Covered facilities", "Wastewater treatment",
                                         "Woodshop", "Refueling stations")),
+        fold("How hotspots were identified",
         h4("How hotspots were identified"),
         helpText("For each pollutant, readings above its campaign 99th ",
                  "percentile were clustered on their geographic coordinates ",
@@ -314,8 +596,12 @@ ui <- navbarPage(
                  nrow(hs$groups), " groups ",
                  "persistent in three or more pollutants are the ",
                  "multi-pollutant hotspots mapped here. Methane, measured ",
-                 "alongside H2S, is analyzed the same way and overlaid as a ",
-                 "co-elevation class on each group."),
+                 "alongside H2S, is run through the same event-selection and ",
+                 "clustering steps but with a separate, methane-specific ",
+                 "persistence screen and minimum-cluster-size setting (SI S8), ",
+                 "so its hotspots are not strictly comparable; it is overlaid as a ",
+                 "co-elevation class on each group.")
+        ),
         helpText("Group markers scale with persistence; click for pollutant ",
                  "make-up, exceedance-days, nearest TRI facility, and methane ",
                  "co-elevation class.")),
@@ -323,7 +609,7 @@ ui <- navbarPage(
                 h4("Group composition and candidate sources"),
                 DT::DTOutput("p4_table")))),
 
-  tabPanel("5. Source probability",
+  tabPanel("5. Source association",
     sidebarLayout(
       sidebarPanel(width = 3,
         selectInput("p5_poll", "Pollutant", unique(events$pollutant),
@@ -334,6 +620,7 @@ ui <- navbarPage(
         selectInput("p5_sigma", "Smoothing sigma (m)",
                     c(500, 900, 1200, 1800), selected = 900),
         actionButton("p5_go", "Compute surface", class = "btn-primary"),
+        fold("How the surface is created",
         h4("How the surface is created"),
         helpText("A wind back-projection: every measurement above the chosen ",
                  "percentile threshold is an exceedance event. From each ",
@@ -341,15 +628,62 @@ ui <- navbarPage(
                  "came from), weighted by the enhancement magnitude and ",
                  "decaying with distance. Weights accumulate on a 250-m grid ",
                  "and are smoothed with a Gaussian kernel; the surface is ",
-                 "scaled to its maximum. Bright areas are the places most ",
-                 "often upwind of high readings - probable source regions. ",
+                 "scaled to its maximum, giving a ", tags$b("relative source-association index"),
+                 " (0-1). It is not a calibrated probability and does not ",
+                 "attribute readings to a unique source: bright areas are the ",
+                 "places most often upwind of high readings - candidate source ",
+                 "regions, which several facilities along the same bearing can share. ",
                  "Winds are taken from the nearest EPA AQS meteorological ",
                  "station. Defaults: p99 threshold, 15 km rays, 900 m ",
-                 "smoothing."),
+                 "smoothing.")
+        ),
         textOutput("p5_info")),
       mainPanel(width = 9, leafletOutput("p5_map", height = 640)))),
 
-  tabPanel("6. Study context",
+  tabPanel("6. Methane",
+    sidebarLayout(
+      sidebarPanel(width = 3,
+        radioButtons("pch4_stat", "Cell statistic",
+                     c("Median" = "median", "95th percentile" = "p95",
+                       "Maximum" = "max", "Number of measurements" = "n")),
+        checkboxGroupInput("pch4_layers", "Methane hotspot overlays",
+                           c("Methane clusters (all)", "Persistent methane clusters"),
+                           selected = "Persistent methane clusters"),
+        checkboxGroupInput("pch4_ctx", "Show context layers", CTX_CHOICES,
+                           selected = c("Covered facilities", "Wastewater treatment")),
+        fold("Methane hotspot screen: method and caveats",
+        h4("Methane hotspot screen"), htmlOutput("pch4_summary"),
+        helpText("Methane was recorded by the same Picarro G2204 that measures ",
+                 "H2S, at a 5 s acquisition cadence, and is processed through ",
+                 "the same chain as H2S: inlet-delay correction, one value per ",
+                 "5-s bin, and the rolling local background of SI section S4.1. ",
+                 "Its hotspot screen differs from the one used for the ",
+                 "quality-assured species on page 4 (DBSCAN minPts = 5 and the ",
+                 "persistence rule below; paper section 3.7)."),
+        helpText("Clusters are built from observations at or above the ",
+                 "campaign 99th percentile, grouped spatially; a cluster is ",
+                 "persistent when it carries more than 10% of all ",
+                 "high-methane events and recurs on more than 10% of the days ",
+                 "carrying them. The hotspot table below uses a separate, ",
+                 "lower reference - the share of observations at or above the ",
+                 "95th percentile - because it measures co-elevation at a ",
+                 "toxics hotspot rather than isolating a methane source. ",
+                 "Because the channel is uncalibrated, read the enhancement ",
+                 "above local background rather than the absolute value."),
+        helpText("The table shows, for each multi-pollutant toxics hotspot on ",
+                 "page 4, whether methane is co-elevated there. That contrast ",
+                 "is the reason methane is carried at all: it separates ",
+                 "gas-associated hotspots from combustion- and ",
+                 "evaporative-type ones, which the toxics alone do not.")
+        )),
+      mainPanel(width = 9,
+        CH4_CAVEAT,
+        leafletOutput("pch4_map", height = 560),
+        h4("Methane at the multi-pollutant toxics hotspots"),
+        DT::DTOutput("pch4_table"),
+        htmlOutput("pch4_legend")))),
+
+  tabPanel("7. Study context",
     sidebarLayout(
       sidebarPanel(width = 3,
         checkboxGroupInput("p6_ctx", "Layers", CTX_CHOICES, selected = CTX_CHOICES),
@@ -364,32 +698,40 @@ ui <- navbarPage(
                  "public inventory of industrial chemical releases.")),
       mainPanel(width = 9, leafletOutput("p6_map", height = 640)))),
 
-  tabPanel("7. Health screening",
+  tabPanel("8. Health screening",
     sidebarLayout(
       sidebarPanel(width = 3,
+        radioButtons("p7_basis", "Block / cell statistic", BASIS_CHOICES),
         radioButtons("p7_scen", "Temporal scaling of concentrations",
                      choices = SCEN_CHOICES, selected = SCEN_CHOICES[[1]]),
+        fold("Temporal scaling scenarios: what A-D mean",
         helpText("Sampling ran on weekday daytimes, so a campaign mean is not ",
                  "a 24-hour mean. The La Casa stationary monitor measures that ",
-                 "gap directly - but only for benzene, toluene and the C8 ",
-                 "aromatics. There is no La Casa channel for ",
-                 "1,2,4-trimethylbenzene, and ", tags$b("none for H2S or HCN"),
-                 " - the two species that set every hazard index on this page. ",
+                 "gap for benzene, toluene and the C8 aromatics. The La Casa ",
+                 "trimethylbenzene channel was not included in the record ",
+                 "supplied for this analysis, and ", tags$b("H2S and HCN are not measured there"),
+                 " - the two species that set the endocrine and respiratory indices, the largest on this page. ",
                  "Scenario A scales nothing and is what the paper reports. B ",
                  "applies each measured aromatic's own factor and gives ",
                  "1,2,4-TMB the mean of the three. C and D additionally ",
                  tags$i("borrow"), " a factor for H2S and HCN."),
-        helpText(tags$b("C and D are bounds, not estimates. "),
+        helpText(tags$b("C and D are sensitivity scenarios, not established bounds. "),
                  "Borrowing assumes the unmeasured species share the aromatics' ",
-                 "diurnal shape. Within 500 m cells they do not: the aromatics ",
-                 "fall across the sampling window while H2S and HCN rise. Read ",
-                 "C and D as an upper envelope on what scaling could do, not as ",
-                 "a better estimate than A."),
-        if (!is.null(SCALE_WINDOW_TXT)) helpText(SCALE_WINDOW_TXT),
+                 "diurnal shape. Within 500 m cells they do not: toluene, xylenes ",
+                 "and trimethylbenzene fall across the sampling window while H2S ",
+                 "and HCN rise - and so does benzene, which nevertheless carries a ",
+                 "measured factor above 1, because the factor is set largely by ",
+                 "overnight hours the vans never sampled. The within-window shape ",
+                 "therefore neither supports borrowing a factor nor shows that the ",
+                 "H2S and HCN factors are below 1; read C and D as what scaling ",
+                 "could do, not as estimates or bounds (SI S7.4).")
+        ),
+        uiOutput("p7_window"),
         radioButtons("p7_organ", "Organ-system hazard index",
                      choices = if (!is.null(haz) && !is.null(haz$cells))
                                  sort(unique(haz$cells$organ)) else "none"),
-        h4("Organ-system hazard indices"), tableOutput("p7_hi"),
+        h4("Organ-system hazard indices"), uiOutput("p7_flag"), tableOutput("p7_hi"),
+        fold("What is shown and which statistic to use",
         h4("What is shown"),
         helpText("A screening-level cumulative noncancer assessment. Each ",
                  "pollutant is expressed as a hazard quotient - its exposure ",
@@ -400,16 +742,24 @@ ui <- navbarPage(
                  "the level judged to be without appreciable risk of that ",
                  "effect over a lifetime. The table gives the two exposure ",
                  "metrics used: the population-weighted community average and ",
-                 "the single most-exposed census block. The map resolves the ",
-                 "same indices onto the 500 m grid."),
+                 "the single most-exposed census block (within-block sums, so ",
+                 "an index never mixes maxima from different blocks). The map ",
+                 "resolves the same indices onto the 500 m grid, using the same ",
+                 "statistic as the tables (cells sampled on at least ten ",
+                 "days)."),
+        BASIS_EXPLAIN
+        ),
         helpText(tags$b("Read the H2S and HCN values with care. "),
-                 "Their reference concentrations (2 and 0.8 ug/m3) lie below ",
-                 "the detection limits of the instruments that measured them, ",
-                 "so these hazard indices are set by values at or below the ",
-                 "detection limit. They indicate a measurement-capability ",
-                 "gap - current mobile instrumentation cannot resolve ambient ",
-                 "concentrations at the level of the health benchmark - not a ",
-                 "demonstrated exceedance."),
+                 "Their reference concentrations (2 and 0.8 ug/m3; 1.75 and 0.88 ppb ",
+                 "at site pressure) lie below the detection limits of the instruments ",
+                 "that measured them (H2S 2-6 ppb, HCN 2-18 ppb over the campaign), so ",
+                 "individual readings cannot resolve concentrations at the level of the ",
+                 "health benchmark. The community-average values behind these indices ",
+                 "lie at or below the detection limits; the H2S value in the most-exposed ",
+                 "block and cell exceeds the detection limits but is set by a few days ",
+                 "with very high readings. Neither establishes chronic exposure above the ",
+                 "benchmark: read the indices as a screening flag and a ",
+                 "measurement-capability gap, not a demonstrated exceedance (SI S3.2, S7.3)."),
         helpText("This is a screening assessment, not a formal exposure or ",
                  "risk assessment: it rests on repeated short visits rather ",
                  "than continuous exposure monitoring, and assumes ",
@@ -426,22 +776,28 @@ ui <- navbarPage(
                 helpText("For each organ system: the hazard index with nothing ",
                          "scaled, with only the measured aromatics scaled, and ",
                          "the factor that would have to apply to the species ",
-                         "with no La Casa channel for that index to reach 1. A ",
+                         "with no La Casa factor for that index to reach 1. A ",
                          "blank means no unscalable species contributes, so no ",
                          "borrowed factor can move that row."),
                 tableOutput("p7_breakeven"),
                 h4("Acute screen: short-term peaks vs 1-hour reference exposure levels"),
                 helpText("Campaign 99th-percentile and maximum short-term ",
                          "concentrations against the California OEHHA 1-hour ",
-                         "acute RELs. The maximum column compares a sub-minute ",
-                         "peak with a one-hour guideline, so it is a ",
-                         "conservative upper bound rather than an estimate of a ",
-                         "realized one-hour exposure. The scaling toggle does ",
-                         "not apply here: a 24-h-equivalence factor adjusts a ",
-                         "long-term mean, not a short-term peak."),
+                         "acute RELs. Both are short-duration comparisons: the ",
+                         "maximum bounds the contribution of the observed peak ",
+                         "to any hour containing it, but it is not an upper ",
+                         "bound on that hour's exposure, because the rest of the ",
+                         "hour was not sampled at that location, and the 99th ",
+                         "percentile bounds nothing. Neither estimates a realized ",
+                         "one-hour exposure. For H2S and HCN, which are averaged ",
+                         "within 5-s and 2-s bins, the delivered columns repeat the ",
+                         "comparison before that averaging, which lowers peaks. ",
+                         "The statistic and scaling toggles ",
+                         "do not apply here: both concern long-term means, not ",
+                         "short-term peaks."),
                 tableOutput("p7_acute")))),
 
-  tabPanel("8. Contact",
+  tabPanel("9. Contact",
     fluidRow(column(width = 8, offset = 2,
       h3("Contact"),
       p("Questions about the data, the analysis, or how to use this application:"),
@@ -547,6 +903,7 @@ server <- function(input, output, session) {
   # ---- page 1 ----
   output$p1_map <- renderLeaflet({
     d <- cells[pollutant == input$p1_poll]
+    if (!input$p1_stat %in% names(d)) d[, (input$p1_stat) := NA_real_]   # older cells_summary.rds
     v <- d[[input$p1_stat]]
     .vv <- if (input$p1_stat == "n") log10(v) else v
     sc  <- conc_scale(.vv)
@@ -555,9 +912,12 @@ server <- function(input, output, session) {
       addRectangles(d$lon - 0.00292, d$lat - 0.00226, d$lon + 0.00292,
                     d$lat + 0.00226, fillColor = col, fillOpacity = 0.65,
                     weight = 0, popup = sprintf(
-                      "n = %s<br>median = %s %s<br>p95 = %s<br>max = %s",
-                      format(d$n, big.mark = ","), d$median,
-                      unit_of(input$p1_poll), d$p95, d$max))
+                      "n = %s values on %s days<br>median of daily medians = %s<br>mean of daily means = %s<br>median of all values = %s %s<br>p95 = %s<br>max = %s",
+                      format(d$n, big.mark = ","),
+                      if ("n_days" %in% names(d)) d$n_days else "?",
+                      if ("dmedmed" %in% names(d)) d$dmedmed else "n/a",
+                      if ("dmeanmean" %in% names(d)) d$dmeanmean else "n/a",
+                      d$median, unit_of(input$p1_poll), d$p95, d$max))
     m <- add_context(m, input$p1_ctx)
     if (input$p1_stat == "n") {
       .sc2 <- sc
@@ -566,18 +926,29 @@ server <- function(input, output, session) {
                            formatC(signif(10^sc$brk[-1], 2), format = "d", big.mark = ","))
       add_conc_legend(m, .sc2, "1-s measurements<br>per 500 m cell")
     } else {
+      .stat_lab <- c(dmedmed = "median of daily medians", dmeanmean = "mean of daily means",
+                     median = "median", p95 = "95th percentile", max = "maximum")
       add_conc_legend(m, sc,
-                title = sprintf("%s %s (%s)", input$p1_poll, input$p1_stat,
+                title = sprintf("%s<br>%s (%s)", input$p1_poll, .stat_lab[[input$p1_stat]],
                                 unit_of(input$p1_poll)))
     }
   })
   output$p1_summary <- renderTable({
     s <- summ[pollutant == input$p1_poll]
     if (nrow(s) == 0) return(data.frame(note = "campaign stats: see manuscript"))
-    data.frame(Metric = c("1-s measurements", "% below MDL", "Median", "p95",
-                          "p99", "Max"),
-               Value = c(format(s$n, big.mark = ","),
-                         paste0(s$pct_below_mdl, "%"), s$median, s$p95, s$p99, s$max))
+    n_lab <- if (input$p1_poll %in% c("H2S", "HCN"))
+      sprintf("Values (one per %s bin; analysis set)", if (input$p1_poll == "H2S") "5-s" else "2-s")
+      else "One-second values (analysis set)"
+    out <- data.frame(Metric = c(n_lab, "% below audit MDL",
+                                 "Median", "p95", "p99", "Max"),
+                      Value = c(format(s$n, big.mark = ","),
+                                paste0(s$pct_below_mdl, "%"), s$median, s$p95, s$p99, s$max))
+    # H2S and HCN are averaged within 5-s / 2-s bins; show the delivered values too
+    if ("max_delivered" %in% names(s) && is.finite(s$max_delivered))
+      out <- rbind(out, data.frame(
+        Metric = c("Median, delivered (before bin averaging)", "p99, delivered", "Max, delivered"),
+        Value = c(s$median_delivered, s$p99_delivered, s$max_delivered)))
+    out
   }, colnames = FALSE)
   output$p1_day_ui <- renderUI({
     if (is.null(tracks))
@@ -623,48 +994,88 @@ server <- function(input, output, session) {
   })
 
   # ---- page 2 ----
+  # The statistic toggle lives on pages 2 and 8; keep the two in step.
+  observeEvent(input$p2_basis, if (!identical(input$p2_basis, input$p7_basis))
+    updateRadioButtons(session, "p7_basis", selected = input$p2_basis), ignoreInit = TRUE)
+  observeEvent(input$p7_basis, if (!identical(input$p7_basis, input$p2_basis))
+    updateRadioButtons(session, "p2_basis", selected = input$p7_basis), ignoreInit = TRUE)
+  p2_b <- reactive(if (is.null(input$p2_basis)) "mean" else input$p2_basis)
+
   output$p2_map <- renderLeaflet({
     b <- blocks
-    val <- switch(input$p2_layer, ats = b$benzene_ppb_airtox,
-                  mob = b$sBenzene_med_of_daily_med_scaled, ratio = b$ratio)
+    mob <- b[[MOB_COL[[p2_b()]]]]
+    rat <- ifelse(b$benzene_ppb_airtox > 0, mob / b$benzene_ppb_airtox, NA)
+    val <- switch(input$p2_layer, ats = b$benzene_ppb_airtox, mob = mob, ratio = rat)
     dom <- switch(input$p2_layer,
                   ats = c(0.1, 0.35), mob = c(0, 1), ratio = c(0, 3))
     sc <- if (input$p2_layer == "ratio") ratio_scale() else conc_scale_fixed(dom)
-    leaflet(b) |> addProviderTiles(providers$CartoDB.Positron) |>
+    leaflet(b) |> add_basemaps() |>
       setView(-104.93, 39.82, zoom = 11) |>
       addPolygons(fillColor = sc$pal(pmin(pmax(val, dom[1]), dom[2])),
                   fillOpacity = 0.75, weight = 0.3, color = "grey40",
-                  popup = ~sprintf(
-                    "AirToxScreen: %.3f ppb<br>Mobile (scaled): %.3f ppb<br>Ratio: %.2f<br>Population: %s",
-                    benzene_ppb_airtox, sBenzene_med_of_daily_med_scaled,
-                    ratio, format(Population_airtox, big.mark = ","))) |>
+                  popup = sprintf(
+                    "AirToxScreen: %.3f ppb<br>Mobile (scaled, %s): %.3f ppb<br>Ratio: %.2f<br>Population: %s",
+                    b$benzene_ppb_airtox, BASIS_SHORT[[p2_b()]], mob, rat,
+                    format(b$Population_airtox, big.mark = ","))) |>
       add_conc_legend(sc, switch(input$p2_layer,
-                ats = "AirToxScreen (ppb)", mob = "Mobile (ppb)",
-                ratio = "Mobile : AirToxScreen<br>(1 = agreement)"))
+                ats = "AirToxScreen (ppb)",
+                mob = sprintf("Mobile (ppb)<br><span style='font-weight:normal'>%s</span>", BASIS_SHORT[[p2_b()]]),
+                ratio = sprintf("Mobile : AirToxScreen<br>(1 = agreement)<br><span style='font-weight:normal'>%s</span>", BASIS_SHORT[[p2_b()]])))
   })
   output$p2_stats <- renderTable({
-    b <- st_drop_geometry(blocks)
-    ok <- is.finite(b$ratio)
+    st <- BSTAT[[p2_b()]]
     data.frame(Metric = c("Blocks", "Population",
+                          "Pop.-weighted benzene, mobile (ppb)",
+                          "Pop.-weighted benzene, AirToxScreen (ppb)",
+                          "Mobile : AirToxScreen (aggregate)",
+                          "Excess cancer cases, mobile",
+                          "Excess cancer cases, AirToxScreen",
                           "AirToxScreen range (ppb)", "Mobile range (ppb)",
-                          "Blocks >2x AirToxScreen", "Blocks >5x", "Median ratio"),
-               Value = c(format(nrow(b), big.mark = ","),
-                         format(sum(b$Population_airtox, na.rm = TRUE), big.mark = ","),
-                         sprintf("%.3f-%.3f", min(b$benzene_ppb_airtox, na.rm = TRUE),
-                                 max(b$benzene_ppb_airtox, na.rm = TRUE)),
-                         sprintf("%.2f-%.2f",
-                                 min(b$sBenzene_med_of_daily_med_scaled, na.rm = TRUE),
-                                 max(b$sBenzene_med_of_daily_med_scaled, na.rm = TRUE)),
-                         sum(b$ratio > 2, na.rm = TRUE), sum(b$ratio > 5, na.rm = TRUE),
-                         sprintf("%.2f", median(b$ratio[ok]))))
+                          "Blocks >2x AirToxScreen", "Blocks >5x",
+                          "Blocks below AirToxScreen", "Median block ratio",
+                          "Block-level Pearson r"),
+               Value = c(format(st$n, big.mark = ","), format(st$pop, big.mark = ","),
+                         sprintf("%.3f", st$pw_mob), sprintf("%.3f", st$pw_ats),
+                         sprintf("%.2f", st$ratio),
+                         sprintf("%.3f-%.3f", st$cases_mob[1], st$cases_mob[2]),
+                         sprintf("%.3f-%.3f", st$cases_ats[1], st$cases_ats[2]),
+                         sprintf("%.3f-%.3f", st$ats_rng[1], st$ats_rng[2]),
+                         sprintf("%.2f-%.2f", st$mob_rng[1], st$mob_rng[2]),
+                         st$gt2, st$gt5, sprintf("%.0f%%", st$pct_below),
+                         sprintf("%.2f", st$med_ratio), sprintf("%.2f", st$pearson)))
   }, colnames = FALSE)
+  output$p2_text <- renderUI({
+    b <- p2_b(); st <- BSTAT[[b]]
+    helpText(
+      sprintf(paste0("On the %s, the population-weighted mean benzene is %.3f ppb from the ",
+                     "mobile data against %.3f ppb from AirToxScreen (ratio %.2f; %.3f-%.3f ",
+                     "excess lifetime cancer cases against %.3f-%.3f, using IRIS inhalation unit ",
+                     "risks of 5.75 and 20.40 per million per ppb). "),
+              BASIS_SHORT[[b]], st$pw_mob, st$pw_ats, st$ratio,
+              st$cases_mob[1], st$cases_mob[2], st$cases_ats[1], st$cases_ats[2]),
+      if (b == "med")
+        "In aggregate the two datasets are therefore close on this statistic, but they "
+      else
+        "On this statistic, which retains the episodic plumes and high days, mobile-derived exposure exceeds AirToxScreen overall, and the two datasets ",
+      sprintf(paste0("disagree almost completely block by block (Pearson r = %.2f, Spearman ",
+                     "r = %.2f): %d blocks exceed twice AirToxScreen, while %.0f%% of blocks ",
+                     "fall below it. The screening model spans only a %.1f-fold range across ",
+                     "the domain, whereas the mobile surface spans more than an order of ",
+                     "magnitude. What holds on both statistics is this block-level ",
+                     "disagreement: the screening model misplaces where exposure is concentrated."),
+              st$pearson, st$spearman, st$gt2, st$pct_below,
+              st$ats_rng[2] / st$ats_rng[1]))
+  })
   output$p2_scatter <- renderPlot({
     b <- st_drop_geometry(blocks)
-    ggplot(b, aes(benzene_ppb_airtox, sBenzene_med_of_daily_med_scaled)) +
+    b$mob <- b[[MOB_COL[[p2_b()]]]]
+    ggplot(b, aes(benzene_ppb_airtox, mob)) +
       geom_point(alpha = 0.25, size = 0.9) +
       geom_abline(slope = 1, intercept = 0, color = "red", linetype = 2) +
-      labs(x = "AirToxScreen benzene (ppb)", y = "Mobile scaled benzene (ppb)",
-           subtitle = "Red line = 1:1. Aggregate risk agrees; block-level r ~ 0.") +
+      labs(x = "AirToxScreen benzene (ppb)",
+           y = sprintf("Mobile scaled benzene (ppb), %s", BASIS_SHORT[[p2_b()]]),
+           subtitle = sprintf("Red line = 1:1. Aggregate ratio %.2f; block-level Pearson r = %.2f.",
+                              BSTAT[[p2_b()]]$ratio, BSTAT[[p2_b()]]$pearson)) +
       theme_bw()
   })
 
@@ -674,13 +1085,14 @@ server <- function(input, output, session) {
       addMarkers(lng = WWTP_LL[2], lat = WWTP_LL[1],
                  icon = star_icon("green", 28),
                  label = "Wastewater treatment facility",
+                 popup = HITE_POPUP,
                  labelOptions = labelOptions(permanent = TRUE,
                                              direction = "left"))
     cols <- c("#d73027", "#fc8d59", "#7b3294", "#4575b4")
     has_loc <- all(c("lat", "lon") %in% names(plumes))
     for (i in seq_len(nrow(plumes))) {
       pop <- sprintf(
-        "<b>Plume %s</b><br>%s<br>ΔH2S: %s ppb<br>Wind: %s m/s | Stability %s<br>Distance from WWTF: %s km<br><b>Inverse estimate: %s t/yr</b>",
+        "<b>Plume %s</b><br>%s<br>ΔH2S: %s ppb<br>Wind: %s m/s | Stability %s<br>Distance from WWTF: %s km<br><b>Inverse estimate: %s t/yr</b><br><span style=\"font-size:11px;color:#555\">Peak-based; assumes continuous operation. See the caveats above this map.</span>",
         plumes$plume_id[i], plumes$datetime[i], plumes$dH2S_ppb[i],
         plumes$wind_ms[i], plumes$stability[i], plumes$dist_km[i],
         format(plumes$rate_tpy[i], big.mark = ","))
@@ -706,6 +1118,7 @@ server <- function(input, output, session) {
     data.frame(Plume = plumes$plume_id,
                `Date/time` = as.character(plumes$datetime),
                `Rate (t/yr)` = format(plumes$rate_tpy, big.mark = ","),
+               `Peak/MDL` = sprintf("%.1f", plumes$dH2S_ppb / H2S_MDL_PPB),
                check.names = FALSE)
   })
 
@@ -727,8 +1140,8 @@ server <- function(input, output, session) {
         # addCircleMarkers takes no highlight argument (that is polygons and
         # polylines only); the hover label is what identifies the group.
         popup = ~sprintf(
-          "<b>Group %s</b><br>Pollutants: %s<br>Total exceedance-days: %s (max %s)<br>Nearest TRI: %s (%.1f km)%s",
-          group_id, gsub("\\+", " + ", pollutants), total_n_days, max_n_days,
+          "<b>Group %s</b><br>Pollutants: %s<br>Persistence: %s days (largest single-pollutant cluster)<br>Cluster-days summed over pollutants: %s<br>Nearest TRI: %s (%.1f km)%s",
+          group_id, gsub("\\+", " + ", pollutants), max_n_days, total_n_days,
           ifelse(is.na(tri_name), "n/a", tri_name), tri_dist_km,
           if ("ch4_class" %in% names(g))
             sprintf("<br>Methane: %s (%.1f%% obs ≥ p95)", ch4_class, pct_ge_p95)
@@ -784,7 +1197,8 @@ server <- function(input, output, session) {
       Group = g$group_id,
       Pollutants = gsub("\\+", " + ", g$pollutants),
       `N pollutants` = g$n_pollutants,
-      `Exceedance-days` = g$total_n_days,
+      `Persistence (days)` = g$max_n_days,
+      `Cluster-days, summed` = g$total_n_days,
       Methane = if (has_ch4)
         ifelse(is.na(g$ch4_class), "-",
                sprintf("%s (%.1f%% ≥ p95)", g$ch4_class, g$pct_ge_p95))
@@ -793,11 +1207,14 @@ server <- function(input, output, session) {
                              sprintf("%s (%.2f km)", g$tri_name, g$tri_dist_km)),
       `Key facilities within 1.5 km` = near_txt,
       `Candidate sources` = src, check.names = FALSE)
-    out <- out[order(-g$total_n_days), ]
+    out <- out[order(-g$max_n_days, -g$total_n_days), ]
     DT::datatable(out, rownames = FALSE,
       options = list(pageLength = 20, dom = "t", scrollX = TRUE),
       caption = paste("Composition of the persistent multi-pollutant hotspot",
-        "groups. Candidate sources are rule-based and transparent: key",
+        "groups. Persistence is the day count of the group's most persistent",
+        "single-pollutant cluster (the paper's group metric); the summed column",
+        "adds the clusters' day counts and can count a day more than once.",
+        "Candidate sources are rule-based and transparent: key",
         "facilities within 0.6 km; wastewater-type if the group includes H2S",
         "and a WWTF lies within 2 km; methane co-elevation class from the",
         "campaign CH4 data; TRI facilities within 0.75 km. Groups matching no",
@@ -806,7 +1223,7 @@ server <- function(input, output, session) {
 
   # ---- page 5 ----
   surface <- eventReactive(input$p5_go, ignoreNULL = FALSE, {
-    withProgress(message = "Computing source-probability surface...", {
+    withProgress(message = "Computing source-association surface...", {
       tryCatch({
         ev <- events[pollutant == input$p5_poll]
         thr <- if (input$p5_thr == "p99") ev$thr99[1] else ev$thr95[1]
@@ -872,7 +1289,7 @@ server <- function(input, output, session) {
     north <- s$lat0 + s$yr[2] / 110540
     pal <- colorNumeric("inferno", c(0, 1), na.color = "transparent")
     m <- base_map() |>
-      addLegend(pal = pal, values = c(0, 1), title = "Relative<br>probability")
+      addLegend(pal = pal, values = c(0, 1), title = "Relative source-<br>association index")
     m <- add_context(m, c("Covered facilities", "Wastewater treatment",
                           "Woodshop", "Refueling stations"))
     htmlwidgets::onRender(m, sprintf(
@@ -894,29 +1311,64 @@ server <- function(input, output, session) {
   # hazard.rds predates 77_health_scaling_sensitivity.R, so an app deployed
   # against older data still runs - it just shows scenario A with no toggle.
   p7_scen <- reactive(if (is.null(input$p7_scen)) "A_none" else input$p7_scen)
+  # Which exposure statistic is live (mean of daily means is the primary).
+  p7_b <- reactive(if (is.null(input$p7_basis)) "mean" else input$p7_basis)
+  hb   <- reactive(haz_basis(p7_b()))
+  output$p7_window <- renderUI({
+    txt <- scale_window_txt(p7_b())
+    if (is.null(txt)) {
+      if (p7_b() == "med" && (is.null(hb()$scen_poll) || identical(hb(), haz)))
+        return(helpText("Scaling scenarios on the median of daily medians are not in this ",
+                        "build: run 77_health_scaling_sensitivity.R with ",
+                        "HAZARD_BASIS=med_of_daily_med, then prep_app_data.R."))
+      return(NULL)
+    }
+    helpText(txt)
+  })
 
-  output$p7_hi <- renderTable({
+  # organ-system indices for the live basis and scenario, in one shape
+  p7_hi_tab <- reactive({
     req(haz)
-    if (!is.null(haz$scen)) {
-      d <- haz$scen[scenario == p7_scen()]
-      req(nrow(d) > 0)
-      d <- d[order(-HI_pwmean)]
-      data.frame(`Organ system` = d$organ,
-                 `Community avg` = sprintf("%.3g", d$HI_pwmean),
-                 `Most-exposed block` = sprintf("%.3g", d$HI_maxblock),
-                 check.names = FALSE)
+    h <- hb()
+    if (!is.null(h$scen)) {
+      d <- h$scen[scenario == p7_scen()]; req(nrow(d) > 0)
+      data.table(organ = d$organ, pw = as.numeric(d$HI_pwmean), mx = as.numeric(d$HI_maxblock))
     } else {
-      data.frame(`Organ system` = haz$hi$target_organ,
-                 `Community avg` = sprintf("%.3g", haz$hi$HI_pwmean),
-                 `Most-exposed block` = sprintf("%.3g", haz$hi$HI_maxblock),
-                 check.names = FALSE)
+      data.table(organ = h$hi$target_organ, pw = as.numeric(h$hi$HI_pwmean), mx = as.numeric(h$hi$HI_maxblock))
     }
   })
+  # which indices are at or above 1 is the result of this page: say it, and mark
+  # those cells in the table, for whichever statistic and scenario is selected
+  output$p7_flag <- renderUI({
+    d <- p7_hi_tab()[order(-pw)]
+    both <- d[pw >= 1 & mx >= 1, organ]; mxo <- d[pw < 1 & mx >= 1, organ]; none <- d[pw < 1 & mx < 1, organ]
+    lab <- function(x) if (length(x)) paste(tolower(x), collapse = " and ") else NULL
+    parts <- c(
+      if (length(both)) sprintf("%s at or above 1 for both the community average and the most-exposed block", lab(both)),
+      if (length(mxo))  sprintf("%s at or above 1 in the most-exposed block only", lab(mxo)),
+      if (length(none)) sprintf("%s below 1 on both metrics", lab(none)))
+    tags$p(style = "font-size:12.5px;line-height:1.45;margin:0 0 6px 0",
+      tags$b(sprintf("On the %s%s: ", BASIS_SHORT[[p7_b()]],
+                     if (!is.null(hb()$scen)) sprintf(", scenario %s", substr(p7_scen(), 1, 1)) else "")),
+      paste0(paste(parts, collapse = "; "), "."),
+      if (nrow(d[organ == "Neurological" & pw < 1 & mx < 1]) == 1 && !any(c("Neurological") %in% c(both, mxo)))
+        paste0(" Each index at or above 1 is set by a single pollutant (endocrine by HCN, respiratory by H2S); ",
+               "the neurological index, the one that sums several pollutants, stays below 1."))
+  })
+  output$p7_hi <- renderTable({
+    d <- p7_hi_tab()[order(-pw)]
+    mark <- function(v) ifelse(v >= 1, sprintf('<span style="color:#B22222;font-weight:bold">%.3g</span>', v), sprintf("%.3g", v))
+    data.frame(`Organ system` = d$organ,
+               `Community avg` = mark(d$pw),
+               `Most-exposed block` = mark(d$mx),
+               check.names = FALSE)
+  }, sanitize.text.function = identity)   # keeps the <span> markup that marks indices at or above 1
 
   output$p7_chronic <- renderTable({
     req(haz)
-    if (!is.null(haz$scen_poll)) {
-      d <- haz$scen_poll[scenario == p7_scen()]
+    h <- hb()
+    if (!is.null(h$scen_poll)) {
+      d <- h$scen_poll[scenario == p7_scen()]
       req(nrow(d) > 0)
       data.frame(Pollutant = tidy_pollutant(d$pollutant),
                  `Target organ` = d$organ,
@@ -928,7 +1380,7 @@ server <- function(input, output, session) {
                  `HQ (most-exposed block)` = sprintf("%.3g", d$HQ_maxblock),
                  check.names = FALSE)
     } else {
-      d <- haz$chronic
+      d <- h$chronic
       data.frame(Pollutant = tidy_pollutant(d$pollutant),
                  `Target organ` = d$target_organ,
                  `IRIS RfC (ug/m3)` = format(d$RfC_ugm3, big.mark = ","),
@@ -940,8 +1392,8 @@ server <- function(input, output, session) {
   })
 
   output$p7_breakeven <- renderTable({
-    req(haz, haz$breakeven)
-    d <- haz$breakeven
+    req(haz, hb()$breakeven)
+    d <- hb()$breakeven
     fmt <- function(x) ifelse(is.finite(x), sprintf("%.3g", x), "")
     # these two columns hold "A + B + C" lists, so the anchored tidy_pollutant()
     # would not touch them - substitute the token wherever it appears instead
@@ -966,6 +1418,10 @@ server <- function(input, output, session) {
                `HQ at p99` = sprintf("%.3g", d$HQ_p99),
                `Max (ug/m3)` = sprintf("%.4g", d$max_ugm3),
                `HQ at max` = sprintf("%.3g", d$HQ_max),
+               `HQ at p99, delivered` = if ("HQ_p99_delivered" %in% names(d))
+                 ifelse(is.finite(d$HQ_p99_delivered), sprintf("%.3g", d$HQ_p99_delivered), "") else "",
+               `HQ at max, delivered` = if ("HQ_max_delivered" %in% names(d))
+                 ifelse(is.finite(d$HQ_max_delivered), sprintf("%.3g", d$HQ_max_delivered), "") else "",
                check.names = FALSE)
   })
 
@@ -982,8 +1438,8 @@ server <- function(input, output, session) {
                "over 5  (at or above benchmark)")
 
   output$p7_map <- renderLeaflet({
-    req(haz, haz$cells)
-    d <- haz$cells
+    req(haz, hb()$cells)
+    d <- hb()$cells
     if ("scenario" %in% names(d)) d <- d[scenario == p7_scen()]
     d <- d[organ == input$p7_organ]
     req(nrow(d) > 0)
@@ -998,14 +1454,122 @@ server <- function(input, output, session) {
                     d$lon + 0.00292, d$lat + 0.00226,
                     fillColor = hi_col(d$HI), fillOpacity = 0.75, weight = 0,
                     popup = sprintf(
-                      "<b>%s hazard index: %.3g</b><br>%s<br>%s sampling days<br><i>%s</i>",
-                      d$organ, d$HI, d$pollutants, d$n_days,
+                      "<b>%s hazard index: %.3g</b><br>%s<br>%s sampling days<br>cell %s<br><i>%s</i>",
+                      d$organ, d$HI, d$pollutants, d$n_days, BASIS_SHORT[[p7_b()]],
                       names(SCEN_CHOICES)[match(p7_scen(), SCEN_CHOICES)])) |>
       add_context(c("Covered facilities", "Wastewater treatment")) |>
       addLegend("bottomright", colors = rev(CONC_RAMP), labels = rev(HI_LABS),
                 opacity = 0.9,
-                title = sprintf("%s hazard index<br><span style='font-weight:normal'>scenario %s</span>",
-                                input$p7_organ, sub("_.*$", "", p7_scen())))
+                title = sprintf("%s hazard index<br><span style='font-weight:normal'>%s, scenario %s</span>",
+                                input$p7_organ, BASIS_SHORT[[p7_b()]], sub("_.*$", "", p7_scen())))
+  })
+
+  # ---- page 6: methane ----
+  # Every value here is relative; see CH4_CAVEAT at the top of the page.
+  output$pch4_map <- renderLeaflet({
+    d <- cells[pollutant == "Methane"]
+    validate(need(nrow(d) > 0,
+                  "No methane cell summary in this build - re-run prep_app_data.R."))
+    v   <- d[[input$pch4_stat]]
+    .vv <- if (input$pch4_stat == "n") log10(v) else v
+    sc  <- conc_scale(.vv)
+    m <- base_map() |>
+      addRectangles(d$lon - 0.00292, d$lat - 0.00226, d$lon + 0.00292,
+                    d$lat + 0.00226, fillColor = sc$pal(.vv), fillOpacity = 0.65,
+                    weight = 0, popup = sprintf(
+                      "n = %s<br>median = %s ppm<br>p95 = %s<br>max = %s",
+                      format(d$n, big.mark = ","), d$median, d$p95, d$max))
+    m <- add_context(m, input$pch4_ctx)
+    if ("Methane clusters (all)" %in% input$pch4_layers && !is.null(hs$methane)) {
+      cl <- hs$methane
+      m <- addCircleMarkers(m, cl$lon, cl$lat, radius = 4, color = "#7F2704",
+             weight = 1, fillColor = "#FD8D3C", fillOpacity = 0.30,
+             popup = sprintf("Methane cluster %s<br>%s high-CH4 events on %s days",
+                             cl$cluster, format(cl$n_events, big.mark = ","), cl$n_days))
+    }
+    if ("Persistent methane clusters" %in% input$pch4_layers &&
+        !is.null(ch4) && !is.null(ch4$persistent) && nrow(ch4$persistent)) {
+      p <- ch4$persistent
+      m <- addCircleMarkers(m, p$lon, p$lat, radius = 11, color = "black",
+             weight = 2, fillColor = "#D94801", fillOpacity = 0.85,
+             popup = sprintf(paste0("<b>Persistent methane cluster %s</b><br>",
+               "%s high-CH4 events on %s days<br>",
+               "median %.2f ppm, max %.2f ppm (uncalibrated)<br>",
+               "median enhancement %.2f ppm above local background<br>%s to %s"),
+               p$cluster, format(p$n_events, big.mark = ","), p$n_days,
+               p$ch4_med, p$ch4_max, p$enh_med, p$first, p$last))
+    }
+    if (input$pch4_stat == "n") {
+      .sc2 <- sc
+      .sc2$labs <- sprintf("%s - %s",
+        formatC(signif(10^sc$brk[-length(sc$brk)], 2), format = "d", big.mark = ","),
+        formatC(signif(10^sc$brk[-1], 2), format = "d", big.mark = ","))
+      add_conc_legend(m, .sc2, "Methane measurements<br>per 500 m cell")
+    } else {
+      add_conc_legend(m, sc, sprintf("Methane %s (ppm,<br>uncalibrated)",
+                                     input$pch4_stat))
+    }
+  })
+
+  output$pch4_summary <- renderUI({
+    if (is.null(ch4) || is.null(ch4$summary) || !nrow(ch4$summary))
+      return(helpText("Methane summary not available in this build."))
+    s <- ch4$summary[1]
+    np <- if (!is.null(ch4$persistent)) nrow(ch4$persistent) else NA_integer_
+    HTML(sprintf(paste0(
+      "Clustering threshold (campaign 99th percentile): <b>%.3f ppm</b><br>",
+      "High-methane observations at that threshold: <b>%s</b> on %s sampling days<br>",
+      "Spatial clusters: <b>%s</b>, of which <b>%s persistent</b><br>",
+      "Co-elevation reference (95th percentile): %.3f ppm"),
+      s$p99, format(s$n_high_events, big.mark = ","), s$n_days_high,
+      s$n_clusters, if (is.na(np)) s$n_persistent else np, s$p95))
+  })
+
+
+  # The class thresholds live in M06_methane_at_toxics_hotspots.R; the sentence
+  # is built from the data so it cannot claim a category the run does not
+  # contain. No group reaches CH4-enriched in the current run, and a legend
+  # entry for a class that never appears would mislead.
+  output$pch4_legend <- renderUI({
+    if (is.null(ch4) || is.null(ch4$at_hotspots) || !nrow(ch4$at_hotspots))
+      return(NULL)
+    a <- as.data.table(ch4$at_hotspots)
+    top <- a[order(-pct_ge_p95)][1:2]
+    nlo <- sum(a$pct_ge_p95 < 5)
+    none_enriched <- if (!any(a$ch4_class == "CH4-enriched"))
+      sprintf(paste0("No group reaches CH4-enriched in this run: co-elevation is ",
+                     "strongest at Group %s (%.1f%%) and Group %s (%.1f%%), while ",
+                     "%d of the %d groups fall below 5%%, consistent with traffic- ",
+                     "or solvent-driven aromatics. "),
+              top$group_id[1], top$pct_ge_p95[1], top$group_id[2], top$pct_ge_p95[2],
+              nlo, nrow(a)) else ""
+    helpText(HTML(paste0(
+      "Classes follow the pipeline rule: <b>CH4-enriched</b> needs at least 15% of ",
+      "observations at or above the campaign 95th percentile on five or more days ",
+      "carrying a 99th-percentile event; <b>CH4-intermediate</b> at least 5%; ",
+      "<b>CH4-quiet</b> below that. ", none_enriched,
+      "'% obs &ge; p95' is the share of methane observations within 100 m of the ",
+      "group centroid at or above the campaign 95th percentile; 'Days with high ",
+      "CH4' counts days carrying a 99th-percentile methane event.")))
+  })
+
+  output$pch4_table <- DT::renderDT({
+    if (is.null(ch4) || is.null(ch4$at_hotspots) || !nrow(ch4$at_hotspots))
+      return(DT::datatable(data.frame(
+        Note = "Methane-at-hotspots table not available in this build."),
+        options = list(dom = "t"), rownames = FALSE))
+    a <- as.data.table(ch4$at_hotspots)
+    out <- data.frame(
+      Group          = a$group_id,
+      Pollutants     = gsub("\\+", " + ", a$pollutants),
+      `Methane class`= a$ch4_class,
+      `Median CH4 (ppm)` = round(a$ch4_med, 2),
+      `% obs >= p95` = round(a$pct_ge_p95, 1),
+      `Days with high CH4` = a$days_with_high,
+      `Nearest persistent CH4 cluster (km)` = round(a$dist_nearest_persistent_ch4_km, 2),
+      check.names = FALSE)
+    DT::datatable(out, rownames = FALSE,
+      options = list(pageLength = 15, dom = "tip", order = list(list(4, "desc"))))
   })
 }
 
