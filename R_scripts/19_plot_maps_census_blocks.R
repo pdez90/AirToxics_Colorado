@@ -371,17 +371,36 @@ ggsave(file.path(out_dir, "scatter_Toluene_MobileScaled_vs_AirTox_ROBUST.png"),
 ggsave(file.path(out_dir, "scatter_Xylene_MobileScaled_vs_AirTox_ROBUST.png"),
        s3, width = 7, height = 6, dpi = dpi_out, bg = "white")
 
-panel3_scatter <- (s1 | s2 | s3) +
+# (2026-10-07) Second row: the same scatterplots on the FULL data range, so the blocks
+# outside the robust map limits (mobile benzene up to ~3.6 ppb) are visible. n, R and
+# RMSE are computed from all blocks in both rows (make_scatter uses d before limits).
+full_lims <- function(df, air_col, mob_col) {
+  v <- c(as_num(df[[air_col]]), as_num(df[[mob_col]]))
+  v <- v[is.finite(v)]
+  r <- range(v); r + c(-0.02, 0.02) * diff(r)
+}
+f1 <- make_scatter(sf_benz, air_benz, mob_benz, "Benzene: full range",
+                   full_lims(sf_benz, air_benz, mob_benz),
+                   xlab = "AirToxScreen Benzene (ppb)", ylab = "Mobile Benzene (scaled; ppb)")
+f2 <- make_scatter(sf_tol, air_tol, mob_tol, "Toluene: full range",
+                   full_lims(sf_tol, air_tol, mob_tol),
+                   xlab = "AirToxScreen Toluene (ppb)", ylab = "Mobile Toluene (scaled; ppb)")
+f3 <- make_scatter(sf_xyl, air_xyl, mob_xyl, "Xylene: full range",
+                   full_lims(sf_xyl, air_xyl, mob_xyl),
+                   xlab = "AirToxScreen Xylene (ppb)", ylab = "Mobile Xylene (scaled; ppb)")
+
+panel3_scatter <- ((s1 | s2 | s3) / (f1 | f2 | f3)) +
   patchwork::plot_annotation(
     title = paste0(
-      "Mobile (scaled) vs AirToxScreen by Census Block (same ppb units; same limits as maps)",
+      "Mobile (scaled) vs AirToxScreen by Census Block (ppb). Top: same limits as the maps (2nd-98th percentiles); bottom: full range",
       ifelse(USE_LOG_AXES, " — log10 axes", "")
     ),
+    tag_levels = "A",
     theme = theme(plot.title = element_text(size = 14, face = "bold"))
   )
 
 ggsave(file.path(out_dir, "FIG_scatter3_MobileScaled_vs_AirTox_equalPanels_ROBUST.png"),
-       panel3_scatter, width = 14, height = 4.8, dpi = dpi_out, bg = "white")
+       panel3_scatter, width = 14, height = 9.6, dpi = dpi_out, bg = "white")
 
 message("Done. Saved maps + scatterplots to: ", out_dir)
 
